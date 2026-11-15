@@ -29,8 +29,23 @@ export default defineConfig(({ command }) => ({
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
-    target: 'chrome120',
+    // Vite's default (Chrome 107-era baseline) compiles to ES2020, which is
+    // what Electron's embedded Chromium and every evergreen browser support.
+    target: 'es2020',
     sourcemap: false,
+    // Lazy module boundaries (route-level) let the heavy chart/vendor code be
+    // split out so the first paint stays small.
     chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('recharts') || id.includes('d3-')) return 'charts';
+          if (id.includes('@supabase')) return 'supabase';
+          if (id.includes('lucide-react')) return 'icons';
+          return 'vendor';
+        },
+      },
+    },
   },
 }));

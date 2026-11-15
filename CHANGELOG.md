@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 First public release of the complete microstock contributor workbench.
 
+### Performance
+- Route-level code splitting (`React.lazy` per page) plus vendor chunking:
+  first paint now ships ~487 kB raw / 155 kB gzip instead of one 942 kB
+  bundle, and the charts/Supabase code only loads when those pages open.
+- Build target aligned with Electron's Chromium baseline; skeleton fallback
+  mirrors the page layout so navigation never flashes unstyled content.
+
 ### Added
 - **Library**: import EPS/AI/SVG/JPG/PNG/WebP with automatic IPTC/XMP read,
   search, format filter, selection, thumbnails, batch generate, batch embed,
