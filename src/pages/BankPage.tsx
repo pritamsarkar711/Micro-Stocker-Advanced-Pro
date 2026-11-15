@@ -4,7 +4,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Field, Input } from '@/components/ui/Field';
+import { Input } from '@/components/ui/Field';
 import { useBank, type Lang } from '@/state/bank';
 import { useToast } from '@/state/ToastState';
 
@@ -22,9 +22,9 @@ export function BankPage() {
   const [newWord, setNewWord] = useState('');
 
   const wordsEditor = (words: string[], onChange: (next: string[]) => void) => (
-    <div className="flex flex-wrap gap-1.5 rounded-[0.375rem] border border-line bg-surface-2 p-2">
+    <div className="flex flex-wrap gap-1.5 r-control border border-line bg-surface-2 p-2">
       {words.map((word) => (
-        <span key={word} className="inline-flex items-center gap-1 rounded-[0.25rem] bg-brand-soft px-1.5 py-0.5 text-[0.6875rem] font-medium text-brand-fg">
+        <span key={word} className="inline-flex items-center gap-1 r-chip bg-brand-soft px-1.5 py-0.5 text-[0.6875rem] font-medium text-brand-fg">
           {word}
           <button type="button" aria-label={`Remove ${word}`} onClick={() => onChange(words.filter((w) => w !== word))}>
             <Trash2 className="size-3" />
@@ -48,8 +48,7 @@ export function BankPage() {
   return (
     <>
       <PageHeader
-        title="Keyword bank"
-        description="Merged into every generation"
+        title="Keywords"
         actions={
           <Button size="sm" variant="ghost" icon={<RotateCcw className="size-4" />} onClick={() => { bank.resetBank(); toast.info('Bank reset', 'Back to the shipped defaults plus nothing.'); }}>
             Reset to defaults
@@ -57,7 +56,7 @@ export function BankPage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
         <Card title="Synonyms" action={<BookMarked className="size-4 text-fg-subtle" />} flush>
           <div className="flex flex-col divide-y divide-line">
             {Object.entries(bank.bank.synonyms).map(([key, words]) => (
@@ -94,11 +93,11 @@ export function BankPage() {
           </div>
         </Card>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           <Card title="Categories" action={<Layers className="size-4 text-fg-subtle" />} flush>
             <div className="flex flex-col divide-y divide-line">
               {Object.entries(bank.bank.categories).map(([key, words]) => (
-                <div key={key} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-start">
+                <div key={key} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start">
                   <div className="flex w-40 shrink-0 items-center gap-1">
                     <Badge tone="brand" size="md" className="justify-center">{key}</Badge>
                     <Button size="xs" variant="ghost" aria-label={`Delete ${key}`} icon={<Trash2 className="size-3.5" />} onClick={() => bank.deleteCategory(key)} />
@@ -125,7 +124,7 @@ export function BankPage() {
           </Card>
 
           <Card title="Translations" action={<Globe2 className="size-4 text-fg-subtle" />}>
-            <div className="grid grid-cols-[1fr_repeat(3,3.5rem)] gap-2 text-[0.6875rem] font-semibold tracking-wide text-fg-subtle uppercase">
+            <div className="grid grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,3.25rem))] gap-1.5 text-[0.6875rem] font-semibold tracking-wide text-fg-subtle uppercase">
               <span>English</span>
               {LANGS.map((lang) => (
                 <span key={lang.id} className="text-center">{lang.label}</span>
@@ -133,7 +132,7 @@ export function BankPage() {
             </div>
             <div className="mt-2 flex flex-col gap-2">
               {Object.entries(bank.bank.translations).map(([word, entry]) => (
-                <div key={word} className="grid grid-cols-[1fr_repeat(3,3.5rem)] items-center gap-2">
+                <div key={word} className="grid grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,3.25rem))] items-center gap-1.5">
                   <span className="truncate text-sm text-fg">{word}</span>
                   {LANGS.map((lang) => (
                     <Input
@@ -145,24 +144,32 @@ export function BankPage() {
                   ))}
                 </div>
               ))}
-              <div className="grid grid-cols-[1fr_repeat(3,3.5rem)] items-center gap-2">
-                <Field label="" className="col-span-4">
-                  <div className="flex gap-2">
-                    <Input value={newWord} onChange={(e) => setNewWord(e.target.value)} placeholder="add English word…" className="h-9" />
-                    <Button
-                      size="sm"
-                      icon={<Plus className="size-4" />}
-                      onClick={() => {
-                        const word = newWord.trim().toLowerCase();
-                        if (!word) return;
-                        bank.setTranslation(word, 'es', '');
-                        setNewWord('');
-                      }}
-                    >
-                      Add
-                    </Button>
-                  </div>
-                </Field>
+              <div className="col-span-full flex min-w-0 items-center gap-2 pt-1">
+                <Input
+                  value={newWord}
+                  onChange={(e) => setNewWord(e.target.value)}
+                  placeholder="add English word…"
+                  className="h-9 min-w-0 flex-1"
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') return;
+                    const word = newWord.trim().toLowerCase();
+                    if (!word) return;
+                    bank.setTranslation(word, 'es', '');
+                    setNewWord('');
+                  }}
+                />
+                <Button
+                  size="sm"
+                  icon={<Plus className="size-4" />}
+                  onClick={() => {
+                    const word = newWord.trim().toLowerCase();
+                    if (!word) return;
+                    bank.setTranslation(word, 'es', '');
+                    setNewWord('');
+                  }}
+                >
+                  Add
+                </Button>
               </div>
             </div>
           </Card>

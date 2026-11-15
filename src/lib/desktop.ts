@@ -50,7 +50,12 @@ export interface UpscalerRunArgs {
   blob?: Blob;
   binary: string;
   modelId: string;
+  /** Native 4× passes. */
   passes: number[];
+  /** Left over to be applied by the renderer after the passes. */
+  tailScale?: number;
+  /** NCNN tile size; 0 = auto, lower values reduce VRAM use. */
+  tileSize?: number;
   outFormat: 'png' | 'jpg' | 'webp';
   quality: number;
   onLog?: (label: string) => void;

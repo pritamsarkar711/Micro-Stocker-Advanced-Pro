@@ -70,7 +70,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
         aria-label={typeof title === 'string' ? title : 'Dialog'}
         className={clsx(
           'relative flex w-full flex-col overflow-hidden border border-line bg-surface shadow-[var(--shadow-pop)]',
-          'rounded-t-lg sm:rounded-lg',
+          'rounded-t-xl sm:rounded-xl',
           'max-h-[92dvh] sm:max-h-[85dvh]',
           SIZES[size],
         )}

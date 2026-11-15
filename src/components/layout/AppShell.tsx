@@ -55,7 +55,7 @@ export function AppShell() {
 
   if (embed) {
     return (
-      <main className="min-h-dvh w-full bg-bg p-3">
+      <main className="min-h-dvh w-full bg-bg p-4">
         <Outlet />
       </main>
     );
@@ -77,7 +77,7 @@ export function AppShell() {
         <main id="main" className="min-w-0 flex-1 pb-20 focus:outline-none lg:pb-0" tabIndex={-1}>
           <div
             key={location.pathname}
-            className="animate-in-fast mx-auto w-full max-w-[100rem] px-3 py-3 sm:px-5 sm:py-5 lg:px-6 lg:py-5"
+            className="animate-in-fast mx-auto w-full max-w-[96rem] px-3 py-4 sm:px-5 sm:py-5 lg:px-7 lg:py-6"
           >
             <Outlet />
           </div>

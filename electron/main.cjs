@@ -278,10 +278,28 @@ function registerIpc() {
         if (!response.ok) throw new Error(`Download failed: HTTP ${response.status}`);
         const buffer = Buffer.from(await response.arrayBuffer());
         const zipPath = path.join(dir, 'realesrgan-ncnn-vulkan.zip');
+
+        // The release zip nests everything under
+        // `realesrgan-ncnn-vulkan-<date>/`, so extract into a staging folder
+        // and then flatten it into <userData>/upscaler. Extracting straight
+        // into `dir` leaves the binary at a path the runner never looks at.
+        const staging = await fs.mkdtemp(path.join(require('node:os').tmpdir(), 'msap-rz-'));
         await fs.writeFile(zipPath, buffer);
         const extractZip = require('extract-zip');
-        await extractZip(zipPath, { dir });
+        await extractZip(zipPath, { dir: staging });
         await fs.unlink(zipPath).catch(() => {});
+
+        const entries = await fs.readdir(staging, { withFileTypes: true });
+        const root =
+          entries.length === 1 && entries[0].isDirectory()
+            ? path.join(staging, entries[0].name)
+            : staging;
+        await fs.cp(root, dir, { recursive: true, force: true });
+        await fs.rm(staging, { recursive: true, force: true }).catch(() => {});
+
+        await fs.access(binaryPath).catch(() => {
+          throw new Error(`Real-ESRGAN downloaded but ${binary} was not found in the archive.`);
+        });
         if (process.platform !== 'win32') {
           await fs.chmod(binaryPath, 0o755).catch(() => {});
         }
@@ -290,7 +308,7 @@ function registerIpc() {
       const found = [];
       for (const model of models || []) {
         const ok = await fs
-          .access(path.join(modelsDir, `${model}.bin`))
+          .access(path.join(modelsDir, `${model}-x4.bin`))
           .then(() => true)
           .catch(() => false);
         if (ok) found.push(model);
@@ -316,11 +334,24 @@ function registerIpc() {
         await fs.writeFile(inputPath, Buffer.from(String(args.inBase64), 'base64'));
       }
 
+      // The NCNN build resolves weights as <models>/<model>-x<scale>.param, so
+      // `-s` MUST match the scale in the file name. All shipped models are 4x,
+      // and any residual difference is handled by the renderer as a final
+      // high-quality resize. Passing -s 2 here would abort the process.
       const runPass = (scale, inFile, outFile) =>
         new Promise((resolve, reject) => {
           const child = spawn(
             binaryPath,
-            ['-i', inFile, '-o', outFile, '-s', String(scale), '-n', String(args.modelId), '-m', modelsDir, '-f', String(args.outFormat)],
+            [
+              '-i', inFile,
+              '-o', outFile,
+              '-s', String(scale),
+              '-n', String(args.modelId),
+              '-m', modelsDir,
+              '-f', String(args.outFormat),
+              // Keep big 8K outputs inside VRAM; 0 lets ncnn pick.
+              '-t', String(args.tileSize || 0),
+            ],
             { cwd: dir },
           );
           let stderr = '';
@@ -376,7 +407,8 @@ function createWindow() {
     minWidth: 360,
     minHeight: 560,
     show: false,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0b1020' : '#f6f7fb',
+    // Matches --bg in src/index.css so the window never flashes a foreign colour.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0e1216' : '#f4f6f8',
     autoHideMenuBar: !isDev,
     title: 'Micro Stocker Advanced Pro',
     webPreferences: {

@@ -11,6 +11,10 @@ export interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'>
   flush?: boolean;
 }
 
+/**
+ * Elevated surface. Header is a 44px row with a hairline divider; body is
+ * padded 16px so dense tables can opt out with `flush`.
+ */
 export function Card({
   title,
   description,
@@ -23,16 +27,14 @@ export function Card({
   ...rest
 }: CardProps) {
   return (
-    <section className={clsx('card overflow-hidden', className)} {...rest}>
+    <section className={clsx('card flex flex-col', className)} {...rest}>
       {(title || action) && (
-        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3.5 py-2.5">
+        <header className="flex min-h-11 flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-2">
           <div className="flex min-w-0 items-center gap-2">
             {icon && <span className="shrink-0 text-fg-subtle">{icon}</span>}
             <div className="min-w-0">
               {title && (
-                <h2 className="truncate text-[0.8125rem] font-semibold tracking-tight text-fg">
-                  {title}
-                </h2>
+                <h2 className="display truncate text-[0.875rem] font-semibold text-fg">{title}</h2>
               )}
               {description && (
                 <p className="mt-0.5 truncate text-[0.75rem] text-fg-muted">{description}</p>
@@ -42,7 +44,7 @@ export function Card({
           {action && <div className="flex shrink-0 items-center gap-1.5">{action}</div>}
         </header>
       )}
-      <div className={clsx(!flush && padded && 'p-3.5')}>{children}</div>
+      <div className={clsx(!flush && padded && 'p-4', 'min-w-0 flex-1')}>{children}</div>
     </section>
   );
 }
@@ -58,7 +60,7 @@ export function SectionTitle({
 }) {
   return (
     <div className={clsx('flex items-baseline justify-between gap-2', className)}>
-      <h2 className="text-[0.6875rem] font-semibold tracking-[0.1em] text-fg-subtle uppercase">
+      <h2 className="text-[0.6875rem] font-semibold tracking-[0.08em] text-fg-subtle uppercase">
         {children}
       </h2>
       {hint && <span className="text-[0.6875rem] text-fg-subtle">{hint}</span>}

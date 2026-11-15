@@ -114,8 +114,7 @@ export function ExportPage() {
   return (
     <>
       <PageHeader
-        title="Export centre"
-        description="Per-platform CSV, renames, embedding"
+        title="Export"
         actions={
           <>
             <Button size="sm" variant="outline" loading={busy} icon={<PenLine className="size-4" />} onClick={onEmbedAll} disabled={rows.length === 0}>
@@ -141,7 +140,7 @@ export function ExportPage() {
         </div>
       </PageHeader>
 
-      <Card title="Platforms" flush>
+      <Card title="Targets" flush>
         <div className="flex flex-wrap gap-2 p-4">
           {PLATFORM_LIST.map((platform) => (
             <button
@@ -150,8 +149,8 @@ export function ExportPage() {
               onClick={() => toggle(platform.id)}
               className={
                 enabled.has(platform.id)
-                  ? 'inline-flex items-center gap-2 rounded-[0.375rem] border border-brand bg-brand-soft px-2.5 py-1 text-[0.75rem] font-semibold text-brand-fg'
-                  : 'inline-flex items-center gap-2 rounded-[0.375rem] border border-line bg-surface-2 px-2.5 py-1 text-[0.75rem] font-medium text-fg-muted transition-colors hover:text-fg'
+                  ? 'inline-flex items-center gap-2 r-control border border-brand bg-brand-soft px-3 py-1.5 text-[0.75rem] font-semibold text-brand-fg transition-colors'
+                  : 'inline-flex items-center gap-2 r-control border border-line bg-surface px-3 py-1.5 text-[0.75rem] font-medium text-fg-muted transition-colors hover:border-line-strong hover:text-fg'
               }
             >
               <PlatformLogo id={platform.id} size={18} />
@@ -163,11 +162,11 @@ export function ExportPage() {
       </Card>
 
       {rows.length === 0 ? (
-        <Card className="mt-4">
-          <p className="p-6 text-center text-sm text-fg-muted">Import files in the Library first — exports need at least one row.</p>
+        <Card className="mt-3">
+          <p className="p-6 text-center text-sm text-fg-muted">Import files first</p>
         </Card>
       ) : (
-        <div className="mt-4 grid grid-cols-1 gap-2 xl:grid-cols-2">
+        <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-2">
           {exports.map(({ platform, result, blocking }) => (
             <Card
               key={platform.id}
@@ -186,8 +185,13 @@ export function ExportPage() {
               }
             >
               <div className="flex flex-wrap items-center gap-2">
-                <Button size="sm" icon={<Download className="size-4" />} onClick={() => download(result.filename, result.content)}>
-                  Download {result.filename}
+                <Button
+                  size="sm"
+                  icon={<Download className="size-4" />}
+                  onClick={() => download(result.filename, result.content)}
+                  title={result.filename}
+                >
+                  Download
                 </Button>
                 <Button
                   size="sm"
@@ -200,13 +204,18 @@ export function ExportPage() {
                 >
                   Copy
                 </Button>
-                <span className="text-[0.6875rem] text-fg-subtle tabular-nums">{result.rows} rows · {(result.bytes / 1024).toFixed(1)} KB</span>
+                <span className="nums min-w-0 truncate font-mono text-[0.6875rem] text-fg-subtle" title={result.filename}>
+                  {result.filename}
+                </span>
+                <span className="nums ml-auto shrink-0 text-[0.6875rem] text-fg-subtle">
+                  {result.rows} rows · {(result.bytes / 1024).toFixed(1)} KB
+                </span>
               </div>
 
               {result.warnings.length > 0 && (
                 <ul className="mt-3 flex flex-col gap-1">
                   {result.warnings.map((warning, index) => (
-                    <li key={index} className="flex items-start gap-1.5 rounded-md bg-warn-soft px-2 py-1.5 text-[0.6875rem] text-warn">
+                    <li key={index} className="flex items-start gap-1.5 r-chip bg-warn-soft px-2 py-1.5 text-[0.6875rem] text-warn">
                       <TriangleAlert className="mt-0.5 size-3.5 shrink-0" /> {warning}
                     </li>
                   ))}
@@ -221,9 +230,8 @@ export function ExportPage() {
         </div>
       )}
 
-      <p className="mt-4 text-xs leading-relaxed text-fg-subtle">
-        Exports are UTF-8 with BOM so Excel opens them without mangling accents. Filename matching on every platform is
-        exact and case-sensitive — use “Rename safe” after any rename outside this app.
+      <p className="mt-3 text-[0.75rem] leading-relaxed text-fg-subtle">
+        UTF-8 with BOM — Excel opens accents correctly. Filename matching is case-sensitive everywhere.
       </p>
     </>
   );

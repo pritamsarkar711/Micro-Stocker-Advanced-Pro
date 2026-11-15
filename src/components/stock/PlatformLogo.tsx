@@ -72,7 +72,7 @@ export function PlatformLogo({ id, size = 20, bare = false, className, title }: 
       aria-label={label}
       title={label}
       className={clsx(
-        'inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[0.3rem]',
+        'inline-flex shrink-0 items-center justify-center overflow-hidden r-chip',
         'border border-line bg-surface-2',
         className,
       )}

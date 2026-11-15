@@ -31,10 +31,10 @@ Installers are published on the **[Releases page](https://github.com/pritamsarka
 | macOS (Apple silicon + Intel) | `.dmg` |
 | Linux (x64) | `.AppImage` |
 
-No account, no subscription, no telemetry. Download once and the app runs fully
-offline; the only network connection it ever makes on its own is the optional
-one-time Real-ESRGAN model download and the optional Supabase sync you configure
-yourself.
+No account, no subscription, no telemetry, and **no paid AI required**. Download
+once and the app runs fully offline; the only connections it ever makes are the
+ones you start — the optional one-time Real-ESRGAN download, the optional
+Supabase sync, and the AI provider you pick (none by default).
 
 ## 🌍 Supported marketplaces
 
@@ -65,9 +65,10 @@ copy-paste sheet with the exact fields in the right order.
 
 | Module | What it does |
 | --- | --- |
+| **Metadata AI** | Free by design, three routes: the built-in offline generator, a model on your own machine (Ollama or any OpenAI-compatible server), or a free-tier cloud key (OpenRouter, Gemini, Mistral, NVIDIA, Groq, Cerebras, Together). Live connection test, real error messages, keys stored locally. |
 | **Library** | Import JPG, PNG, WebP, EPS, AI, SVG. Existing IPTC/XMP is read on import. Grid or list, search, format filters, batch generate, batch embed, metadata templates, near-duplicate scan (64-bit dHash), folder watching on desktop. |
 | **Prepare** | Strip EXIF/GPS and Photoshop blocks, re-encode through sRGB to any portal's size budget, sanitise SVG (scripts, handlers, `@import`, editor namespaces) and report on EPS/AI internals (CMYK, live fonts, rasters, Illustrator version). |
-| **Upscale** | Built-in resampler plus one-click Real-ESRGAN (BSD-3, commercial-safe) running locally on your GPU. Per-platform presets up to 8K (7680×4320). Images are never uploaded. |
+| **Upscale** | Built-in resampler plus one-click Real-ESRGAN (BSD-3, commercial-safe) running locally on your GPU. Four commercially usable models, six researched targets up to 8K (7680×4320), tiled passes for big output. Images are never uploaded. |
 | **Export** | Exact CSV dialects for every portal above, UTF-8 BOM, platform-safe renaming, batch embedding, planner hand-off, plus re-import of existing metadata CSVs. |
 | **Platforms** | A dense reference for all 14 marketplaces: formats, resolution windows, file caps, keyword rules, title caps, CSV layout and AI policy. |
 | **Planner** | Per-portal queues (todo → queued → submitted → accepted / rejected) with real publishing caps, including Freepik's first-batch window and monthly limit. |

@@ -104,13 +104,13 @@ export function EarningsPage() {
     { key: 'earnings', header: 'Earnings', align: 'right', sortable: true, sortValue: (r) => r.earnings, render: (r) => <span className="tabular-nums">{money(r.earnings, settings.currency)}</span> },
   ];
 
-  const BAR_COLORS = ['#6366f1', '#f43f5e', '#10b981', '#f59e0b', '#06b6d4', '#8b5cf6', '#84cc16', '#ec4899', '#14b8a6', '#f97316'];
+  /** Unknown platform ids fall back to the brand at decreasing opacity — one hue. */
+  const BAR_FALLBACK = ['var(--brand)', 'color-mix(in oklab, var(--brand) 72%, var(--surface))', 'color-mix(in oklab, var(--brand) 46%, var(--surface))'];
 
   return (
     <>
       <PageHeader
-        title="Earnings analytics"
-        
+        title="Earnings"
         actions={
           <>
             <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => e.target.files?.[0] && onPickFile(e.target.files[0])} />
@@ -169,7 +169,7 @@ export function EarningsPage() {
           />
         </Card>
       ) : (
-        <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           <Card title="Trend" action={<LineChart className="size-4 text-fg-subtle" />}>
             <div className="h-60 w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -205,7 +205,7 @@ export function EarningsPage() {
                         fill={
                           (() => {
                             const known = findPlatform(entry.platform);
-                            return known ? PLATFORM_BRAND[known].color : BAR_COLORS[index % BAR_COLORS.length];
+                            return known ? PLATFORM_BRAND[known].color : BAR_FALLBACK[index % BAR_FALLBACK.length];
                           })()
                         }
                       />

@@ -145,7 +145,7 @@ export function OverviewPage() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi label="Files" value={total} icon={Images} to="/library" tone="brand" />
         <Kpi
           label="Ready"
@@ -171,12 +171,12 @@ export function OverviewPage() {
         />
       </div>
 
-      <div className="mt-2 grid grid-cols-1 gap-2 xl:grid-cols-3">
+      <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-3">
         {/* Readiness */}
         <Card
           className="xl:col-span-2"
           title="Platform readiness"
-          action={<Link to="/platforms" className="text-[0.6875rem] font-medium text-brand">All</Link>}
+          action={<Link to="/platforms" className="r-chip px-1.5 py-0.5 text-[0.6875rem] font-semibold text-brand transition-colors hover:bg-brand-soft">All</Link>}
           flush
         >
           {total === 0 ? (
@@ -185,7 +185,7 @@ export function OverviewPage() {
               <p className="text-[0.8125rem] text-fg-muted">No files yet</p>
               <Link
                 to="/library"
-                className="r-control border border-line-strong px-2.5 py-1 text-[0.75rem] font-medium text-fg hover:bg-surface-2"
+                className="r-control border border-line-strong bg-surface px-3 py-1.5 text-[0.75rem] font-medium text-fg transition-colors hover:bg-surface-2"
               >
                 Import files
               </Link>
@@ -193,7 +193,7 @@ export function OverviewPage() {
           ) : (
             <ul className="divide-y divide-line">
               {topPlatforms.map(({ platform, ok, blocked }) => (
-                <li key={platform.id} className="flex items-center gap-2.5 px-3.5 py-2">
+                <li key={platform.id} className="flex items-center gap-3 px-4 py-2.5">
                   <PlatformLogo id={platform.id} size={20} />
                   <span className="w-28 shrink-0 truncate text-[0.8125rem] font-medium text-fg">
                     {platform.name}
@@ -219,10 +219,10 @@ export function OverviewPage() {
         </Card>
 
         {/* Queue */}
-        <Card title="Pipeline" action={<Link to="/plan" className="text-[0.6875rem] font-medium text-brand">Open</Link>} flush>
+        <Card title="Pipeline" action={<Link to="/plan" className="r-chip px-1.5 py-0.5 text-[0.6875rem] font-semibold text-brand transition-colors hover:bg-brand-soft">Open</Link>} flush>
           <ul className="divide-y divide-line">
             {STATUS_ORDER.map((status) => (
-              <li key={status} className="flex items-center justify-between px-3.5 py-2">
+              <li key={status} className="flex items-center justify-between px-4 py-2.5">
                 <Badge tone={STATUS_TONE[status]}>{status}</Badge>
                 <span className="nums text-[0.8125rem] font-semibold text-fg">
                   {funnel[status] ?? 0}
@@ -233,7 +233,7 @@ export function OverviewPage() {
         </Card>
       </div>
 
-      <div className="mt-2 grid grid-cols-1 gap-2 xl:grid-cols-3">
+      <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-3">
         <Card className="xl:col-span-2" title="Revenue · 12 months" flush>
           <div className="h-48 px-2 py-2">
             {trend.length === 0 ? (
@@ -292,7 +292,7 @@ export function OverviewPage() {
               <li key={to}>
                 <Link
                   to={to}
-                  className="flex items-center gap-2.5 px-3.5 py-2 text-[0.8125rem] text-fg hover:bg-surface-2"
+                  className="group flex items-center gap-3 px-4 py-2.5 text-[0.8125rem] font-medium text-fg transition-colors hover:bg-surface-2"
                 >
                   <Icon className="size-4 text-fg-subtle" strokeWidth={1.8} />
                   <span className="flex-1 truncate">{label}</span>
@@ -315,25 +315,13 @@ export function OverviewPage() {
               </Link>
             </li>
           </ul>
-          <div className="flex items-center justify-between border-t border-line px-3.5 py-2 text-[0.6875rem] text-fg-subtle">
+          <div className="flex items-center justify-between border-t border-line px-4 py-2.5 text-[0.6875rem] text-fg-subtle">
             <span>Releases linked</span>
             <span className="nums text-fg-muted">{linkedReleases}</span>
           </div>
         </Card>
       </div>
 
-      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-        {STEPS.map(({ to, label, icon: Icon }) => (
-          <Link
-            key={to}
-            to={to}
-            className="card flex items-center gap-2 px-3 py-2 text-[0.75rem] font-medium text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
-          >
-            <Icon className="size-4 text-brand" strokeWidth={1.9} />
-            <span className="truncate">{label}</span>
-          </Link>
-        ))}
-      </div>
     </>
   );
 }

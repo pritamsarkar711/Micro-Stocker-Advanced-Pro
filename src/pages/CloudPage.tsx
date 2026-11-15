@@ -99,7 +99,7 @@ export function CloudPage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
         <div className="flex flex-col gap-2 xl:col-span-2">
           <Card
             title="Supabase"
@@ -209,9 +209,7 @@ export function CloudPage() {
                 Pull
               </Button>
             </div>
-            <p className="mt-2 text-[0.6875rem] text-fg-subtle">
-              Metadata only — artwork never leaves this machine.
-            </p>
+            <p className="mt-2 text-[0.6875rem] text-fg-subtle">Metadata only — artwork stays local.</p>
           </Card>
 
           <Card
@@ -222,7 +220,7 @@ export function CloudPage() {
           </Card>
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           <Card title="Status" action={<Cloud className="size-4 text-fg-subtle" />}>
             <div className="flex items-center gap-2">
               <StatusDot state={active.state} />
@@ -233,27 +231,23 @@ export function CloudPage() {
             </div>
             <p className="mt-1.5 text-[0.75rem] text-fg-muted">{active.message}</p>
             {active.hint && (
-              <p className="mt-2 border-l-2 border-warn pl-2 text-[0.75rem] text-warn">{active.hint}</p>
+              <p className="mt-2 r-chip border border-warn/25 bg-warn-soft px-2 py-1 text-[0.75rem] text-warn">
+                {active.hint}
+              </p>
             )}
             <Button variant="outline" size="sm" className="mt-2.5" onClick={recheckConnection} block>
               Re-check
             </Button>
           </Card>
 
-          <Card title="Stored where">
-            <ul className="flex flex-col gap-2 text-[0.75rem] text-fg-muted">
-              <li className="flex items-start gap-2">
-                <KeyRound className="mt-0.5 size-3.5 shrink-0 text-brand" />
-                Device only —{' '}
-                <code className="font-mono text-[0.6875rem] text-fg">
-                  {typeof window !== 'undefined' ? 'local storage' : 'file'}
-                </code>
-              </li>
-              <li className="flex items-start gap-2">
-                <Database className="mt-0.5 size-3.5 shrink-0 text-fg-subtle" />
-                Anonymous key + row-level security
-              </li>
-            </ul>
+          <Card title="Credentials">
+            <p className="flex items-start gap-2 text-[0.75rem] leading-relaxed text-fg-muted">
+              <KeyRound className="mt-0.5 size-3.5 shrink-0 text-brand" />
+              <span>
+                Device only, never uploaded. The anon key is public by design — row-level
+                security guards each row.
+              </span>
+            </p>
           </Card>
         </div>
       </div>

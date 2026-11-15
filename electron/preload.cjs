@@ -104,6 +104,8 @@ const api = {
         binary: args.binary,
         modelId: args.modelId,
         passes: args.passes,
+        tailScale: args.tailScale,
+        tileSize: args.tileSize,
         outFormat: args.outFormat,
         quality: args.quality,
       });

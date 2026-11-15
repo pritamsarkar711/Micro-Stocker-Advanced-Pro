@@ -19,7 +19,14 @@ import {
 } from '@/lib/stock/types';
 import { detectFormat, probeRasterDimensions, probeVectorDimensions } from '@/lib/stock/files';
 import { embedMetadata, readEmbeddedMetadata } from '@/lib/stock/xmp';
-import { adaptForPlatform, generateMetadata, generateWithAi, type AiAssistantConfig, type GenerateOptions } from '@/lib/stock/metadata';
+import { adaptForPlatform, generateMetadata, type GenerateOptions } from '@/lib/stock/metadata';
+import {
+  EMPTY_AI_SETTINGS,
+  generateWithProvider,
+  getProvider,
+  isAiReady,
+  type AiSettings,
+} from '@/lib/stock/ai';
 import { DEFAULT_BANK, type KeywordBank } from '@/state/bank';
 import { planApply, type ApplyResult, type MetadataRow } from '@/lib/stock/csvimport';
 import { PLATFORMS } from '@/lib/stock/platforms';
@@ -28,14 +35,15 @@ import { useToast } from '@/state/ToastState';
 const LIBRARY_KEY = 'msap:library';
 const AI_CONFIG_KEY = 'msap:ai-config';
 
-export const EMPTY_AI_CONFIG: AiAssistantConfig = { baseUrl: '', apiKey: '', model: '' };
+export const EMPTY_AI_CONFIG = EMPTY_AI_SETTINGS;
 
 interface LibraryState {
   ready: boolean;
   items: StockItem[];
   selection: Set<string>;
-  aiConfig: AiAssistantConfig;
-  setAiConfig: (config: AiAssistantConfig) => Promise<void>;
+  aiConfig: AiSettings;
+  aiReady: boolean;
+  setAiConfig: (config: AiSettings) => Promise<void>;
 
   importBrowserFiles: (files: File[]) => Promise<number>;
   importDesktopFiles: () => Promise<number>;
@@ -57,7 +65,10 @@ interface LibraryState {
   toggleSelect: (id: string) => void;
   setSelection: (ids: string[]) => void;
 
-  generateFor: (ids: string[], options: GenerateOptions) => Promise<{ done: number; aiUsed: number }>;
+  generateFor: (
+    ids: string[],
+    options: GenerateOptions,
+  ) => Promise<{ done: number; aiUsed: number; providerLabel: string; error: string | null }>;
   embedFor: (ids: string[], options: { backup: boolean }) => Promise<{ done: number; failed: string[] }>;
   replaceBytes: (id: string, bytes: Uint8Array, options?: { backup?: boolean }) => Promise<boolean>;
 
@@ -77,7 +88,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [items, setItems] = useState<StockItem[]>([]);
   const [selection, setSelectionState] = useState<Set<string>>(new Set());
-  const [aiConfig, setAiConfigState] = useState<AiAssistantConfig>(EMPTY_AI_CONFIG);
+  const [aiConfig, setAiConfigState] = useState<AiSettings>(EMPTY_AI_CONFIG);
   const [watching, setWatching] = useState<string | null>(null);
   const sources = useRef(new Map<string, Uint8Array | File>());
   const toast = useToast();
@@ -87,7 +98,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     (async () => {
       const [stored, storedAi] = await Promise.all([
         kv.get<Omit<StockItem, 'thumbUrl'>[]>(LIBRARY_KEY, []),
-        kv.get<AiAssistantConfig>(AI_CONFIG_KEY, EMPTY_AI_CONFIG),
+        kv.get<AiSettings>(AI_CONFIG_KEY, EMPTY_AI_CONFIG),
       ]);
       setItems(
         stored.map((item) => ({
@@ -473,7 +484,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   /* --------------------------- generate / embed --------------------------- */
 
-  const setAiConfig = useCallback(async (config: AiAssistantConfig) => {
+  const setAiConfig = useCallback(async (config: AiSettings) => {
     setAiConfigState(config);
     await kv.set(AI_CONFIG_KEY, config);
   }, []);
@@ -481,7 +492,9 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const generateFor = useCallback(
     async (ids: string[], options: GenerateOptions) => {
       let aiUsed = 0;
-      const useAi = Boolean(aiConfig.baseUrl && aiConfig.apiKey);
+      const useAi = isAiReady(aiConfig);
+      const providerLabel = getProvider(aiConfig.provider).label;
+      let lastError: string | null = null;
       const storedBank = await kv.get<Partial<KeywordBank>>('msap:keyword-bank', {});
       const bank = {
         synonyms: { ...DEFAULT_BANK.synonyms, ...storedBank.synonyms },
@@ -493,9 +506,12 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
         let metadata: StockMetadata;
         if (useAi) {
           try {
-            metadata = await generateWithAi(item, aiConfig);
+            metadata = await generateWithProvider({ item, settings: aiConfig });
             aiUsed++;
-          } catch {
+          } catch (error) {
+            // Never lose the batch: fall back to the offline generator and
+            // surface exactly why the AI call failed.
+            lastError = error instanceof Error ? error.message : String(error);
             metadata = generateMetadata(item, options, bank);
           }
         } else {
@@ -503,7 +519,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
         }
         setMetadata(id, metadata);
       }
-      return { done: ids.length, aiUsed };
+      return { done: ids.length, aiUsed, providerLabel, error: lastError };
     },
     [aiConfig, items, setMetadata],
   );
@@ -564,6 +580,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       items,
       selection,
       aiConfig,
+      aiReady: isAiReady(aiConfig),
       setAiConfig,
       importBrowserFiles,
       importDesktopFiles,

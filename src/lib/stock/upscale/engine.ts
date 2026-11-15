@@ -1,5 +1,5 @@
 import { desktop, isDesktop } from '@/lib/desktop';
-import { PLATFORMS, type PlatformSpec } from '../platforms';
+import type { PlatformSpec } from '../platforms';
 import type { PlatformId, StockItem } from '../types';
 import { megapixels } from '../types';
 import { upscaleClassic } from './classic';
@@ -28,24 +28,17 @@ export const TARGET_PRESETS: TargetPreset[] = [
   { id: 'min-all', label: 'Clear all minimums (6.5 MP)', minMP: 6.5, note: 'Smallest export that passes Adobe+Shutterstock+Alamy at once.' },
 ];
 
-export function platformPreset(id: PlatformId): TargetPreset {
-  const spec = PLATFORMS[id];
-  return {
-    id: `platform-${id}`,
-    label: `${spec.name} minimum (${spec.minMP} MP)`,
-    minMP: spec.minMP,
-    platform: id,
-    note: spec.highlights.join(' · '),
-  };
-}
-
 export interface ScalePlan {
+  /** Native 4× passes handed to the model. */
   passes: number[];
+  /** Exact multiplier needed to hit the target. */
   finalScale: number;
+  /** Resize factor applied after the last pass (≥ 1). */
+  tailScale: number;
   reason: string;
 }
 
-/** Smallest chain of native model scales (2/3/4) that reaches the target. */
+/** Chain of native 4× model passes that reaches the target, plus a fine tail. */
 export function planScale(item: StockItem, preset: TargetPreset, maxScale = 16): ScalePlan {
   const mp = megapixels(item) ?? 1;
   const width = item.width ?? 1000;
@@ -54,14 +47,22 @@ export function planScale(item: StockItem, preset: TargetPreset, maxScale = 16):
   if (preset.minMP) needed = Math.max(needed, Math.sqrt(preset.minMP / mp));
   needed = Math.min(needed, maxScale);
 
-  const chains: number[][] = [[2], [3], [4], [2, 2], [2, 3], [2, 4], [3, 4], [4, 4], [2, 2, 4], [4, 4, 2]];
+  // Shipped NCNN weights are 4x only, so chains are 4, 4x4, 4x4x4.
+  // `finalScale` is the exact multiplier; `tailScale` is the final resize that
+  // makes up the difference between a 4x pass and the exact target.
+  const chains: number[][] = [[4], [4, 4], [4, 4, 4]];
   for (const chain of chains) {
     const total = chain.reduce((a, b) => a * b, 1);
     if (total + 1e-9 >= needed) {
-      return { passes: chain, finalScale: total, reason: `${chain.join('×')} = ${total}× reaches the target` };
+      return {
+        passes: chain,
+        finalScale: needed,
+        tailScale: Math.max(1, needed / total),
+        reason: needed === total ? `${total}× in ${chain.length} pass${chain.length === 1 ? '' : 'es'}` : `${total}× then resized to ${needed.toFixed(2)}×`,
+      };
     }
   }
-  return { passes: [4, 4, 4], finalScale: 64, reason: 'capped at 64×' };
+  return { passes: [4, 4, 4], finalScale: 64, tailScale: 1, reason: 'capped at 64×' };
 }
 
 export interface UpscaleRequest {
@@ -69,6 +70,8 @@ export interface UpscaleRequest {
   engine: EngineId;
   modelId: string;
   passes: number[];
+  /** Extra resize after the AI passes, to land exactly on the target. */
+  tailScale?: number;
   outFormat: 'png' | 'jpg' | 'webp';
   quality: number;
   onProgress?: (ratio: number, label: string) => void;
@@ -84,6 +87,13 @@ export interface UpscaleResult {
   ms: number;
 }
 
+/**
+ * The NCNN build only ships 4× weights, so a scale chain is expressed as
+ * 4× passes plus one optional final 2× resample done in the renderer.
+ * `planScale` therefore returns powers of four only, and the last fractional
+ * step is applied by `upscaleClassic` — never by asking the model for a scale
+ * it has no weights for.
+ */
 export function engineAvailability(): { id: EngineId; label: string; available: boolean; why?: string }[] {
   return [
     { id: 'classic', label: 'Built-in high-quality resampler', available: true },
@@ -113,9 +123,18 @@ export async function runUpscale(sourceBlob: Blob, request: UpscaleRequest): Pro
     let blob = sourceBlob;
     for (let i = 0; i < total; i++) {
       const pass = request.passes[i] as 2 | 3 | 4;
-      request.onProgress?.(i / total, `Classic pass ${i + 1}/${total} (${pass}×)`);
+      request.onProgress?.(i / total, `Resampling pass ${i + 1}/${total} (${pass}×)`);
       blob = await upscaleClassic(blob, {
         scale: pass,
+        outFormat: request.outFormat,
+        quality: request.quality,
+      });
+    }
+    if (request.tailScale && request.tailScale > 1.01) {
+      request.onProgress?.(0.95, 'Final resize to target');
+      blob = await upscaleClassic(blob, {
+        // resampleExact keeps the aspect and lands on the requested width
+        exactScale: request.tailScale,
         outFormat: request.outFormat,
         quality: request.quality,
       });
@@ -133,6 +152,7 @@ export async function runUpscale(sourceBlob: Blob, request: UpscaleRequest): Pro
     binary: release.binary,
     modelId: request.modelId,
     passes: request.passes,
+    tailScale: request.tailScale,
     outFormat: request.outFormat,
     quality: request.quality,
   });

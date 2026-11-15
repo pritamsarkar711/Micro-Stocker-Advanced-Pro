@@ -3,6 +3,71 @@
 All notable changes to Micro Stocker Advanced Pro are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.2.0] - 2026-11-15
+
+### Added
+- **Free AI metadata, five ways to reach it.** New provider layer
+  (`src/lib/stock/ai.ts`) with a single settings shape and two transports
+  (OpenAI-compatible and Google Gemini):
+  - **Local, no key:** Ollama (`/api/tags` model detection) and any
+    OpenAI-compatible server (LM Studio, llama.cpp, vLLM).
+  - **Free tiers, your own key:** OpenRouter, Google Gemini (AI Studio),
+    Mistral, NVIDIA NIM, Groq, Cerebras, Together.
+  - Per-provider model pickers, a creativity control, a live **Test** button
+    that reports the real error (401/404/429 are translated), and a one-click
+    remove. Keys stay on the machine (same local `kv` store as everything else).
+- **Settings → AI metadata** panel: grouped provider picker, key/endpoint
+  fields that only appear when relevant, and an at-a-glance ready state.
+- AI usage is now reported honestly: the toast names the provider and, when a
+  call fails, says *"AI failed — used offline instead"* with the reason
+  instead of silently falling back.
+- **New product mark** — an `M` cut from one stroke with a caption rule.
+  Regenerated `favicon.svg`, 16–512 px PNGs, `resources/icon.ico` (7 sizes) and
+  `resources/icon.png`.
+- Self-hosted **Inter** (body) and **Manrope** (display), variable woff2,
+  OFL 1.1, no CDN.
+- Tests: 68 (was 57) — provider registry, key handling, model-JSON
+  normalisation, upscale planning.
+
+### Changed
+- **Redesign on Material principles.** 8 px shape scale (cards 12 px, controls
+  8 px, chips 4 px), one 1 px hairline + one soft ambient shadow for elevation,
+  a single primary (`#1c64f2`), tonal surfaces, 44 px header rows and a
+  consistent 12 px rhythm between cards. Icon-rail sidebar with a soft active
+  pill and a 3 px indicator; sticky translucent topbar; display face on every
+  heading.
+- Library cards now use a 4:3 thumbnail, a hover lift and a visible selection
+  ring; the toolbar is search-first with the secondary tools on one line.
+- Upscale studio rebuilt around three fields (source, target, engine) — the
+  20-marketplace target list collapsed to six researched presets.
+- Copy trimmed again: the four page subtitles that only repeated their nav
+  label are gone, and the About licence paragraph is one sentence.
+
+### Fixed
+- **AI upscale produced no output.** Two independent faults:
+  1. The release zip nests everything under `realesrgan-ncnn-vulkan-<date>/`,
+     so extracting straight into the engine folder left the binary where the
+     runner never looked. The installer now extracts to a temp folder, flattens
+     it, and fails loudly if the binary is missing.
+  2. The NCNN binary resolves weights as `<model>-x<scale>`, so asking for a
+     2× or 3× pass selected weights that do not exist and the process exited.
+     `planScale` now emits 4× passes only and closes the remaining gap with a
+     final high-quality resize; `realesrgan-x2plus` (a Python-only model that
+     was never in the zip) is removed from the catalogue.
+- Large outputs no longer exhaust VRAM silently: passes run with an explicit
+  `-t` tile size.
+- `.ai` (PDF) and header-only WebP embedding still fail with a clear message
+  instead of a false success (regression-tested).
+- Upscale page: the "Install" button no longer appears in the browser preview
+  where the binary can never run.
+
+### Removed
+- The single-endpoint `AiAssistantConfig` / `generateWithAi` path in
+  `metadata.ts` — superseded by the provider registry, and the reason a paid
+  OpenAI endpoint was the only option before.
+- `platformPreset` (20 near-identical upscale targets), the duplicate KPI strip
+  on Overview and the "4x-UltraSharp / NMKD" hints, which are non-commercial.
+
 ## [1.1.0] - 2026-11-15
 
 ### Changed
