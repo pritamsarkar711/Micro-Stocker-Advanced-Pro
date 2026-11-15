@@ -108,7 +108,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <div
               key={toast.id}
               className={clsx(
-                'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border bg-surface p-3 shadow-[var(--shadow-pop)]',
+                'pointer-events-auto flex w-full max-w-sm items-start gap-2.5 rounded-md border bg-surface p-2.5 shadow-[var(--shadow-pop)]',
                 tone.box,
               )}
               style={{ animation: 'toast-in 180ms ease-out both' }}

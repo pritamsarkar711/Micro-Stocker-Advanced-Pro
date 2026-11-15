@@ -41,7 +41,7 @@ Open any card. Tabs:
   validation; copy the adapted keyword list straight to the clipboard.
 - **Embed** — write/read IPTC/XMP for this single file.
 
-## 3. File Doctor
+## 3. Prepare
 
 - Select files → **Clean** strips EXIF/GPS and Photoshop scratch data, then
   re-encodes through an sRGB canvas stepping quality and scale until the file

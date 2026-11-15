@@ -27,7 +27,7 @@ export function useMediaQuery(query: string): boolean {
   return matches;
 }
 
-/** Live viewport info: powers the Responsive Lab and adaptive layout logic. */
+/** Live viewport info for adaptive layout logic. */
 export function useViewport() {
   const [size, setSize] = useState(() => ({
     width: typeof window === 'undefined' ? 1440 : window.innerWidth,

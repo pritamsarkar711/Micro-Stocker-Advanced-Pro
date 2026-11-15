@@ -1,5 +1,5 @@
 /**
- * File Doctor — privacy & technical cleanup before submission.
+ * Prepare — privacy & technical cleanup before submission.
  *
  *  - inspects JPEG segments: EXIF (incl. GPS), Photoshop IRB, ICC, XMP
  *  - strips EXIF/GPS (camera serials, lenses, GPS coordinates are a privacy

@@ -13,8 +13,8 @@ import { desktop } from '@/lib/desktop';
  *  1024-1279: auto-collapsed rail + topbar
  *  <1024px : off-canvas drawer + topbar + bottom tab bar
  *
- * `?embed=1` renders just the page content - used by the Responsive Lab device
- * simulator, which loads the real app inside fixed-width frames.
+ * `?embed=1` renders just the page content, with no chrome - handy for
+ * screenshots and for embedding the real pages inside other windows.
  */
 export function AppShell() {
   const { settings, updateSettings, ready } = useApp();

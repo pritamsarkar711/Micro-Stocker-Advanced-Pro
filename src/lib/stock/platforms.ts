@@ -433,7 +433,6 @@ export function platformName(id: PlatformId): string {
   return PLATFORMS[id].name;
 }
 
-/** Aggregators that simply redistribute the per-platform exports. */
 /** Portal labels used in sales CSVs that are not the internal id. */
 export const PLATFORM_ALIASES: Record<string, PlatformId> = {
   istock: 'getty',
@@ -450,7 +449,7 @@ export const PLATFORM_ALIASES: Record<string, PlatformId> = {
   'canva creators': 'canva',
   'canva elements': 'canva',
   'envato elements': 'envato',
-  'elements': 'envato',
+  elements: 'envato',
 };
 
 /** Match a free-text platform label (usually from a sales CSV) to a marketplace. */
@@ -471,14 +470,3 @@ export function findPlatform(label: string): PlatformId | null {
   }
   return null;
 }
-
-export const AGGREGATORS = [
-  {
-    name: 'Wirestock',
-    note: 'One upload, many agencies: use each platform export from this app and let Wirestock distribute, or upload the embedded files directly.',
-  },
-  {
-    name: 'Blackbox / StockSubmit-style tools',
-    note: 'Any tool that ingests IPTC/XMP will pick up metadata embedded by this app.',
-  },
-];
