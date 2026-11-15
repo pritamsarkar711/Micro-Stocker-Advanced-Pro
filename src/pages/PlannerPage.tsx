@@ -137,7 +137,7 @@ export function PlannerPage() {
     <>
       <PageHeader
         title="Submission planner"
-        description="Per-platform queues with the real publishing caps enforced."
+        
         actions={
           <span className="flex w-full items-center gap-2 sm:w-auto">
             <PlatformLogo id={platform} size={30} className="hidden sm:inline-flex" />
@@ -165,14 +165,14 @@ export function PlannerPage() {
 
       {(firstBatchIssue || monthlyIssue || cap) && (
         <Card className="mb-4" title={`${spec.name} publishing caps`} action={<CalendarClock className="size-4 text-brand" />}>
-          {cap && <p className="text-xs leading-relaxed text-fg-muted">{cap.note}</p>}
+          {cap && <p className="text-xs text-fg-muted">{cap.note}</p>}
           {firstBatchIssue && (
             <p className="mt-2 flex items-start gap-2 rounded-lg bg-warn-soft px-3 py-2 text-xs leading-relaxed text-warn">
               <TriangleAlert className="mt-0.5 size-4 shrink-0" /> {firstBatchIssue}
             </p>
           )}
           {monthlyIssue && (
-            <p className="mt-2 flex items-start gap-2 rounded-lg bg-surface-2 px-3 py-2 text-xs leading-relaxed text-fg-muted">
+            <p className="mt-2 flex items-start gap-2 rounded-lg bg-surface-2 px-3 py-2 text-xs text-fg-muted">
               <CalendarClock className="mt-0.5 size-4 shrink-0" /> {monthlyIssue}
             </p>
           )}
@@ -209,7 +209,7 @@ export function PlannerPage() {
         {!ready ? (
           <p className="p-6 text-center text-sm text-fg-muted">Loading planner…</p>
         ) : rows.length === 0 ? (
-          <EmptyState icon={<ListChecks className="size-7" />} title="Nothing in the library" description="Import files first — the planner tracks their journey per platform." />
+          <EmptyState icon={<ListChecks className="size-7" />} title="No files" description="Import files to start tracking." />
         ) : (
           <DataTable rows={rows} columns={columns} rowKey={(row) => row.item.id} dense footer={`${eligible.length} of ${rows.length} files currently pass ${spec.name} validation.`} />
         )}

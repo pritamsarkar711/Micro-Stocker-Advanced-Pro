@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Cpu, Download, Gauge, Library, Scale, Sparkles, TriangleAlert, Zap } from 'lucide-react';
+import { Cpu, Download, Gauge, Library, Scale, Sparkles, Zap } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -95,13 +95,13 @@ export function UpscalePage() {
         description="Enlarge PNG, JPG and WebP locally up to 8K with licence-safe models."
       />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <Card className="xl:col-span-2" title="Job" description="Source file, engine and target">
+      <div className="grid grid-cols-1 gap-2 xl:grid-cols-3">
+        <Card className="xl:col-span-2" title="Job">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Source file" hint={`${rasterItems.length} raster file(s) in library`}>
+            <Field label="Source">
               <Select value={activeItem?.id ?? ''} onChange={(e) => setItemId(e.target.value)} options={rasterItems.map((i) => ({ value: i.id, label: `${i.name} (${i.width ?? '?'}×${i.height ?? '?'})` }))} disabled={rasterItems.length === 0} />
             </Field>
-            <Field label="Target preset" hint={preset.note}>
+            <Field label="Target" hint={preset.note}>
               <Select value={presetId} onChange={(e) => setPresetId(e.target.value)} options={presets.map((p) => ({ value: p.id, label: p.label }))} />
             </Field>
             <Field label="Engine">
@@ -112,26 +112,26 @@ export function UpscalePage() {
               />
             </Field>
             {engine === 'realesrgan' && (
-              <Field label="Model" hint="All BSD-3-Clause, commercial use OK">
+              <Field label="Model">
                 <Select value={modelId} onChange={(e) => setModelId(e.target.value)} options={UPSCALE_MODELS.map((m) => ({ value: m.id, label: `${m.label} — ${m.bestFor}` }))} />
               </Field>
             )}
             <Field label="Output format">
               <Select value={outFormat} onChange={(e) => setOutFormat(e.target.value as typeof outFormat)} options={[
-                { value: 'png', label: 'PNG (lossless, larger)' },
-                { value: 'jpg', label: 'JPG (stock standard)' },
-                { value: 'webp', label: 'WebP (small previews)' },
+                { value: 'png', label: 'PNG' },
+                { value: 'jpg', label: 'JPG' },
+                { value: 'webp', label: 'WebP' },
               ]} />
             </Field>
             {outFormat !== 'png' && (
-              <Field label={`Quality ${Math.round(quality * 100)}%`} hint="Stock portals want 90-100 for JPEG">
+              <Field label={`Quality ${Math.round(quality * 100)}%`}>
                 <input type="range" min={0.7} max={1} step={0.01} value={quality} onChange={(e) => setQuality(Number(e.target.value))} className="mt-3 w-full accent-[var(--brand)]" />
               </Field>
             )}
           </div>
 
           {activeItem && plan && (
-            <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface-2 p-3 text-xs text-fg-muted">
+            <div className="mt-4 flex flex-wrap items-center gap-2 rounded-[0.375rem] border border-line bg-surface-2 p-3 text-xs text-fg-muted">
               <Scale className="size-4 text-brand" />
               <span>
                 {activeItem.width}×{activeItem.height} ({((activeItem.width! * activeItem.height!) / 1e6).toFixed(1)} MP)
@@ -145,43 +145,49 @@ export function UpscalePage() {
           )}
 
           {engine === 'realesrgan' && (
-            <div className="mt-3 rounded-xl border border-line bg-surface-2 p-3">
+            <div className="mt-3 rounded-[0.375rem] border border-line bg-surface-2 p-3">
               <div className="flex flex-wrap items-center gap-2">
                 <Cpu className="size-4 text-brand" />
                 <p className="flex-1 text-xs text-fg-muted">
-                  {engineState.status === 'ready' ? engineState.message : engineState.status === 'error' ? engineState.message : 'Portable binary not installed yet. It downloads once from GitHub (BSD-3-Clause) into your user data folder and then runs fully offline on your GPU.'}
+                  {engineState.status === 'ready'
+                    ? engineState.message
+                    : engineState.status === 'error'
+                      ? engineState.message
+                      : 'Downloads once (≈ 40 MB), then runs offline on your GPU.'}
                 </p>
                 <Button size="xs" variant="outline" onClick={onEnsure} loading={engineState.status === 'checking'} icon={<Download className="size-3.5" />}>
-                  {engineState.status === 'ready' ? 'Re-check' : 'Install engine'}
+                  {engineState.status === 'ready' ? 'Re-check' : 'Install'}
                 </Button>
               </div>
-              {!isDesktop && <p className="mt-2 flex items-center gap-1.5 text-[0.6875rem] text-warn"><TriangleAlert className="size-3.5" /> You are in the browser preview — switch to the desktop build to run Real-ESRGAN.</p>}
+              {!isDesktop && <p className="mt-2 text-[0.6875rem] text-warn">Desktop build required.</p>}
             </div>
           )}
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Button onClick={onRun} disabled={!activeItem || progress !== null || (engine === 'realesrgan' && engineState.status !== 'ready')} icon={<Zap className="size-4" />} loading={progress !== null}>
-              Run upscale
+              Run
             </Button>
             {progress && (
               <span className="flex items-center gap-2 text-xs text-fg-muted">
                 <Spinner size={3} /> {progress.label}
               </span>
             )}
-            <Badge tone="neutral" icon={<Gauge className="size-3" />}>8K = 33.2 MP ceiling preset</Badge>
+            <Badge tone="neutral" icon={<Gauge className="size-3" />}>8K</Badge>
           </div>
         </Card>
 
-        <Card title="Model licences" description="Commercial-use check, done for you">
+        <Card title="Licences">
           <ul className="flex flex-col gap-2">
             {UPSCALE_MODELS.map((model) => (
-              <li key={model.id} className="flex items-start gap-2.5 rounded-lg border border-line bg-surface-2 p-2.5">
+              <li key={model.id} className="flex items-start gap-2.5 rounded-[0.375rem] border border-line bg-surface-2 p-2.5">
                 <Sparkles className="mt-0.5 size-4 shrink-0 text-ok" />
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-fg">{model.label} <span className="font-normal text-fg-subtle">({model.nativeScale}×, ~{model.sizeMB} MB)</span></p>
-                  <p className="mt-0.5 text-[0.6875rem] leading-relaxed text-fg-muted">{model.bestFor}</p>
-                  <Badge tone="ok" className="mt-1">{model.license} · commercial OK</Badge>
+                  <p className="text-[0.75rem] font-medium text-fg">{model.label}</p>
+                  <p className="mt-0.5 text-[0.6875rem] text-fg-muted">
+                    {model.nativeScale}× · {model.bestFor}
+                  </p>
                 </div>
+                <Badge tone="ok" className="ml-auto shrink-0">OK</Badge>
               </li>
             ))}
           </ul>
@@ -190,18 +196,18 @@ export function UpscalePage() {
         </Card>
       </div>
 
-      <Card className="mt-4" title="Results" description="Download, or push straight back into the library for metadata + CSV" flush>
+      <Card className="mt-2" title="Results" flush>
         {results.length === 0 ? (
-          <p className="p-6 text-center text-sm text-fg-muted">No upscales yet in this session.</p>
+          <p className="px-3 py-6 text-center text-[0.8125rem] text-fg-subtle">No results</p>
         ) : (
           <ul className="divide-y divide-line">
             {results.map((result) => (
-              <li key={result.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-                <img src={result.url} alt={result.outName} className="h-20 w-28 shrink-0 rounded-lg border border-line object-cover" />
+              <li key={result.id} className="flex items-center gap-3 px-3 py-2">
+                <img src={result.url} alt={result.outName} className="h-14 w-20 shrink-0 rounded-[0.3rem] border border-line object-cover" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-fg">{result.outName}</p>
                   <p className="mt-0.5 text-xs text-fg-muted">
-                    from {result.sourceName} · {result.width}×{result.height} ({((result.width * result.height) / 1e6).toFixed(1)} MP) · {formatBytes(result.blob.size)} · {result.engine === 'classic' ? 'built-in resampler' : result.modelId} · {(result.ms / 1000).toFixed(1)}s
+                    {result.width}×{result.height} · {formatBytes(result.blob.size)} · {(result.ms / 1000).toFixed(1)}s
                   </p>
                 </div>
                 <div className="flex shrink-0 gap-2">
@@ -215,7 +221,7 @@ export function UpscalePage() {
                   </Button>
                   <Button size="xs" icon={<Library className="size-3.5" />} onClick={async () => {
                     await library.addUpscaled(result.outName, result.blob, result.width, result.height);
-                    toast.success('Added to library', 'Generate metadata and export CSV for it like any other item.');
+                    toast.success('Added');
                   }}>
                     To library
                   </Button>

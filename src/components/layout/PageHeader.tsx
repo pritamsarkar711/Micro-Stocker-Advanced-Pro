@@ -1,11 +1,14 @@
 import clsx from 'clsx';
 import type { ReactNode } from 'react';
 
+/**
+ * Page title row. Deliberately captionless: the nav label and the page title
+ * carry all the meaning; explanatory prose belongs in empty states only.
+ */
 export function PageHeader({
   title,
   description,
   actions,
-  children,
   className,
 }: {
   title: ReactNode;
@@ -15,23 +18,25 @@ export function PageHeader({
   className?: string;
 }) {
   return (
-    <div className={clsx('flex flex-col gap-4 pb-5', className)}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight text-fg sm:text-2xl lg:text-[1.75rem]">
-            {title}
-          </h1>
-          {description && (
-            <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-fg-muted">{description}</p>
-          )}
-        </div>
-        {actions && (
-          <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:px-0 sm:pb-0">
-            {actions}
-          </div>
+    <div
+      className={clsx(
+        'mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2',
+        className,
+      )}
+    >
+      <div className="min-w-0">
+        <h1 className="truncate text-[1.0625rem] font-semibold tracking-tight text-fg">
+          {title}
+        </h1>
+        {description && (
+          <p className="mt-0.5 truncate text-[0.75rem] text-fg-muted">{description}</p>
         )}
       </div>
-      {children}
+      {actions && (
+        <div className="no-scrollbar flex shrink-0 items-center gap-1.5 overflow-x-auto">
+          {actions}
+        </div>
+      )}
     </div>
   );
 }

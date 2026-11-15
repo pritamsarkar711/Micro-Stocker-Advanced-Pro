@@ -13,7 +13,6 @@ import {
   Plus,
   ScanSearch,
   Search,
-  Sparkles,
   Stethoscope,
   Trash2,
   Upload,
@@ -195,7 +194,6 @@ export function LibraryPage() {
     <>
       <PageHeader
         title="Library"
-        description="Import EPS, AI, SVG, JPG, PNG and WebP. Generate, edit and embed metadata."
         actions={
           <>
             <input
@@ -207,23 +205,23 @@ export function LibraryPage() {
               onChange={(event) => onImport(event.target.files)}
             />
             <Button size="sm" loading={busy} icon={isDesktop ? <HardDrive className="size-4" /> : <Upload className="size-4" />} onClick={() => (isDesktop ? onImport() : fileInputRef.current?.click())}>
-              Import files
+              Import
             </Button>
             <Button size="sm" variant="outline" loading={busy} icon={<Wand2 className="size-4" />} onClick={onBulkGenerate}>
-              Generate all
+              Generate
             </Button>
             <Button size="sm" variant="outline" loading={busy} icon={<PenLine className="size-4" />} onClick={onBulkEmbed}>
-              Embed all
+              Embed
             </Button>
           </>
         }
       />
 
       {/* toolbar */}
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+      <div className="mb-2 flex flex-col gap-1.5 sm:flex-row sm:items-center">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-fg-subtle" />
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name, title or keyword…" className="pl-9" />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search…" className="pl-9" />
         </div>
         <Select
           value={formatFilter}
@@ -240,7 +238,7 @@ export function LibraryPage() {
           ]}
         />
         <Button size="sm" variant="outline" icon={<ScanSearch className="size-4" />} onClick={onScanDupes} disabled={library.items.length < 2}>
-          Find duplicates
+          Duplicates
         </Button>
         <Button size="sm" variant="outline" icon={<Copy className="size-4" />} onClick={() => setTplOpen(true)} disabled={library.items.length === 0}>
           Template
@@ -262,19 +260,19 @@ export function LibraryPage() {
           icon={<FileSpreadsheet className="size-4" />}
           onClick={() => (csvRaw ? setCsvOpen(true) : csvInputRef.current?.click())}
           disabled={library.items.length === 0}
-          title="Re-use an existing metadata CSV (this app, Xpiks or a portal download)"
+          title="Import CSV"
         >
-          Import CSV
+          CSV
         </Button>
         {isDesktop && (
           <Button
             size="sm"
-            variant={library.watching ? 'success' : 'ghost'}
+            variant={library.watching ? 'secondary' : 'ghost'}
             icon={<FolderSearch className="size-4" />}
             onClick={() => (library.watching ? library.stopWatch() : library.startWatch())}
-            title={library.watching ?? 'Watch a folder for new files'}
+            title="Watch folder"
           >
-            {library.watching ? 'Watching' : 'Watch folder'}
+            {library.watching ? 'Watching' : 'Watch'}
           </Button>
         )}
         <Button size="sm" variant="ghost" onClick={() => library.setSelection(library.selection.size === library.items.length ? [] : library.items.map((i) => i.id))}>
@@ -283,8 +281,9 @@ export function LibraryPage() {
       </div>
 
       {library.watching && (
-        <p className="mb-3 flex items-center gap-2 rounded-lg border border-ok/30 bg-ok-soft px-3 py-2 text-xs text-ok">
-          <FolderSearch className="size-4 shrink-0" /> Auto-importing new stock files from <code className="truncate font-mono">{library.watching}</code>
+        <p className="mb-2 flex items-center gap-2 border-l-2 border-ok pl-2 text-[0.6875rem] text-ok">
+          <FolderSearch className="size-3.5 shrink-0" />
+          <span className="truncate font-mono">{library.watching}</span>
         </p>
       )}
 
@@ -292,11 +291,11 @@ export function LibraryPage() {
         <Card>
           <EmptyState
             icon={<Box className="size-7" />}
-            title={library.items.length === 0 ? 'Your library is empty' : 'Nothing matches the filter'}
+            title={library.items.length === 0 ? 'No files' : 'No match'}
             description={
               library.items.length === 0
-                ? 'Import your stock files to start generating metadata, CSVs and upscales. On desktop the native file picker opens; in the browser preview use the file chooser.'
-                : 'Adjust the search or format filter.'
+                ? 'JPG, PNG, WebP, EPS, AI or SVG'
+                : 'Change the search or filter.'
             }
             action={
               <Button icon={<Plus className="size-4" />} onClick={() => (isDesktop ? onImport() : fileInputRef.current?.click())}>
@@ -336,7 +335,7 @@ export function LibraryPage() {
                 window.location.hash = '#/prepare';
               }}
             >
-              File Doctor
+              Prepare
             </Button>
             <Button
               size="xs"
@@ -347,7 +346,7 @@ export function LibraryPage() {
                 window.location.hash = '#/export';
               }}
             >
-              Export CSV
+              CSV
             </Button>
             <Button size="xs" variant="ghost" icon={<Trash2 className="size-3.5" />} onClick={() => library.removeItems(selectedIds)}>Remove</Button>
             <Button size="xs" variant="ghost" icon={<X className="size-3.5" />} onClick={() => library.setSelection([])} aria-label="Clear selection" />
@@ -356,7 +355,7 @@ export function LibraryPage() {
       )}
 
       {/* duplicates modal */}
-      <Modal open={dupOpen} onClose={() => setDupOpen(false)} title="Near-duplicate scan" description="64-bit perceptual dHash; ≤ 8 differing bits = near-identical at thumbnail scale." size="lg">
+      <Modal open={dupOpen} onClose={() => setDupOpen(false)} title="Duplicates" size="lg">
         {dupState.running ? (
           <div className="flex flex-col items-center gap-3 py-10">
             <Spinner size={5} />
@@ -365,22 +364,22 @@ export function LibraryPage() {
         ) : clusters === null ? (
           <p className="py-8 text-center text-sm text-fg-muted">Starting scan…</p>
         ) : clusters.length === 0 ? (
-          <EmptyState icon={<ScanSearch className="size-7" />} title="No near-duplicates" description="Every raster file in the library hashes uniquely. Safe to submit together." />
+          <EmptyState icon={<ScanSearch className="size-7" />} title="No duplicates" description="Every raster hashes uniquely." />
         ) : (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
             {clusters.map((cluster, index) => (
               <div key={index} className="card p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-fg">Cluster {index + 1} · {cluster.items.length} files</p>
-                  <Badge tone="warn" dot>max distance {cluster.maxDistance}</Badge>
+                  <p className="text-[0.8125rem] font-semibold text-fg">{cluster.items.length} files</p>
+                  <Badge tone="warn">Δ {cluster.maxDistance}</Badge>
                 </div>
                 <ul className="mt-2 grid gap-2 sm:grid-cols-2">
                   {cluster.items.map((item, position) => (
-                    <li key={item.id} className="flex items-center gap-2 rounded-lg border border-line bg-surface-2 p-2">
+                    <li key={item.id} className="flex items-center gap-2 rounded-[0.375rem] border border-line bg-surface-2 p-2">
                       {item.thumbUrl ? <img src={item.thumbUrl} alt="" className="size-10 rounded-md border border-line object-cover" /> : <FileImage className="size-10 text-fg-subtle" />}
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-xs font-medium text-fg">{item.name}</span>
-                        <span className="block text-[0.625rem] text-fg-subtle">{position === 0 ? 'keep (first)' : 'possible duplicate'}</span>
+                        <span className="block text-[0.625rem] text-fg-subtle">{position === 0 ? 'keep' : 'duplicate'}</span>
                       </span>
                     </li>
                   ))}
@@ -392,10 +391,10 @@ export function LibraryPage() {
                   onClick={() => {
                     library.setSelection(cluster.items.slice(1).map((i) => i.id));
                     setDupOpen(false);
-                    toast.info('Duplicates selected', 'Review them, then Remove or clean from the bulk bar.');
+                    toast.info('Selected', 'Review, then remove.');
                   }}
                 >
-                  Select all but the first
+                  Select others
                 </Button>
               </div>
             ))}
@@ -407,24 +406,24 @@ export function LibraryPage() {
       <Modal
         open={tplOpen}
         onClose={() => setTplOpen(false)}
-        title="Batch metadata template"
-        description={`Applies to ${selectedIds.length || library.items.length} file(s). Variables: {name} {format} {index} {count} {category}`}
+        title="Template"
+        description={`${selectedIds.length || library.items.length} files · {name} {format} {index} {count} {category}`}
         size="md"
         footer={
           <>
             <Button variant="ghost" onClick={() => setTplOpen(false)}>Cancel</Button>
-            <Button onClick={applyTemplate} icon={<Copy className="size-4" />}>Apply template</Button>
+            <Button onClick={applyTemplate} icon={<Copy className="size-4" />}>Apply</Button>
           </>
         }
       >
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
           <Field label="Title template">
             <Input value={tplTitle} onChange={(e) => setTplTitle(e.target.value)} />
           </Field>
           <Field label="Description template">
             <Textarea value={tplDesc} onChange={(e) => setTplDesc(e.target.value)} />
           </Field>
-          <Field label="Keywords to append (comma separated)" hint="Merged with existing keywords, de-duplicated, capped at 50.">
+          <Field label="Keywords to append">
             <Input value={tplKeywords} onChange={(e) => setTplKeywords(e.target.value)} />
           </Field>
         </div>
@@ -434,8 +433,8 @@ export function LibraryPage() {
       <Modal
         open={csvOpen}
         onClose={() => setCsvOpen(false)}
-        title="Import metadata CSV"
-        description="Rows match library files by filename; titles, keywords and flags are merged."
+        title="Import CSV"
+        description="Matched by filename"
         size="lg"
         footer={
           <>
@@ -447,26 +446,26 @@ export function LibraryPage() {
               disabled={!csvParse || !csvMatch || csvMatch.size === 0}
               icon={<FileSpreadsheet className="size-4" />}
             >
-              Apply to library
+              Apply
             </Button>
           </>
         }
       >
         {csvParse ? (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
               {csvParse.platform ? (
                 <Badge tone="brand">
                   <span className="flex items-center gap-1.5">
                     <PlatformLogo id={csvParse.platform} size={16} />
-                    {PLATFORM_LIST.find((p) => p.id === csvParse.platform)?.name} dialect
+                    {PLATFORM_LIST.find((p) => p.id === csvParse.platform)?.name}
                   </span>
                 </Badge>
               ) : (
                 <Badge tone="neutral">generic CSV</Badge>
               )}
               <Badge tone="outline">{csvParse.delimiter === '\t' ? 'TAB' : `"${csvParse.delimiter}"`}</Badge>
-              <Badge tone="outline">{csvParse.hasHeader ? 'header row' : 'headerless'}</Badge>
+              <Badge tone="outline">{csvParse.hasHeader ? 'header' : 'no header'}</Badge>
               <Badge tone={csvParse.rows.length ? 'ok' : 'danger'}>{csvParse.rows.length} rows</Badge>
               {csvParse.skipped > 0 && <Badge tone="warn">{csvParse.skipped} skipped</Badge>}
               <Badge tone={csvMatch && csvMatch.size > 0 ? 'ok' : 'warn'}>
@@ -474,7 +473,7 @@ export function LibraryPage() {
               </Badge>
             </div>
 
-            <Field label="Column order" hint="Headerless sheets are read positionally — pick the platform whose layout matches.">
+            <Field label="Column order">
               <Select
                 value={csvDialect}
                 onChange={(event) => setCsvDialect(event.target.value as PlatformId | '')}
@@ -485,14 +484,14 @@ export function LibraryPage() {
               />
             </Field>
 
-            <div className="overflow-x-auto rounded-xl border border-line">
+            <div className="overflow-x-auto rounded-[0.375rem] border border-line">
               <table className="w-full min-w-[26rem] text-left text-xs">
                 <thead className="bg-surface-2 text-[0.6875rem] tracking-wide text-fg-subtle uppercase">
                   <tr>
                     <th className="px-3 py-2">File</th>
                     <th className="px-3 py-2">Title</th>
                     <th className="px-3 py-2 text-right">Keywords</th>
-                    <th className="px-3 py-2 text-right">In library</th>
+                    <th className="px-3 py-2 text-right">Match</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
@@ -513,16 +512,14 @@ export function LibraryPage() {
               </table>
             </div>
 
-            <p className="text-xs text-fg-subtle">
-              Rows that do not match a library filename are ignored — import the artwork first, then re-apply.
-            </p>
+            <p className="text-[0.6875rem] text-fg-subtle">Unmatched rows are ignored.</p>
           </div>
         ) : (
           <EmptyState
             icon={<FileSpreadsheet className="size-7" />}
-            title="Pick a metadata CSV"
-            description="Exports from this app, Xpiks or a portal download all work — the dialect is detected automatically."
-            action={<Button icon={<Upload className="size-4" />} onClick={() => csvInputRef.current?.click()}>Choose CSV</Button>}
+            title="Choose a CSV"
+            description="Dialect detected automatically"
+            action={<Button icon={<Upload className="size-4" />} onClick={() => csvInputRef.current?.click()}>Choose</Button>}
           />
         )}
       </Modal>
@@ -548,15 +545,15 @@ function LibraryCard({
   const mp = megapixels(item);
   return (
     <li>
-      <div className={clsx('card group relative overflow-hidden transition hover:border-line-strong', selected && 'ring-2 ring-brand/60')}>
+      <div className={clsx('card group relative overflow-hidden transition-colors hover:border-line-strong', selected && 'ring-1 ring-brand')}>
         <button type="button" onClick={onOpen} className="block w-full text-left">
-          <div className="relative flex h-36 items-center justify-center overflow-hidden bg-surface-2 sm:h-40">
+          <div className="relative flex h-32 items-center justify-center overflow-hidden bg-surface-2">
             {item.thumbUrl ? (
-              <img src={item.thumbUrl} alt={item.name} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
+              <img src={item.thumbUrl} alt={item.name} className="h-full w-full object-cover" loading="lazy" />
             ) : (
               <span className="flex flex-col items-center gap-2 text-fg-subtle">
                 {item.format === 'eps' || item.format === 'ai' || item.format === 'svg' ? <Layers className="size-8" /> : <FileImage className="size-8" />}
-                <span className="font-mono text-xs uppercase">{item.format}</span>
+                <span className="font-mono text-[0.6875rem] uppercase">{item.format}</span>
               </span>
             )}
             <span className="absolute top-2 left-2 flex gap-1">
@@ -567,22 +564,23 @@ function LibraryCard({
               <Badge tone={LEVEL_TONE[level]} dot>{level === 'ok' ? 'ready' : level}</Badge>
             </span>
           </div>
-          <div className="p-3">
-            <p className="truncate text-sm font-medium text-fg" title={item.name}>{item.name}</p>
-            <p className="mt-1 truncate text-xs text-fg-muted">{item.metadata.title || 'No title yet'}</p>
-            <div className="mt-2 flex items-center justify-between gap-2 text-[0.6875rem] text-fg-subtle">
-              <span className="tabular-nums">{formatBytes(item.sizeBytes)}</span>
-              <span className="flex items-center gap-1.5">
-                <Sparkles className="size-3" />
+          <div className="px-2.5 py-2">
+            <p className="truncate text-[0.8125rem] font-medium text-fg" title={item.name}>{item.name}</p>
+            <p className="mt-0.5 truncate text-[0.6875rem] text-fg-muted">{item.metadata.title || '—'}</p>
+            <div className="mt-1.5 flex items-center justify-between gap-2 text-[0.625rem] text-fg-subtle">
+              <span className="nums">{formatBytes(item.sizeBytes)}</span>
+              <span className="flex items-center gap-1">
                 {item.metadata.keywords.length} kw
-                {item.embeddedAt && <Badge tone="ok" className="ml-1">embedded</Badge>}
+                {item.embeddedAt && <span className="size-1.5 rounded-full bg-ok" title="Embedded" />}
               </span>
             </div>
           </div>
         </button>
-        <label className="absolute bottom-3 left-3 flex cursor-pointer items-center gap-1.5 rounded-md bg-black/45 px-2 py-1 text-[0.6875rem] font-medium text-white backdrop-blur">
+        <label
+          className="absolute bottom-2 left-2 flex cursor-pointer items-center rounded-[0.25rem] bg-black/55 p-1 backdrop-blur"
+          aria-label={`Select ${item.name}`}
+        >
           <input type="checkbox" checked={selected} onChange={onSelect} className="size-3.5 accent-[var(--brand)]" />
-          select
         </label>
       </div>
     </li>

@@ -116,7 +116,6 @@ export function stripJpegMetadata(bytes: Uint8Array, options: { photoshop: boole
     const payload = bytes.subarray(offset + 4, offset + 2 + length);
 
     const isExif = marker === 0xe1 && dec.decode(payload.subarray(0, 6)) === 'Exif\0\0';
-    const isXmp = marker === 0xe1 && dec.decode(payload.subarray(0, XMP_NS.length)) === XMP_NS;
     const isIrb = marker === 0xed && dec.decode(payload.subarray(0, 14)) === 'Photoshop 3.0\0';
 
     if (isExif) removed.push('EXIF/GPS');

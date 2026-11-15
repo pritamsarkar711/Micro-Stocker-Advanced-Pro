@@ -17,7 +17,7 @@ import {
   type StockItem,
   type StockMetadata,
 } from '@/lib/stock/types';
-import { detectFormat, probeRasterDimensions, probeVectorDimensions, bytesToBase64 } from '@/lib/stock/files';
+import { detectFormat, probeRasterDimensions, probeVectorDimensions } from '@/lib/stock/files';
 import { embedMetadata, readEmbeddedMetadata } from '@/lib/stock/xmp';
 import { adaptForPlatform, generateMetadata, generateWithAi, type AiAssistantConfig, type GenerateOptions } from '@/lib/stock/metadata';
 import { DEFAULT_BANK, type KeywordBank } from '@/state/bank';

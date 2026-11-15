@@ -70,18 +70,18 @@ export function Modal({ open, onClose, title, description, children, footer, siz
         aria-label={typeof title === 'string' ? title : 'Dialog'}
         className={clsx(
           'relative flex w-full flex-col overflow-hidden border border-line bg-surface shadow-[var(--shadow-pop)]',
-          'rounded-t-2xl sm:rounded-2xl',
+          'rounded-t-lg sm:rounded-lg',
           'max-h-[92dvh] sm:max-h-[85dvh]',
           SIZES[size],
         )}
         style={{ animation: 'toast-in 180ms ease-out both' }}
       >
         {(title || description) && (
-          <header className="flex items-start justify-between gap-4 border-b border-line px-4 py-3.5 sm:px-5">
+          <header className="flex items-start justify-between gap-4 border-b border-line px-4 py-3">
             <div className="min-w-0">
               {title && <h2 className="text-base font-semibold text-fg">{title}</h2>}
               {description && (
-                <p className="mt-1 text-xs leading-relaxed text-fg-muted sm:text-sm">{description}</p>
+                <p className="mt-0.5 text-[0.75rem] text-fg-muted">{description}</p>
               )}
             </div>
             <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close dialog">
@@ -90,7 +90,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
           </header>
         )}
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">{children}</div>
 
         {footer && (
           <footer className="flex flex-col-reverse gap-2 border-t border-line bg-surface-2 px-4 py-3 safe-bottom sm:flex-row sm:justify-end sm:px-5">

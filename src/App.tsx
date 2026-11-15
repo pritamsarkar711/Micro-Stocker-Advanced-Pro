@@ -25,7 +25,6 @@ const ReleasesPage = lazy(() => import('@/pages/ReleasesPage').then((m) => ({ de
 const EarningsPage = lazy(() => import('@/pages/EarningsPage').then((m) => ({ default: m.EarningsPage })));
 const BankPage = lazy(() => import('@/pages/BankPage').then((m) => ({ default: m.BankPage })));
 const CloudPage = lazy(() => import('@/pages/CloudPage').then((m) => ({ default: m.CloudPage })));
-const ResponsiveLabPage = lazy(() => import('@/pages/ResponsiveLabPage').then((m) => ({ default: m.ResponsiveLabPage })));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const AboutPage = lazy(() => import('@/pages/AboutPage').then((m) => ({ default: m.AboutPage })));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
@@ -56,7 +55,6 @@ export default function App() {
                 <Route path="earnings" element={<EarningsPage />} />
                 <Route path="bank" element={<BankPage />} />
                 <Route path="cloud" element={<CloudPage />} />
-                <Route path="responsive" element={<ResponsiveLabPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="about" element={<AboutPage />} />
                 <Route path="404" element={<NotFoundPage />} />

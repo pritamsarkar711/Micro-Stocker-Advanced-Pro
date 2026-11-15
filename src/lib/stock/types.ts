@@ -12,7 +12,11 @@ export type PlatformId =
   | 'depositphotos'
   | 'vecteezy'
   | 'getty'
-  | 'alamy';
+  | 'alamy'
+  | 'pond5'
+  | 'vectorstock'
+  | 'canva'
+  | 'envato';
 
 export interface StockMetadata {
   title: string;

@@ -13,6 +13,7 @@ import { parseMetadataCsv, planApply, splitFields } from '@/lib/stock/csvimport'
 import { generateMetadata, adaptForPlatform, tokensFromFilename } from '@/lib/stock/metadata';
 import { sanitizeFilename, validateItem, validateEverywhere, worstLevel } from '@/lib/stock/validate';
 import { PLATFORMS, PLATFORM_LIST, findPlatform } from '@/lib/stock/platforms';
+import { PLATFORM_BRAND } from '@/lib/stock/brand';
 import { SHUTTERSTOCK_CATEGORIES } from '@/lib/stock/categories';
 import { detectFormat, formatBytes, bytesToBase64, base64ToBytes } from '@/lib/stock/files';
 import { buildXmpPacket, embedMetadata, parseXmpPacket, readEmbeddedMetadata } from '@/lib/stock/xmp';
@@ -97,9 +98,21 @@ function item(overrides: Partial<StockItem> = {}): StockItem {
 /* =========================== platform registry =========================== */
 group('Platform registry');
 
-test('ten marketplaces are registered with brand colours', () => {
-  equal(PLATFORM_LIST.length, 10, 'platform count');
+test('fourteen marketplaces are registered with brand colours', () => {
+  equal(PLATFORM_LIST.length, 14, 'platform count');
   assert(PLATFORM_LIST.every((p) => /^#/.test(p.color)), 'every platform has a hex colour');
+});
+
+test('every marketplace has a brand mark and a CSV or portal workflow', () => {
+  for (const platform of PLATFORM_LIST) {
+    const brand = PLATFORM_BRAND[platform.id];
+    assert(brand, `brand missing for ${platform.id}`);
+    assert(/^#/.test(brand.color), `brand colour missing for ${platform.id}`);
+    assert(
+      Boolean(brand.glyph || brand.monogram),
+      `brand needs a glyph or monogram: ${platform.id}`,
+    );
+  }
 });
 
 test('Shutterstock keyword window is 7-50 and unordered', () => {
@@ -236,7 +249,7 @@ test('recognisable people without a linked release raise a warning', () => {
 
 test('validateEverywhere reports every platform at once', () => {
   const everywhere = validateEverywhere(item(), [item()]);
-  equal(Object.keys(everywhere).length, 10, 'one entry per platform');
+  equal(Object.keys(everywhere).length, PLATFORM_LIST.length, 'one entry per platform');
 });
 
 test('filenames are made platform-safe', () => {

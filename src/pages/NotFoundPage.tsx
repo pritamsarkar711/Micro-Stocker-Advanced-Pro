@@ -8,11 +8,11 @@ export function NotFoundPage() {
     <div className="card mx-auto max-w-xl">
       <EmptyState
         icon={<Compass className="size-7" />}
-        title="This page does not exist"
-        description="The route you asked for is not part of the app yet. Feature modules are added once the specification is confirmed."
+        title="Not found"
+        
         action={
           <Link to="/">
-            <Button size="sm">Back to overview</Button>
+            <Button size="sm">Overview</Button>
           </Link>
         }
       />

@@ -22,9 +22,9 @@ export function BankPage() {
   const [newWord, setNewWord] = useState('');
 
   const wordsEditor = (words: string[], onChange: (next: string[]) => void) => (
-    <div className="flex flex-wrap gap-1.5 rounded-lg border border-line bg-surface-2 p-2">
+    <div className="flex flex-wrap gap-1.5 rounded-[0.375rem] border border-line bg-surface-2 p-2">
       {words.map((word) => (
-        <span key={word} className="inline-flex items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 text-[0.6875rem] font-medium text-brand-fg">
+        <span key={word} className="inline-flex items-center gap-1 rounded-[0.25rem] bg-brand-soft px-1.5 py-0.5 text-[0.6875rem] font-medium text-brand-fg">
           {word}
           <button type="button" aria-label={`Remove ${word}`} onClick={() => onChange(words.filter((w) => w !== word))}>
             <Trash2 className="size-3" />
@@ -49,7 +49,7 @@ export function BankPage() {
     <>
       <PageHeader
         title="Keyword bank"
-        description="Your synonyms, category banks and ES/DE/FR dictionary — merged into every generation."
+        description="Merged into every generation"
         actions={
           <Button size="sm" variant="ghost" icon={<RotateCcw className="size-4" />} onClick={() => { bank.resetBank(); toast.info('Bank reset', 'Back to the shipped defaults plus nothing.'); }}>
             Reset to defaults
@@ -57,8 +57,8 @@ export function BankPage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <Card title="Synonym expansions" description="filename token → search vocabulary" action={<BookMarked className="size-4 text-brand" />} flush>
+      <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
+        <Card title="Synonyms" action={<BookMarked className="size-4 text-fg-subtle" />} flush>
           <div className="flex flex-col divide-y divide-line">
             {Object.entries(bank.bank.synonyms).map(([key, words]) => (
               <div key={key} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-start">
@@ -94,8 +94,8 @@ export function BankPage() {
           </div>
         </Card>
 
-        <div className="flex flex-col gap-4">
-          <Card title="Category banks" description="extra concept words per category key" action={<Layers className="size-4 text-brand" />} flush>
+        <div className="flex flex-col gap-2">
+          <Card title="Categories" action={<Layers className="size-4 text-fg-subtle" />} flush>
             <div className="flex flex-col divide-y divide-line">
               {Object.entries(bank.bank.categories).map(([key, words]) => (
                 <div key={key} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-start">
@@ -124,7 +124,7 @@ export function BankPage() {
             </div>
           </Card>
 
-          <Card title="Translation dictionary" description="append localized keywords from the item editor" action={<Globe2 className="size-4 text-brand" />}>
+          <Card title="Translations" action={<Globe2 className="size-4 text-fg-subtle" />}>
             <div className="grid grid-cols-[1fr_repeat(3,3.5rem)] gap-2 text-[0.6875rem] font-semibold tracking-wide text-fg-subtle uppercase">
               <span>English</span>
               {LANGS.map((lang) => (

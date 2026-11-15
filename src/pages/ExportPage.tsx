@@ -115,7 +115,7 @@ export function ExportPage() {
     <>
       <PageHeader
         title="Export centre"
-        description="Every platform's exact CSV dialect, platform-safe filenames, embedded metadata."
+        description="Per-platform CSV, renames, embedding"
         actions={
           <>
             <Button size="sm" variant="outline" loading={busy} icon={<PenLine className="size-4" />} onClick={onEmbedAll} disabled={rows.length === 0}>
@@ -141,7 +141,7 @@ export function ExportPage() {
         </div>
       </PageHeader>
 
-      <Card title="Target platforms" description="Tick every marketplace in this batch" flush>
+      <Card title="Platforms" flush>
         <div className="flex flex-wrap gap-2 p-4">
           {PLATFORM_LIST.map((platform) => (
             <button
@@ -150,8 +150,8 @@ export function ExportPage() {
               onClick={() => toggle(platform.id)}
               className={
                 enabled.has(platform.id)
-                  ? 'inline-flex items-center gap-2 rounded-full border border-brand bg-brand-soft px-3 py-1.5 text-xs font-semibold text-brand-fg'
-                  : 'inline-flex items-center gap-2 rounded-full border border-line bg-surface-2 px-3 py-1.5 text-xs font-medium text-fg-muted transition hover:text-fg'
+                  ? 'inline-flex items-center gap-2 rounded-[0.375rem] border border-brand bg-brand-soft px-2.5 py-1 text-[0.75rem] font-semibold text-brand-fg'
+                  : 'inline-flex items-center gap-2 rounded-[0.375rem] border border-line bg-surface-2 px-2.5 py-1 text-[0.75rem] font-medium text-fg-muted transition-colors hover:text-fg'
               }
             >
               <PlatformLogo id={platform.id} size={18} />
@@ -167,7 +167,7 @@ export function ExportPage() {
           <p className="p-6 text-center text-sm text-fg-muted">Import files in the Library first — exports need at least one row.</p>
         </Card>
       ) : (
-        <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div className="mt-4 grid grid-cols-1 gap-2 xl:grid-cols-2">
           {exports.map(({ platform, result, blocking }) => (
             <Card
               key={platform.id}

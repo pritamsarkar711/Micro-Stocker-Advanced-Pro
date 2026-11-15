@@ -1,16 +1,13 @@
 import { useEffect, useState } from 'react';
 import {
   Cloud,
-  CloudOff,
   Database,
   Eye,
   EyeOff,
   KeyRound,
   Link2,
   Save,
-  ShieldAlert,
   Trash2,
-  TriangleAlert,
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/Card';
@@ -23,17 +20,14 @@ import { useApp } from '@/state/AppState';
 import { useToast } from '@/state/ToastState';
 import { SUPABASE_SQL } from '@/lib/cloud/schema';
 import { testCloudConnection, type ConnectionReport } from '@/lib/cloud/config';
-import { dateTime } from '@/lib/format';
 import { pushLibrary, pullLibrary } from '@/lib/stock/sync';
 import { useLibrary } from '@/state/library';
-import { isDesktop } from '@/lib/desktop';
 
 export function CloudPage() {
-  const { cloud, saveCloud, clearCloud, connection, recheckConnection, runtime, ready } = useApp();
+  const { cloud, saveCloud, clearCloud, connection, recheckConnection, ready } = useApp();
   const library = useLibrary();
   const toast = useToast();
   const [syncing, setSyncing] = useState(false);
-
   const [url, setUrl] = useState('');
   const [anonKey, setAnonKey] = useState('');
   const [enabled, setEnabled] = useState(true);
@@ -52,16 +46,14 @@ export function CloudPage() {
 
   const urlIssue =
     url && !/^https:\/\/[a-z0-9-]+\.supabase\.(co|in)$/i.test(url.trim())
-      ? 'Expected https://<project-ref>.supabase.co — check for typos, spaces or a missing https://'
+      ? 'Format: https://<ref>.supabase.co'
       : undefined;
-
   const keyIssue =
     anonKey && anonKey.trim().length < 40
-      ? 'An anon key is normally a long JWT (100+ characters). This looks too short.'
+      ? 'Key looks too short'
       : anonKey.includes('service_role')
-        ? 'This looks like a service_role key. Never ship that inside a desktop app — use the anon key.'
+        ? 'Use the anon key, never service_role'
         : undefined;
-
   const canSave = Boolean(url.trim() && anonKey.trim()) && !urlIssue && !keyIssue;
 
   const onTest = async () => {
@@ -75,9 +67,9 @@ export function CloudPage() {
     });
     setReport(result);
     setTesting(false);
-    if (result.state === 'online') toast.success('Cloud reachable', result.message);
-    else if (result.state === 'error') toast.error('Cloud test failed', result.message);
-    else toast.info('Offline mode', result.message);
+    if (result.state === 'online') toast.success('Reachable');
+    else if (result.state === 'error') toast.error('Test failed', result.message);
+    else toast.info('Local mode');
   };
 
   const onSave = async () => {
@@ -90,8 +82,8 @@ export function CloudPage() {
       savedAt: null,
     });
     setSaving(false);
-    if (ok) toast.success('Cloud saved', 'Credentials stored and connection verified.');
-    else toast.warning('Saved with problems', 'Credentials stored, but the connection test failed.');
+    if (ok) toast.success('Connected');
+    else toast.warning('Saved, test failed');
   };
 
   const active = report ?? connection;
@@ -99,56 +91,27 @@ export function CloudPage() {
   return (
     <>
       <PageHeader
-        title="Cloud connection"
-        description="Optional Supabase sync. Everything runs offline until credentials are added."
+        title="Cloud"
         actions={
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onTest}
-              loading={testing}
-              icon={<Link2 className="size-4" />}
-            >
-              Test
-            </Button>
-            <Button
-              size="sm"
-              onClick={onSave}
-              loading={saving}
-              disabled={!canSave}
-              icon={<Save className="size-4" />}
-            >
-              Save & connect
-            </Button>
-          </>
+          <Badge tone={active.state === 'online' ? 'ok' : active.state === 'error' ? 'danger' : 'neutral'} dot>
+            {active.state === 'online' ? 'Synced' : 'Local'}
+          </Badge>
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <div className="flex flex-col gap-4 xl:col-span-2">
+      <div className="grid grid-cols-1 gap-2 xl:grid-cols-3">
+        <div className="flex flex-col gap-2 xl:col-span-2">
           <Card
-            title="Supabase credentials"
-            description="Project Settings → API in your Supabase dashboard"
-            action={
-              <Badge tone={active.state === 'online' ? 'ok' : active.state === 'error' ? 'danger' : 'neutral'} dot>
-                {active.state}
-              </Badge>
-            }
+            title="Supabase"
+            action={<span className="text-[0.6875rem] text-fg-subtle">Project → API</span>}
           >
-            <div className="flex flex-col gap-4">
-              <Field
-                label="Project URL"
-                htmlFor="supabase-url"
-                required
-                error={urlIssue}
-                hint="Example: https://abcdefghijk.supabase.co"
-              >
+            <div className="flex flex-col gap-3">
+              <Field label="Project URL" htmlFor="supabase-url" error={urlIssue}>
                 <Input
                   id="supabase-url"
                   value={url}
                   onChange={(event) => setUrl(event.target.value)}
-                  placeholder="https://your-project-ref.supabase.co"
+                  placeholder="https://ref.supabase.co"
                   autoComplete="off"
                   spellCheck={false}
                   invalid={Boolean(urlIssue)}
@@ -156,29 +119,23 @@ export function CloudPage() {
                 />
               </Field>
 
-              <Field
-                label="Anon public key"
-                htmlFor="supabase-key"
-                required
-                error={keyIssue}
-                hint="Safe to store in the app: it is a public key protected by Row Level Security."
-              >
+              <Field label="Anon key" htmlFor="supabase-key" error={keyIssue}>
                 <div className="relative">
                   <Input
                     id="supabase-key"
                     type={showKey ? 'text' : 'password'}
                     value={anonKey}
                     onChange={(event) => setAnonKey(event.target.value)}
-                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9…"
+                    placeholder="eyJhbGciOi…"
                     autoComplete="off"
                     spellCheck={false}
-                    className="pr-11 font-mono text-xs"
+                    className="pr-9 font-mono text-xs"
                     invalid={Boolean(keyIssue)}
                   />
                   <button
                     type="button"
                     onClick={() => setShowKey((v) => !v)}
-                    className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-1.5 text-fg-subtle transition hover:bg-surface-3 hover:text-fg"
+                    className="r-control absolute top-1/2 right-1.5 -translate-y-1/2 p-1 text-fg-subtle hover:text-fg"
                     aria-label={showKey ? 'Hide key' : 'Show key'}
                   >
                     {showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -186,24 +143,22 @@ export function CloudPage() {
                 </div>
               </Field>
 
-              <div className="rounded-xl border border-line bg-surface-2 p-3.5">
-                <Switch
-                  id="cloud-enabled"
-                  checked={enabled}
-                  onChange={setEnabled}
-                  label="Use cloud as the primary data source"
-                  description="When off, the app keeps working offline and syncs later."
-                />
-              </div>
+              <Switch
+                id="cloud-enabled"
+                checked={enabled}
+                onChange={setEnabled}
+                label="Use cloud as primary source"
+              />
 
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Button onClick={onSave} disabled={!canSave} loading={saving} icon={<Save className="size-4" />}>
-                  Save & connect
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Button size="sm" onClick={onSave} disabled={!canSave} loading={saving} icon={<Save className="size-4" />}>
+                  Save
                 </Button>
-                <Button variant="outline" onClick={onTest} loading={testing} icon={<Link2 className="size-4" />}>
-                  Test connection
+                <Button size="sm" variant="outline" onClick={onTest} loading={testing} icon={<Link2 className="size-4" />}>
+                  Test
                 </Button>
                 <Button
+                  size="sm"
                   variant="ghost"
                   onClick={() => setConfirmClear(true)}
                   disabled={!cloud.url}
@@ -217,92 +172,24 @@ export function CloudPage() {
           </Card>
 
           <Card
-            title="Database schema"
-            description="Run once in Supabase Studio → SQL Editor: tables, indexes and RLS policies."
-            action={<Badge tone="brand">Postgres</Badge>}
+            title="Library sync"
+            action={<Database className="size-4 text-fg-subtle" />}
           >
-            <CodeBlock code={SUPABASE_SQL} language="sql" maxHeight="22rem" />
-            <p className="mt-3 text-xs leading-relaxed text-fg-muted">
-              Domain tables (the real Micro Stocker data model) are generated the same way once the
-              feature spec is confirmed — you will get one SQL file to paste, no manual clicking.
-            </p>
-          </Card>
-        </div>
-
-        <div className="flex flex-col gap-4">
-          <Card title="Connection status" description={active.checkedAt ? `Checked ${dateTime(active.checkedAt)}` : 'Not checked yet'}>
-            <div className="flex items-center gap-2.5">
-              <StatusDot state={active.state} />
-              <p className="text-sm font-semibold text-fg capitalize">{active.state}</p>
-              {active.latencyMs !== null && (
-                <Badge tone="neutral" className="ml-auto tabular-nums">
-                  {active.latencyMs} ms
-                </Badge>
-              )}
-            </div>
-            <p className="mt-2 text-sm leading-relaxed text-fg-muted">{active.message}</p>
-            {active.hint && (
-              <div className="mt-3 flex gap-2 rounded-lg border border-warn/30 bg-warn-soft p-3 text-xs leading-relaxed text-warn">
-                <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-                <span>{active.hint}</span>
-              </div>
-            )}
-            <Button variant="outline" size="sm" className="mt-3" onClick={recheckConnection} block>
-              Re-check saved connection
-            </Button>
-          </Card>
-
-          <Card title="Where credentials are stored" description="Nothing is sent anywhere except Supabase">
-            <ul className="flex flex-col gap-2.5 text-sm">
-              <li className="flex gap-2.5">
-                <KeyRound className="mt-0.5 size-4 shrink-0 text-brand" />
-                <span className="text-fg-muted">
-                  {isDesktop ? (
-                    <>
-                      Desktop: <code className="font-mono text-xs text-fg">{runtime.userDataPath ?? 'userData'}</code>
-                      <br />
-                      <span className="text-xs">JSON file on your computer only.</span>
-                    </>
-                  ) : (
-                    <>
-                      Browser preview: <code className="font-mono text-xs text-fg">localStorage</code>
-                    </>
-                  )}
-                </span>
-              </li>
-              <li className="flex gap-2.5">
-                <ShieldAlert className="mt-0.5 size-4 shrink-0 text-warn" />
-                <span className="text-xs leading-relaxed text-fg-muted">
-                  Never add a <code className="font-mono">service_role</code> key to a desktop app — it
-                  bypasses Row Level Security. Keep it in Supabase Edge Functions instead.
-                </span>
-              </li>
-              <li className="flex gap-2.5">
-                <Database className="mt-0.5 size-4 shrink-0 text-ok" />
-                <span className="text-xs leading-relaxed text-fg-muted">
-                  A write queue (<code className="font-mono">sync_queue</code>) is part of the schema so
-                  offline edits can be replayed when the connection returns.
-                </span>
-              </li>
-            </ul>
-          </Card>
-
-          <Card title="Library sync" description="Share one metadata library between your computers via kv_store">
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-1.5">
               <Button
                 size="sm"
                 variant="outline"
                 loading={syncing}
-                disabled={connection.state !== 'online'}
+                disabled={connection.state !== 'online' || library.items.length === 0}
                 onClick={async () => {
                   setSyncing(true);
                   const result = await pushLibrary(cloud, library.items);
                   setSyncing(false);
-                  if (result.ok) toast.success('Library pushed', `${library.items.length} item descriptor(s) uploaded.`);
+                  if (result.ok) toast.success('Pushed', `${library.items.length} items`);
                   else toast.error('Push failed', result.error);
                 }}
               >
-                Push library
+                Push
               </Button>
               <Button
                 size="sm"
@@ -315,27 +202,58 @@ export function CloudPage() {
                   setSyncing(false);
                   if (result.ok) {
                     library.replaceAll(result.merged);
-                    toast.success('Library merged', `${result.merged.length} item(s) after merge (newer updatedAt wins). File bytes stay on each machine.`);
+                    toast.success('Merged', `${result.merged.length} items`);
                   } else toast.error('Pull failed', result.error);
                 }}
               >
-                Pull & merge
+                Pull
               </Button>
-              <p className="text-[0.6875rem] leading-relaxed text-fg-muted">
-                Descriptors (names, sizes, metadata, flags) sync — not the artwork itself. Merge is last-write-wins per item.
-              </p>
             </div>
+            <p className="mt-2 text-[0.6875rem] text-fg-subtle">
+              Metadata only — artwork never leaves this machine.
+            </p>
           </Card>
 
-          <Card title="Offline behaviour" description="What the app does without internet">
-            <div className="flex items-start gap-3 rounded-xl border border-line bg-surface-2 p-3.5">
-              <CloudOff className="mt-0.5 size-5 shrink-0 text-fg-subtle" />
-              <p className="text-xs leading-relaxed text-fg-muted">
-                Reads fall back to the last cached copy on this device, writes are queued locally, and
-                the status badge in the top bar shows <strong className="text-fg">Offline</strong>. No
-                crash, no data loss, no blocking dialog.
-              </p>
+          <Card
+            title="Schema"
+            action={<span className="text-[0.6875rem] text-fg-subtle">SQL Editor → Run</span>}
+          >
+            <CodeBlock code={SUPABASE_SQL} language="sql" maxHeight="16rem" />
+          </Card>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Card title="Status" action={<Cloud className="size-4 text-fg-subtle" />}>
+            <div className="flex items-center gap-2">
+              <StatusDot state={active.state} />
+              <span className="text-[0.8125rem] font-medium text-fg capitalize">{active.state}</span>
+              {active.latencyMs !== null && (
+                <span className="nums ml-auto text-[0.75rem] text-fg-subtle">{active.latencyMs} ms</span>
+              )}
             </div>
+            <p className="mt-1.5 text-[0.75rem] text-fg-muted">{active.message}</p>
+            {active.hint && (
+              <p className="mt-2 border-l-2 border-warn pl-2 text-[0.75rem] text-warn">{active.hint}</p>
+            )}
+            <Button variant="outline" size="sm" className="mt-2.5" onClick={recheckConnection} block>
+              Re-check
+            </Button>
+          </Card>
+
+          <Card title="Stored where">
+            <ul className="flex flex-col gap-2 text-[0.75rem] text-fg-muted">
+              <li className="flex items-start gap-2">
+                <KeyRound className="mt-0.5 size-3.5 shrink-0 text-brand" />
+                Device only —{' '}
+                <code className="font-mono text-[0.6875rem] text-fg">
+                  {typeof window !== 'undefined' ? 'local storage' : 'file'}
+                </code>
+              </li>
+              <li className="flex items-start gap-2">
+                <Database className="mt-0.5 size-3.5 shrink-0 text-fg-subtle" />
+                Anonymous key + row-level security
+              </li>
+            </ul>
           </Card>
         </div>
       </div>
@@ -343,8 +261,7 @@ export function CloudPage() {
       <Modal
         open={confirmClear}
         onClose={() => setConfirmClear(false)}
-        title="Disconnect from Supabase?"
-        description="Stored credentials are removed from this computer. Cached data stays."
+        title="Disconnect cloud?"
         size="sm"
         footer={
           <>
@@ -360,7 +277,7 @@ export function CloudPage() {
                 setAnonKey('');
                 setReport(null);
                 setConfirmClear(false);
-                toast.info('Disconnected', 'The app is back in offline mode.');
+                toast.info('Disconnected');
               }}
             >
               Disconnect
@@ -368,9 +285,7 @@ export function CloudPage() {
           </>
         }
       >
-        <p className="text-sm leading-relaxed text-fg-muted">
-          You can reconnect at any time by pasting the URL and anon key again.
-        </p>
+        <p className="text-[0.8125rem] text-fg-muted">Credentials are removed. Cached data stays.</p>
       </Modal>
     </>
   );

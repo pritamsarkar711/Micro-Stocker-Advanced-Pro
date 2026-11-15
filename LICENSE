@@ -1,21 +1,107 @@
-MIT License
+Micro Stocker Advanced Pro — Source-Available Proprietary Licence
+Copyright © 2026 pritamsarkar711. All rights reserved.
 
-Copyright (c) 2026 pritamsarkar711
+This licence replaces the MIT licence that applied to versions up to and
+including v1.0.0. Versions released under MIT remain MIT-licensed for anyone
+who obtained them under that licence; every later version is licensed under the
+terms below.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. DEFINITIONS
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+   "Software" means the source code, compiled builds, installer packages and
+   documentation in this repository.
+   "You" means the individual or legal entity exercising rights under this
+   licence.
+   "Distribution" means the paid or unpaid Windows/macOS/Linux installer, or any
+   compiled build of the Software, published by the Copyright Holder on GitHub
+   Releases.
+   "Personal Use" means installing and using a Distribution, or building the
+   Software from source for your own use, on computers you own or control.
+   "Commercial Use" means any use by, or for the benefit of, a business or
+   revenue-generating activity, including using the Software to prepare assets
+   that you sell.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+2. GRANT
+
+   Subject to the terms below, the Copyright Holder grants You a worldwide,
+   royalty-free, non-exclusive, non-transferable licence to:
+
+   a. use the Software for Personal Use and Commercial Use;
+   b. build the Software from source for your own use;
+   c. copy a Distribution onto devices you own or control.
+
+3. RESTRICTIONS
+
+   You may NOT:
+
+   a. copy, mirror, publish, sublicense, sell, rent, lease or otherwise
+      distribute the Software or any compiled build of it, in whole or in part,
+      to any third party, except by linking to the official repository or
+      official Release page;
+   b. upload the Software, a build of it, or a substantial portion of its source
+      code to any other repository, package registry, app store, website or
+      distribution service;
+   c. modify, adapt, translate, rebrand, or create derivative works of the
+      Software, or remove, obscure or alter any copyright, licence or
+      attribution notice;
+   d. reverse engineer, decompile or disassemble any compiled Distribution,
+      except to the extent such restriction is prohibited by applicable law;
+   e. use the Software, its name, or its marks to imply endorsement, or to
+      present it as your own product;
+   f. provide the Software to third parties as a hosted or managed service.
+
+4. DISTRIBUTION
+
+   Official compiled builds are published only by the Copyright Holder on the
+   official GitHub Releases page. Any build obtained from anywhere else is not
+   an official Distribution and is used entirely at your own risk.
+
+5. CONTRIBUTIONS
+
+   By submitting a pull request, patch or other contribution, You grant the
+   Copyright Holder a perpetual, irrevocable, worldwide, royalty-free licence to
+   use, reproduce, modify, sublicense and distribute that contribution as part
+   of the Software under the terms of this licence.
+
+6. THIRD-PARTY COMPONENTS
+
+   The Software includes third-party components under their own licences (see
+   THIRD-PARTY-NOTICES.md). Those licences continue to govern those components
+   and nothing in this licence restricts rights You have under them. Marketplace
+   names and logos are trademarks of their respective owners and are used only
+   to identify the portal a file is prepared for.
+
+7. TERMINATION
+
+   Any breach of Section 3 terminates this licence immediately. On termination
+   You must stop using the Software and delete all copies in your possession,
+   except that rights in versions You obtained under the MIT licence are not
+   affected.
+
+8. NO WARRANTY
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL THE
+   COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+9. LIMITATION OF LIABILITY
+
+   To the maximum extent permitted by law, the Copyright Holder's total
+   liability for any claim relating to the Software is limited to the amount You
+   paid for the Software, which for free Distributions is zero.
+
+10. GOVERNING LAW
+
+    This licence is governed by the laws of the jurisdiction in which the
+    Copyright Holder resides, without regard to conflict-of-law rules. Nothing
+    here limits mandatory consumer rights You have under local law.
+
+11. CONTACT
+
+    Permissions beyond this licence — including redistribution of builds,
+    white-labelling, OEM bundling or resale — require prior written consent from
+    the Copyright Holder: open an issue at
+    https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro/issues
