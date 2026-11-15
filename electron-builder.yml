@@ -1,0 +1,67 @@
+appId: com.pritamsarkar.microstocker.advancedpro
+productName: Micro Stocker Advanced Pro
+copyright: Copyright © 2026 pritamsarkar711
+
+# NOTE: build output folders are git-ignored. `buildResources` uses `resources/`
+# (not `build/`) so icons are committed to the repository.
+directories:
+  output: release
+  buildResources: resources
+
+files:
+  - dist/**/*
+  - electron/**/*
+  - package.json
+  - "!**/*.map"
+
+asar: true
+compression: normal
+
+# Fail loudly instead of silently shipping a broken installer.
+npmRebuild: true
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: resources/icon.ico
+  artifactName: ${productName}-Setup-${version}-win-x64.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Micro Stocker Advanced Pro
+  deleteAppDataOnUninstall: false
+
+portable:
+  artifactName: ${productName}-${version}-portable-win-x64.${ext}
+
+mac:
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+  category: public.app-category.business
+  icon: resources/icon.png
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Office
+  icon: resources/icon.png
+  maintainer: pritamsarkar711
+  synopsis: Responsive stock/inventory desktop application
+  artifactName: ${productName}-${version}-linux-${arch}.${ext}
+
+# Used by `electron-updater` and by the GitHub Actions release workflow.
+publish:
+  provider: github
+  owner: pritamsarkar711
+  repo: Micro-Stocker-Advanced-Pro

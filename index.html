@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5.0"
+    />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#0b1020" />
+    <meta
+      name="description"
+      content="Micro Stocker Advanced Pro - responsive desktop application"
+    />
+    <title>Micro Stocker Advanced Pro</title>
+    <script>
+      // Apply the saved theme before first paint to avoid a white flash.
+      (function () {
+        try {
+          var raw = localStorage.getItem('msap:settings');
+          var theme = raw ? JSON.parse(raw).theme : null;
+          if (!theme) {
+            theme = window.matchMedia('(prefers-color-scheme: light)').matches
+              ? 'light'
+              : 'dark';
+          }
+          document.documentElement.classList.toggle('dark', theme === 'dark');
+          document.documentElement.style.colorScheme = theme;
+        } catch (e) {
+          /* keep the default dark class from <html> */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
