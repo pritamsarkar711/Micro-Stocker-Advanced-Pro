@@ -92,7 +92,7 @@ export function UpscalePage() {
     <>
       <PageHeader
         title="Upscale studio"
-        description="Enlarge PNG, JPG and WebP locally — up to 8K (7680×4320) — with free, commercially-licensed open-source models, or the built-in high-quality resampler. Nothing is uploaded anywhere."
+        description="Enlarge PNG, JPG and WebP locally up to 8K with licence-safe models."
       />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">

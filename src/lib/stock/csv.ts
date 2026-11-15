@@ -16,12 +16,13 @@ import type { PlatformId, StockItem } from './types';
  */
 
 function field(value: string, spec: PlatformSpec): string {
+  const q = spec.csv!.quote;
   const needsQuotes =
+    spec.csv!.alwaysQuote === true ||
     value.includes(spec.csv!.delimiter) ||
-    value.includes(spec.csv!.quote) ||
+    value.includes(q) ||
     /[\r\n]/.test(value);
   if (!needsQuotes) return value;
-  const q = spec.csv!.quote;
   return q + value.split(q).join(q + q) + q;
 }
 

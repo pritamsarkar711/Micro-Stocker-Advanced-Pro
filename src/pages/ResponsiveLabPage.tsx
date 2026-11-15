@@ -136,7 +136,7 @@ export function ResponsiveLabPage() {
     <>
       <PageHeader
         title="Responsive lab"
-        description="Proof, not promise: the same running app rendered at phone, tablet and desktop widths. Resize your real window too — the shell adapts continuously, not only at breakpoints."
+        description="The live app rendered at phone, tablet and desktop widths."
         actions={
           <Button variant="outline" size="sm" icon={<Expand className="size-4" />} onClick={openInNewWindow}>
             Open resizable window

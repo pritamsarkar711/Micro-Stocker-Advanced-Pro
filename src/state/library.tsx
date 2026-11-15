@@ -21,6 +21,7 @@ import { detectFormat, probeRasterDimensions, probeVectorDimensions, bytesToBase
 import { embedMetadata, readEmbeddedMetadata } from '@/lib/stock/xmp';
 import { adaptForPlatform, generateMetadata, generateWithAi, type AiAssistantConfig, type GenerateOptions } from '@/lib/stock/metadata';
 import { DEFAULT_BANK, type KeywordBank } from '@/state/bank';
+import { planApply, type ApplyResult, type MetadataRow } from '@/lib/stock/csvimport';
 import { PLATFORMS } from '@/lib/stock/platforms';
 import { useToast } from '@/state/ToastState';
 
@@ -47,6 +48,8 @@ interface LibraryState {
   setMetadata: (id: string, patch: Partial<StockMetadata>) => void;
   setFlags: (id: string, patch: Partial<ItemFlags>) => void;
   setReleaseIds: (id: string, releaseIds: string[]) => void;
+  /** Apply rows from an imported metadata CSV, matched by filename. */
+  applyMetadataRows: (rows: MetadataRow[]) => ApplyResult;
   renameItem: (id: string, name: string) => Promise<boolean>;
   removeItems: (ids: string[]) => void;
   replaceAll: (items: StockItem[]) => void;
@@ -294,6 +297,45 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     [mutate],
   );
 
+  const applyMetadataRows = useCallback(
+    (rows: MetadataRow[]): ApplyResult => {
+      const plan = planApply(items, rows);
+      const stamp = new Date().toISOString();
+      const patches = new Map<string, StockItem>();
+      const missing: string[] = [];
+
+      for (const row of rows) {
+        const item = plan.get(row);
+        if (!item) {
+          if (missing.length < 10) missing.push(row.filename);
+          continue;
+        }
+        const current = patches.get(item.id) ?? item;
+        const metadata: StockMetadata = { ...current.metadata };
+        if (row.title) metadata.title = row.title;
+        if (row.description) metadata.description = row.description;
+        if (row.keywords?.length) {
+          metadata.keywords = Array.from(new Set([...metadata.keywords, ...row.keywords])).slice(0, 50);
+        }
+        if (row.categories?.length) {
+          metadata.categories = Array.from(new Set([...metadata.categories, ...row.categories])).slice(0, 2);
+        }
+        const flags: ItemFlags = { ...current.flags };
+        if (row.editorial !== undefined) flags.editorial = row.editorial;
+        if (row.mature !== undefined) flags.mature = row.mature;
+        if (row.illustration !== undefined) flags.illustration = row.illustration;
+        if (row.aiGenerated) flags.aiGenerated = true;
+        patches.set(item.id, { ...current, metadata, flags, updatedAt: stamp });
+      }
+
+      if (patches.size > 0) {
+        mutate((prev) => prev.map((item) => patches.get(item.id) ?? item));
+      }
+      return { matched: patches.size, updated: plan.size, missing };
+    },
+    [items, mutate],
+  );
+
   const renameItem = useCallback(
     async (id: string, name: string) => {
       const item = items.find((i) => i.id === id);
@@ -532,6 +574,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       setMetadata,
       setFlags,
       setReleaseIds,
+      applyMetadataRows,
       renameItem,
       removeItems,
       replaceAll,
@@ -559,6 +602,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       setMetadata,
       setFlags,
       setReleaseIds,
+      applyMetadataRows,
       renameItem,
       removeItems,
       replaceAll,

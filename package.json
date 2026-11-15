@@ -2,8 +2,8 @@
   "name": "micro-stocker-advanced-pro",
   "productName": "Micro Stocker Advanced Pro",
   "private": true,
-  "version": "0.3.0",
-  "description": "Micro Stocker Advanced Pro - fully responsive cross-platform desktop application (Electron + React + TypeScript).",
+  "version": "1.0.0",
+  "description": "All-in-one desktop toolkit for microstock contributors: metadata generation, keywording, per-platform CSV export, IPTC/XMP embedding, local AI upscaling to 8K, validation, releases, submission planning and earnings analytics for 10 marketplaces.",
   "author": "pritamsarkar711",
   "license": "MIT",
   "type": "module",
@@ -15,7 +15,8 @@
     "dev:web": "vite --host 0.0.0.0",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "verify": "npm run typecheck && npm run build",
+    "test": "node scripts/run-tests.mjs",
+    "verify": "npm run typecheck && npm test && npm run build",
     "preview": "vite preview --host 0.0.0.0",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
@@ -48,5 +49,38 @@
     "typescript": "~5.9.3",
     "vite": "^7.3.8",
     "wait-on": "^9.5.1"
+  },
+  "keywords": [
+    "microstock",
+    "stock-photography",
+    "metadata",
+    "keywords",
+    "iptc",
+    "xmp",
+    "csv-export",
+    "shutterstock",
+    "adobe-stock",
+    "freepik",
+    "magnific",
+    "pixabay",
+    "dreamstime",
+    "123rf",
+    "depositphotos",
+    "vecteezy",
+    "getty-images",
+    "alamy",
+    "image-upscaling",
+    "real-esrgan",
+    "electron",
+    "react",
+    "typescript"
+  ],
+  "homepage": "https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro/issues"
   }
 }

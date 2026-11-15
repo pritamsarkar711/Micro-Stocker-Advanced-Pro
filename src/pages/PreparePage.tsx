@@ -225,7 +225,7 @@ export function PreparePage() {
     <>
       <PageHeader
         title="File Doctor"
-        description="Strip camera EXIF and GPS coordinates, drop Photoshop scratch data, and re-encode through an sRGB canvas at the exact quality/size each platform accepts — without ever touching your XMP keywords."
+        description="Strip EXIF/GPS, re-encode to sRGB, hit size caps, clean vectors."
         actions={
           <>
             <Button size="sm" variant="outline" onClick={refreshReports}>Scan metadata</Button>
@@ -322,9 +322,11 @@ export function PreparePage() {
                         {report.svg.externalRefs.length > 0 && <Badge tone="warn">{report.svg.externalRefs.length} external refs</Badge>}
                         {report.svg.embeddedRasters > 0 && <Badge tone="warn">{report.svg.embeddedRasters} raster(s)</Badge>}
                         {report.svg.fonts.length > 0 && <Badge tone="neutral">fonts: {report.svg.fonts.slice(0, 3).join(', ')}</Badge>}
+                        {report.svg.hasImportCss && <Badge tone="danger">@import CSS</Badge>}
+                        {report.svg.editorJunk.length > 0 && <Badge tone="warn">{report.svg.editorJunk.join(', ')} junk</Badge>}
                         {!report.svg.hasViewBox && <Badge tone="warn">no viewBox</Badge>}
                         {!report.svg.hasMetadata && <Badge tone="neutral">no metadata</Badge>}
-                        {!report.svg.hasScript && report.svg.eventHandlers === 0 && report.svg.externalRefs.length === 0 && <Badge tone="ok" dot>clean</Badge>}
+                        {report.svg.ok && <Badge tone="ok" dot>clean</Badge>}
                       </div>
                     ) : report.eps ? (
                       <div className="mt-1 flex flex-wrap gap-1">
@@ -333,7 +335,7 @@ export function PreparePage() {
                         {report.eps.hasEmbeddedRaster && <Badge tone="warn">embedded raster</Badge>}
                         {report.eps.documentFonts.length > 0 && <Badge tone="warn">fonts live</Badge>}
                         {!report.eps.hasXmp && <Badge tone="neutral">no XMP</Badge>}
-                        {report.eps.notes.length === 0 && <Badge tone="ok" dot>no findings</Badge>}
+                        {report.eps.ok && <Badge tone="ok" dot>submission ready</Badge>}
                       </div>
                     ) : null}
                     {report?.eps && report.eps.notes.length > 0 && (

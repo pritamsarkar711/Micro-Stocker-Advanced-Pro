@@ -54,8 +54,11 @@ export function Topbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
     return () => document.removeEventListener('mousedown', onClickAway);
   }, []);
 
-  const results = NAV_ITEMS.filter((item) =>
-    item.label.toLowerCase().includes(query.trim().toLowerCase()),
+  const needle = query.trim().toLowerCase();
+  const results = NAV_ITEMS.filter(
+    (item) =>
+      item.label.toLowerCase().includes(needle) ||
+      (item.description ?? '').toLowerCase().includes(needle),
   );
 
   const cloudState = connection.state;
@@ -107,9 +110,7 @@ export function Topbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
           {searchOpen && query.trim() && (
             <div className="card absolute inset-x-0 top-12 z-50 overflow-hidden p-1 shadow-[var(--shadow-pop)]">
               {results.length === 0 ? (
-                <p className="px-3 py-4 text-sm text-fg-muted">
-                  No page matches “{query}”. Feature modules arrive with the spec.
-                </p>
+                <p className="px-3 py-4 text-sm text-fg-muted">No page matches “{query}”.</p>
               ) : (
                 <ul>
                   {results.map((item) => (

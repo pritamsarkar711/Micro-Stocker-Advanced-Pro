@@ -26,6 +26,11 @@ export function AppShell() {
 
   useEffect(() => setMobileNavOpen(false), [location.pathname]);
 
+  /* Every navigation starts at the top of the new page. */
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+  }, [location.pathname]);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => event.key === 'Escape' && setMobileNavOpen(false);
     window.addEventListener('keydown', onKey);
@@ -70,7 +75,10 @@ export function AppShell() {
 
         {/* pb-20 keeps content clear of the mobile bottom tab bar */}
         <main id="main" className="min-w-0 flex-1 pb-20 focus:outline-none lg:pb-0" tabIndex={-1}>
-          <div className="mx-auto w-full max-w-[110rem] px-3 py-4 sm:px-5 sm:py-6 lg:px-8 lg:py-8">
+          <div
+            key={location.pathname}
+            className="animate-in-fast mx-auto w-full max-w-[110rem] px-3 py-4 sm:px-5 sm:py-6 lg:px-8 lg:py-8"
+          >
             <Outlet />
           </div>
         </main>

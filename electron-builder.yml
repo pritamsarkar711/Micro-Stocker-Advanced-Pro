@@ -25,6 +25,9 @@ win:
     - target: nsis
       arch:
         - x64
+    - target: portable
+      arch:
+        - x64
   icon: resources/icon.ico
   artifactName: ${productName}-Setup-${version}-win-x64.${ext}
 
@@ -57,7 +60,8 @@ linux:
   category: Office
   icon: resources/icon.png
   maintainer: pritamsarkar711
-  synopsis: Responsive stock/inventory desktop application
+  synopsis: All-in-one toolkit for microstock contributors
+  description: Metadata generation, per-platform CSV export, IPTC/XMP embedding, local AI upscaling and submission tracking for 10 microstock marketplaces.
   artifactName: ${productName}-${version}-linux-${arch}.${ext}
 
 # Used by `electron-updater` and by the GitHub Actions release workflow.

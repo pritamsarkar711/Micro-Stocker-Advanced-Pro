@@ -18,6 +18,8 @@ export interface CsvSpec {
   columns: string[];
   /** How keywords are joined inside their column. */
   keywordJoin: ', ' | ',';
+  /** Freepik's importer expects every field wrapped in the quote character. */
+  alwaysQuote?: boolean;
   notes: string;
 }
 
@@ -126,6 +128,7 @@ export const PLATFORMS: Record<PlatformId, PlatformSpec> = {
       withHeader: false,
       columns: ['filename', 'title', 'keywords'],
       keywordJoin: ',',
+      alwaysQuote: true,
       notes:
         'Semicolon-separated with SINGLE-QUOTED fields and NO header row; keywords joined with commas inside the quoted field. Title ≤ 100 chars, ≤ 50 tags. AI files need the _ai_generated keyword. Metadata must ALSO be embedded in the file.',
     },
@@ -329,6 +332,37 @@ export function platformName(id: PlatformId): string {
 }
 
 /** Aggregators that simply redistribute the per-platform exports. */
+/** Portal labels used in sales CSVs that are not the internal id. */
+export const PLATFORM_ALIASES: Record<string, PlatformId> = {
+  istock: 'getty',
+  'istockphoto': 'getty',
+  'getty images': 'getty',
+  magnific: 'freepik',
+  'adobe stock': 'adobe',
+  '123 rf': '123rf',
+  'deposit photos': 'depositphotos',
+  'shutterstock.com': 'shutterstock',
+};
+
+/** Match a free-text platform label (usually from a sales CSV) to a marketplace. */
+export function findPlatform(label: string): PlatformId | null {
+  const needle = label.trim().toLowerCase();
+  if (!needle) return null;
+  const exact = PLATFORM_LIST.find(
+    (platform) => platform.id === needle || platform.name.toLowerCase() === needle,
+  );
+  if (exact) return exact.id;
+  if (PLATFORM_ALIASES[needle]) return PLATFORM_ALIASES[needle];
+  const partial = PLATFORM_LIST.find(
+    (platform) => needle.includes(platform.id) || needle.includes(platform.name.toLowerCase()),
+  );
+  if (partial) return partial.id;
+  for (const [alias, id] of Object.entries(PLATFORM_ALIASES)) {
+    if (needle.includes(alias)) return id;
+  }
+  return null;
+}
+
 export const AGGREGATORS = [
   {
     name: 'Wirestock',

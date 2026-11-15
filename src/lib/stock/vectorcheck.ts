@@ -48,14 +48,18 @@ export function analyzeSvg(text: string): SvgReport {
     if (name && !fonts.includes(name)) fonts.push(name);
   }
   const editorJunk = EDITOR_NS.filter((ns) => text.includes(`${ns}:`));
+  const hasScript = /<script[\s>]/i.test(text);
+  const eventHandlers = (text.match(SVG_EVENT_RE) ?? []).length;
+  const hasImportCss = /@import/i.test(text);
   return {
-    ok: true,
-    hasScript: /<script[\s>]/i.test(text),
-    eventHandlers: (text.match(SVG_EVENT_RE) ?? []).length,
+    /* Submission-clean: no scripting, no external references, no editor junk. */
+    ok: !hasScript && eventHandlers === 0 && externalRefs.length === 0 && !hasImportCss && editorJunk.length === 0,
+    hasScript,
+    eventHandlers,
     externalRefs,
     embeddedRasters: (text.match(/<image[\s>]/gi) ?? []).length,
     fonts,
-    hasImportCss: /@import/i.test(text),
+    hasImportCss,
     hasViewBox: /viewBox\s*=/i.test(text),
     hasSize: /width\s*=/i.test(text) && /height\s*=/i.test(text),
     hasMetadata: text.includes('<x:xmpmeta') || text.includes('<metadata'),
@@ -86,10 +90,27 @@ export function sanitizeSvg(text: string): SvgSanitizeResult {
     removed.push('CSS @import rules');
   }
   for (const ns of EDITOR_NS) {
-    const re = new RegExp(`\\s${ns}:[a-zA-Z-]+\\s*=\\s*"[^"]*"`, 'g');
-    if (re.test(out)) {
-      out = out.replace(re, '');
+    const attr = new RegExp(`\\s${ns}:[a-zA-Z-]+\\s*=\\s*"[^"]*"`, 'g');
+    if (attr.test(out)) {
+      out = out.replace(attr, '');
       removed.push(`${ns}:* editor attributes`);
+    }
+    /* xmlns:sodipodi="…" style namespace declarations (and their URLs) */
+    const decl = new RegExp(`\\sxmlns:${ns}\\s*=\\s*"[^"]*"`, 'gi');
+    if (decl.test(out)) {
+      out = out.replace(decl, '');
+      removed.push(`xmlns:${ns} declaration`);
+    }
+    /* <sodipodi:namedview … /> editor elements */
+    const element = new RegExp(`<${ns}:[a-zA-Z-]+[^>]*?/>`, 'gi');
+    if (element.test(out)) {
+      out = out.replace(element, '');
+      removed.push(`<${ns}:*> editor elements`);
+    }
+    const paired = new RegExp(`<${ns}:[a-zA-Z-]+[^>]*?>[\\s\\S]*?</${ns}:[a-zA-Z-]+\\s*>`, 'gi');
+    if (paired.test(out)) {
+      out = out.replace(paired, '');
+      removed.push(`<${ns}:*> editor elements`);
     }
   }
   out = out.replace(/<\?php[\s\S]*?\?>/gi, '');
@@ -100,7 +121,8 @@ export function analyzeEps(text: string): EpsReport {
   const creator = text.match(/%%Creator:\s*(.+)/)?.[1]?.trim() ?? null;
   const versionMatch = creator?.match(/Illustrator(?:\(R\))?\s*(?:CC|CS)?\s*(\d+)/i);
   const ccMatch = /Adobe Illustrator CC/i.test(creator ?? '');
-  const epsVersion = text.match(/%%EPSF-\d+(\.\d+)?/)?.[0] ?? null;
+  /* Real files write "%!PS-Adobe-3.0 EPSF-3.0" (no %% prefix on EPSF). */
+  const epsVersion = text.match(/(?:%%)?EPSF-\d+(?:\.\d+)?/)?.[0] ?? null;
 
   const fonts: string[] = [];
   const docFonts = text.match(/%%DocumentFonts:\s*(.+)/)?.[1]?.trim();

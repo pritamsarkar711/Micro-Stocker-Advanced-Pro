@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Bot,
+  DatabaseBackup,
   Download,
   Eraser,
+  FolderUp,
   HardDrive,
   Keyboard,
   Monitor,
@@ -45,6 +47,7 @@ export function SettingsPage() {
   const [keys, setKeys] = useState<string[]>([]);
   const [confirmClear, setConfirmClear] = useState(false);
   const [busy, setBusy] = useState(false);
+  const restoreRef = useRef<HTMLInputElement>(null);
 
   const refreshKeys = useCallback(async () => {
     setKeys(await kv.keys());
@@ -76,6 +79,55 @@ export function SettingsPage() {
     else if (!result.canceled) toast.error('Export failed', result.error);
   };
 
+  /* ---------------- full workspace backup / restore ---------------- */
+  const onBackup = async () => {
+    setBusy(true);
+    const all = await kv.keys();
+    const data: Record<string, unknown> = {};
+    for (const key of all) data[key] = await kv.get<unknown>(key, null);
+    const payload = {
+      app: 'micro-stocker-advanced-pro',
+      backupVersion: 1,
+      exportedAt: new Date().toISOString(),
+      keyCount: all.length,
+      data,
+    };
+    const result = await desktop.fs.exportText({
+      defaultName: `micro-stocker-backup-${new Date().toISOString().slice(0, 10)}.json`,
+      text: JSON.stringify(payload, null, 2),
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+    });
+    setBusy(false);
+    if (result.ok) {
+      toast.success('Backup saved', `${all.length} keys · library, releases, planner, bank, sales and settings`);
+    } else if (!result.canceled) {
+      toast.error('Backup failed', result.error);
+    }
+  };
+
+  const onRestoreFile = async (file: File) => {
+    setBusy(true);
+    try {
+      const parsed = JSON.parse(await file.text()) as { data?: Record<string, unknown> };
+      if (!parsed || typeof parsed !== 'object' || !parsed.data) {
+        toast.error('Not a Micro Stocker backup', 'The file has no "data" map.');
+        setBusy(false);
+        return;
+      }
+      let count = 0;
+      for (const [key, value] of Object.entries(parsed.data)) {
+        await kv.set(key, value);
+        count++;
+      }
+      await refreshKeys();
+      toast.success(`Restored ${count} keys`, 'Reloading the workspace…');
+      setTimeout(() => window.location.reload(), 1000);
+    } catch (error) {
+      setBusy(false);
+      toast.error('Restore failed', error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const onClear = async () => {
     setBusy(true);
     const all = await kv.keys();
@@ -104,7 +156,7 @@ export function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        description="Everything here is persisted on this computer and applied instantly — including the UI scale, which uses the OS zoom in the desktop build and root font scaling in the browser."
+        description="Applied instantly, stored on this computer."
         actions={
           <>
             <Button variant="outline" size="sm" icon={<Download className="size-4" />} onClick={onExport}>
@@ -260,7 +312,7 @@ export function SettingsPage() {
         <Card
           className="xl:col-span-2"
           title="Data on this computer"
-          description="One JSON file per key in the desktop build, localStorage entries in the browser preview"
+          description="Back up the whole workspace to one JSON file, or restore it on another machine"
           action={
             <Button size="xs" variant="ghost" icon={<RefreshCw className="size-3.5" />} onClick={refreshKeys}>
               Refresh
@@ -282,8 +334,25 @@ export function SettingsPage() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" icon={<Download className="size-4" />} onClick={onExport}>
-                Export settings
+              <input
+                ref={restoreRef}
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void onRestoreFile(file);
+                  event.target.value = '';
+                }}
+              />
+              <Button size="sm" icon={<DatabaseBackup className="size-4" />} loading={busy} onClick={onBackup}>
+                Back up
+              </Button>
+              <Button size="sm" variant="outline" icon={<FolderUp className="size-4" />} disabled={busy} onClick={() => restoreRef.current?.click()}>
+                Restore
+              </Button>
+              <Button size="sm" variant="ghost" icon={<Download className="size-4" />} onClick={onExport}>
+                Diagnostics
               </Button>
               <Button
                 size="sm"

@@ -50,7 +50,7 @@ export function AboutPage() {
     <>
       <PageHeader
         title="About"
-        description="Runtime details of the exact instance you are looking at."
+        description="Runtime details of this exact instance."
         actions={
           <Button
             variant="outline"

@@ -5,6 +5,7 @@ import {
   Copy,
   Download,
   FileImage,
+  FileSpreadsheet,
   FolderSearch,
   HardDrive,
   Layers,
@@ -33,6 +34,10 @@ import { formatBytes } from '@/lib/stock/files';
 import { megapixels, type StockItem } from '@/lib/stock/types';
 import { validateEverywhere, worstLevel } from '@/lib/stock/validate';
 import { findDuplicateClusters, type DuplicateCluster } from '@/lib/stock/dupes';
+import { parseMetadataCsv, planApply } from '@/lib/stock/csvimport';
+import { PLATFORM_LIST } from '@/lib/stock/platforms';
+import type { PlatformId } from '@/lib/stock/types';
+import { PlatformLogo } from '@/components/stock/PlatformLogo';
 import { ItemEditor } from '@/components/stock/ItemEditor';
 
 const LEVEL_TONE = { error: 'danger', warn: 'warn', info: 'neutral', ok: 'ok' } as const;
@@ -51,6 +56,13 @@ export function LibraryPage() {
   const [dupState, setDupState] = useState<{ running: boolean; done: number; total: number }>({ running: false, done: 0, total: 0 });
   const [clusters, setClusters] = useState<DuplicateCluster[] | null>(null);
 
+  /* metadata CSV import */
+  const csvInputRef = useRef<HTMLInputElement>(null);
+  const [csvOpen, setCsvOpen] = useState(false);
+  const [csvRaw, setCsvRaw] = useState<string | null>(null);
+  const [csvName, setCsvName] = useState('');
+  const [csvDialect, setCsvDialect] = useState<PlatformId | ''>('');
+
   /* batch templates */
   const [tplOpen, setTplOpen] = useState(false);
   const [tplTitle, setTplTitle] = useState('{name} vector illustration, flat design element');
@@ -68,6 +80,15 @@ export function LibraryPage() {
             item.metadata.keywords.some((k) => k.includes(query.toLowerCase()))),
       ),
     [library.items, query, formatFilter],
+  );
+
+  const csvParse = useMemo(
+    () => (csvRaw ? parseMetadataCsv(csvRaw, csvDialect || undefined) : null),
+    [csvRaw, csvDialect],
+  );
+  const csvMatch = useMemo(
+    () => (csvParse ? planApply(library.items, csvParse.rows) : null),
+    [csvParse, library.items],
   );
 
   const health = useMemo(() => {
@@ -123,6 +144,32 @@ export function LibraryPage() {
     if (found.length === 0) toast.success('No near-duplicates found', 'Every raster file hashes uniquely at thumbnail scale.');
   };
 
+  const onCsvFile = async (file: File) => {
+    try {
+      const text = await file.text();
+      setCsvRaw(text);
+      setCsvName(file.name);
+      setCsvDialect('');
+      setCsvOpen(true);
+    } catch (error) {
+      toast.error('Could not read the CSV', error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const onApplyCsv = () => {
+    if (!csvParse) return;
+    const result = library.applyMetadataRows(csvParse.rows);
+    toast.success(
+      `Metadata applied to ${result.matched} file${result.matched === 1 ? '' : 's'}`,
+      result.missing.length
+        ? `Not in library: ${result.missing.slice(0, 3).join(', ')}${result.missing.length > 3 ? '…' : ''}`
+        : 'Titles, descriptions, keywords and flags merged.',
+    );
+    setCsvOpen(false);
+    setCsvRaw(null);
+    setCsvName('');
+  };
+
   const applyTemplate = () => {
     const targets = selectedIds.length ? library.items.filter((i) => library.selection.has(i.id)) : library.items;
     const render = (tpl: string, item: StockItem, index: number) =>
@@ -148,7 +195,7 @@ export function LibraryPage() {
     <>
       <PageHeader
         title="Library"
-        description="Import EPS, AI, SVG, JPG, PNG and WebP assets. Embedded IPTC/XMP is read on import; generated metadata can be written back into the files."
+        description="Import EPS, AI, SVG, JPG, PNG and WebP. Generate, edit and embed metadata."
         actions={
           <>
             <input
@@ -197,6 +244,27 @@ export function LibraryPage() {
         </Button>
         <Button size="sm" variant="outline" icon={<Copy className="size-4" />} onClick={() => setTplOpen(true)} disabled={library.items.length === 0}>
           Template
+        </Button>
+        <input
+          ref={csvInputRef}
+          type="file"
+          accept=".csv,.txt,.tsv,text/csv"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) void onCsvFile(file);
+            event.target.value = '';
+          }}
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          icon={<FileSpreadsheet className="size-4" />}
+          onClick={() => (csvRaw ? setCsvOpen(true) : csvInputRef.current?.click())}
+          disabled={library.items.length === 0}
+          title="Re-use an existing metadata CSV (this app, Xpiks or a portal download)"
+        >
+          Import CSV
         </Button>
         {isDesktop && (
           <Button
@@ -288,7 +356,7 @@ export function LibraryPage() {
       )}
 
       {/* duplicates modal */}
-      <Modal open={dupOpen} onClose={() => setDupOpen(false)} title="Near-duplicate scan" description="64-bit perceptual dHash; ≤ 8 differing bits = visually near-identical at thumbnail scale — the similarity check Vecteezy and Adobe reject batches for." size="lg">
+      <Modal open={dupOpen} onClose={() => setDupOpen(false)} title="Near-duplicate scan" description="64-bit perceptual dHash; ≤ 8 differing bits = near-identical at thumbnail scale." size="lg">
         {dupState.running ? (
           <div className="flex flex-col items-center gap-3 py-10">
             <Spinner size={5} />
@@ -360,6 +428,103 @@ export function LibraryPage() {
             <Input value={tplKeywords} onChange={(e) => setTplKeywords(e.target.value)} />
           </Field>
         </div>
+      </Modal>
+
+      {/* metadata CSV import modal */}
+      <Modal
+        open={csvOpen}
+        onClose={() => setCsvOpen(false)}
+        title="Import metadata CSV"
+        description="Rows match library files by filename; titles, keywords and flags are merged."
+        size="lg"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => csvInputRef.current?.click()} icon={<Upload className="size-4" />}>
+              {csvParse ? 'Choose another' : 'Choose CSV'}
+            </Button>
+            <Button
+              onClick={onApplyCsv}
+              disabled={!csvParse || !csvMatch || csvMatch.size === 0}
+              icon={<FileSpreadsheet className="size-4" />}
+            >
+              Apply to library
+            </Button>
+          </>
+        }
+      >
+        {csvParse ? (
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center gap-2">
+              {csvParse.platform ? (
+                <Badge tone="brand">
+                  <span className="flex items-center gap-1.5">
+                    <PlatformLogo id={csvParse.platform} size={16} />
+                    {PLATFORM_LIST.find((p) => p.id === csvParse.platform)?.name} dialect
+                  </span>
+                </Badge>
+              ) : (
+                <Badge tone="neutral">generic CSV</Badge>
+              )}
+              <Badge tone="outline">{csvParse.delimiter === '\t' ? 'TAB' : `"${csvParse.delimiter}"`}</Badge>
+              <Badge tone="outline">{csvParse.hasHeader ? 'header row' : 'headerless'}</Badge>
+              <Badge tone={csvParse.rows.length ? 'ok' : 'danger'}>{csvParse.rows.length} rows</Badge>
+              {csvParse.skipped > 0 && <Badge tone="warn">{csvParse.skipped} skipped</Badge>}
+              <Badge tone={csvMatch && csvMatch.size > 0 ? 'ok' : 'warn'}>
+                {csvMatch?.size ?? 0} matched · {csvName}
+              </Badge>
+            </div>
+
+            <Field label="Column order" hint="Headerless sheets are read positionally — pick the platform whose layout matches.">
+              <Select
+                value={csvDialect}
+                onChange={(event) => setCsvDialect(event.target.value as PlatformId | '')}
+                options={[
+                  { value: '', label: csvParse.platform ? `Auto (${csvParse.platform})` : 'Auto-detect' },
+                  ...PLATFORM_LIST.map((platform) => ({ value: platform.id, label: platform.name })),
+                ]}
+              />
+            </Field>
+
+            <div className="overflow-hidden rounded-xl border border-line">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-surface-2 text-[0.6875rem] tracking-wide text-fg-subtle uppercase">
+                  <tr>
+                    <th className="px-3 py-2">File</th>
+                    <th className="px-3 py-2">Title</th>
+                    <th className="px-3 py-2 text-right">Keywords</th>
+                    <th className="px-3 py-2 text-right">In library</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {csvParse.rows.slice(0, 8).map((row, index) => {
+                    const matched = Boolean(csvMatch?.get(row));
+                    return (
+                      <tr key={`${row.filename}-${index}`} className="bg-surface">
+                        <td className="max-w-40 truncate px-3 py-2 font-mono text-fg" title={row.filename}>{row.filename}</td>
+                        <td className="max-w-56 truncate px-3 py-2 text-fg-muted" title={row.title ?? ''}>{row.title || '—'}</td>
+                        <td className="px-3 py-2 text-right text-fg tabular-nums">{row.keywords?.length ?? 0}</td>
+                        <td className="px-3 py-2 text-right">
+                          {matched ? <Badge tone="ok">yes</Badge> : <Badge tone="warn">no</Badge>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <p className="text-xs text-fg-subtle">
+              Rows that do not match a library filename are ignored — import the artwork first, then re-apply.
+            </p>
+          </div>
+        ) : (
+          <EmptyState
+            icon={<FileSpreadsheet className="size-7" />}
+            title="Pick a metadata CSV"
+            description="Exports from this app, Xpiks or a portal download all work — the dialect is detected automatically."
+            action={<Button icon={<Upload className="size-4" />} onClick={() => csvInputRef.current?.click()}>Choose CSV</Button>}
+          />
+        )}
       </Modal>
 
       {editorItem && <ItemEditor item={editorItem} onClose={() => setEditorId(null)} />}

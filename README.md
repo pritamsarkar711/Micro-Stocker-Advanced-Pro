@@ -1,108 +1,151 @@
+<div align="center">
+
+![Micro Stocker Advanced Pro](docs/assets/banner.png)
+
 # Micro Stocker Advanced Pro
 
-> All-in-one **desktop workbench for microstock contributors** — metadata generation,
-> per-platform CSV export, embedded IPTC/XMP writing, platform validation and
-> local open-source AI upscaling to 8K. Electron + React + TypeScript.
+**The all-in-one desktop workbench for microstock contributors.**
+Metadata, keywording, per-platform CSV, IPTC/XMP embedding, local AI upscaling
+to 8K, validation, releases, submission planning and earnings analytics —
+for **10 marketplaces**, fully offline, on Windows, macOS and Linux.
 
-![icon](resources/icon-256.png)
+[![version](https://img.shields.io/badge/version-1.0.0-6366f1?style=for-the-badge)](https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro/releases)
+[![license](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)
+[![electron](https://img.shields.io/badge/Electron-45-47848F?style=for-the-badge)](https://www.electronjs.org)
+[![react](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge)](https://react.dev)
+[![typescript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=for-the-badge)](https://www.typescriptlang.org)
+[![tests](https://img.shields.io/badge/tests-56%20passing-brightgreen?style=for-the-badge)](#testing)
 
-## What it does
+</div>
 
-| Module | Delivered |
+> **Who is this for?** Regular contributors to Adobe Stock, Shutterstock,
+> Freepik (Magnific) and Pixabay — and anyone else selling vectors and photos
+> across several portals at once. Write your metadata **once**, then let the app
+> reshape it into every platform's exact CSV dialect, embed IPTC/XMP so portals
+> pre-fill their forms, and keep your releases, quotas and earnings in order.
+
+---
+
+## ✨ What's inside
+
+| Module | What it does |
 | --- | --- |
-| **Library** | Import EPS / AI / SVG / JPG / PNG / WebP (native picker on desktop, file chooser in preview). Existing IPTC/XMP is read on import. Vector sizes parsed from `%%BoundingBox` / `viewBox`; raster sizes probed without full decode. |
-| **Metadata generation** | Offline generator: filename tokens → subject synonyms → style & category banks → ordered, de-duplicated keywords, title + description sentences. Optional BYO OpenAI-compatible endpoint (Settings → AI assistant) with automatic fallback. |
-| **Per-platform adaptation** | Caps, minimums, comma-safety and keyword ordering (Adobe/Vecteezy/Getty put title words in the top 10) applied at export time per platform. |
-| **CSV export** | Exact dialects: Shutterstock (header, comma, Description = title, Categories/flags), Adobe Stock (exact template, ≤5 000 rows / 1 MB, 30-char filenames), **Freepik (semicolon, single quotes, NO header, `_ai_generated` tag)**, Dreamstime, 123RF (+Country), Depositphotos (Editorial/Nudity), Vecteezy (License column, quoted keywords). Pixabay/Getty/Alamy get a copy-paste sheet (they have no CSV importer). UTF-8 + BOM. |
-| **Embedded metadata** | Pure-TS XMP/IPTC writer: JPEG APP1, PNG iTXt (CRC-fixed), SVG `<metadata>`, EPS/AI PostScript header; WebP replace-only with honest limitation message. 2 KB padding for in-place edits. `.msap-backup` copies on desktop. |
-| **Validation** | Per platform: formats, MP window, file-size min/max, filename charset/length, keyword min/max/special chars, title/description rules, EPS+JPG pairing, AI policy (forbidden vs disclosure), embedded-metadata reminders. |
-| **Upscale studio** | Engines: built-in high-quality resampler (everywhere) + **Real-ESRGAN NCNN-Vulkan** (desktop: one-click download of the BSD-3 portable binary from GitHub, runs on your GPU, models `realesrgan-x4plus/-x2plus/-x4plus-anime/realesrnet-x4plus/realesr-animevideov3`). Scale plans chain 2/3/4× passes to hit presets incl. **8K (7680×4320)** and per-platform minimums. Custom NCNN model folder supported. |
-| **Platforms reference** | 10 marketplaces with researched limits (Nov 2026), CSV dialects, vector rules, AI policies and source tags (official / community). |
-| **File Doctor** | JPEG segment inspector (EXIF / **GPS** / Photoshop IRB / ICC / XMP), privacy stripping that keeps XMP + ICC, sRGB canvas re-encode with per-platform size caps (quality steps down first, resolution last), `.msap-backup` safety copies. |
-| **Duplicate scanner** | 64-bit perceptual dHash clustering (≤ 8 bits = near-identical) — catches the similarity rejections Vecteezy/Adobe issue; one click selects all-but-first. |
-| **Batch templates** | Title/description/keyword templates with `{name} {format} {index} {count} {category}` variables applied to selection or whole library. |
-| **Watch folder** | Desktop: pick a folder and every new EPS/AI/SVG/JPG/PNG/WebP that lands in it is imported automatically (debounced, de-duplicated by path). |
-| **Release tracker** | Model/property release registry (kind, signed/expiry dates, stored-file reminder) linked per item; validators warn on commercial files with recognisable people but no linked release. |
-| **Earnings analytics** | Import each portal's sales CSV with automatic column detection + manual remap; unified ledger, monthly trend, per-platform totals, best sellers, ledger export. Stored locally only. |
-| **Keyword bank** | Personal synonym expansions, extra category banks and an EN→ES/DE/FR mini dictionary; merged into every generation, translations appendable from the item editor. |
-| **Vector check** | SVG sanitizer (scripts, inline handlers, CSS @import, editor namespaces) + EPS/AI findings (Illustrator version, CMYK, embedded rasters, live fonts, BoundingBox) with per-portal save-version notes. |
-| **Submission planner** | Per-platform queues (todo → queued → submitted → accepted/rejected), validation-gated "queue all eligible", and real publishing caps — Freepik 150-200 first batch / 200-per-month warnings included. |
-| **Library sync** | Supabase `kv_store` push / pull-and-merge of item descriptors (last-write-wins per item); artwork bytes never leave the machine. |
-| **Responsive shell** | Sidebar rail ⇄ drawer ⇄ bottom tabs, fluid type, 360 px → 4K, dark/light/system, density, 60–200 % UI scale, keyboard shortcuts, Responsive Lab device simulator. |
-| **Cloud (optional)** | Supabase adapter with runtime credentials, connection tester and generated SQL (incl. offline `sync_queue`). App is fully functional offline without it. |
+| **Library** | Import EPS, AI, SVG, JPG, PNG, WebP; existing IPTC/XMP is read on import. Search, filter, select, thumbnails, batch generate, batch embed, batch templates, near-duplicate scan (64-bit dHash) and folder watching (desktop). |
+| **Metadata engine** | Offline generator for titles, descriptions, 7-50 keywords and categories; personal **keyword bank** (synonyms, extra category banks, EN→ES/DE/FR dictionary); optional BYO OpenAI-compatible endpoint; per-platform adaptation (title caps, comma rules, keyword order, `_ai_generated`). |
+| **Export centre** | Exact CSV dialects: Shutterstock (comma + header, description-as-title), Adobe (5 000 rows / 1 MB / 30-char names), Freepik (semicolon, single quotes, **no header**), Dreamstime, 123RF, Depositphotos, Vecteezy; copy-paste sheets for Pixabay, Getty/iStock, Alamy. UTF-8 BOM, platform-safe renames, **metadata CSV import** round-trip, planner hand-off. |
+| **Embedded metadata** | IPTC/XMP written into JPEG (APP1), PNG (iTXt with CRC repair), SVG `<metadata>` and EPS/AI headers with automatic `.msap-backup` copies. WebP XMP is replace-only and the app refuses to fake it. |
+| **Upscale studio** | Built-in high-quality resampler **plus** one-click download of Real-ESRGAN NCNN-Vulkan (BSD-3, commercial-safe) running on your own GPU. 2/3/4× chains, presets up to 8K (7680×4320), per-platform resolution/size validation. Nothing is ever uploaded. |
+| **File Doctor** | Strip camera EXIF & GPS, drop Photoshop scratch data, re-encode through sRGB at each portal's quality/size budget; **SVG sanitizer** (scripts, inline handlers, `@import`, editor namespaces) and **EPS/AI report** (Illustrator version, CMYK, live fonts, embedded rasters, `%%BoundingBox`). |
+| **Submission planner** | Per-platform queues (todo → queued → submitted → accepted/rejected) with validation gating and real publishing caps — Freepik's 150-200 first-batch window and 200/month quota included. |
+| **Release tracker** | Model/property release registry with expiry tracking, per-item linking, and validator warnings when commercial files show recognisable people without a release. |
+| **Earnings analytics** | Import each portal's sales CSV with automatic column detection (manual remap when needed), one unified ledger, monthly trend, per-platform totals, best sellers, ledger export. 100 % local. |
+| **Cloud sync** | Optional Supabase project: push/pull library descriptors (last-write-wins per item), connection health, schema SQL in-app, plus full-workspace **backup/restore** JSON. Artwork bytes never leave your machine. |
+| **Responsive shell** | 360 px phones → 4K monitors: drawer nav + bottom tabs on phones, icon rail on laptops, full sidebar on desktops; dark/light themes, density, UI scale, `Ctrl+K` page search, `Ctrl ±/0` zoom, Responsive Lab that renders the live app at three widths. |
 
-## Supported marketplaces
+## 🌍 Supported marketplaces
 
-Shutterstock · Adobe Stock · Freepik (Magnific) · Pixabay · Dreamstime · 123RF ·
-Depositphotos · Vecteezy · Getty Images/iStock · Alamy — plus aggregator notes
-(Wirestock etc.). See **Platforms** page in-app for the full rule matrix.
+| Marketplace | CSV | Keywords | AI policy | Notes enforced by the app |
+| --- | --- | --- | --- | --- |
+| **Shutterstock** | comma + header | 7-50 | 🚫 forbidden | Description doubles as title; 1-2 of the fixed 26 categories |
+| **Adobe Stock** | comma + header | 5-49 (ordered, first 10 weighted) | ✅ labelled | ≤70-char titles without commas, ≤30-char filenames, ≤5 000 rows / 1 MB |
+| **Freepik / Magnific** | semicolon, single quotes, **no header** | ≤50 | ✅ labelled | First batch 150-200 same format, 200/month, EPS + same-name JPG preview, `_ai_generated` |
+| **Pixabay** | copy sheet | ≤20 tags | n/a | Portal-form workflow |
+| **Dreamstime** | comma + header | 7-50 | ✅ labelled | Numeric category id, 300 DPI, UTF-8 only |
+| **123RF** | comma + header | 10-50 | ✅ labelled | Country column, EPS = Illustrator 8 compatible |
+| **Depositphotos** | comma + header | ≥8 | 🚫 forbidden | Editorial / Nudity flag columns |
+| **Vecteezy** | comma + header | 5-50 (first 5 weighted) | ✅ labelled | `License` column (`pro`/`free`/`editorial`) |
+| **Getty / iStock** | copy sheet | portal form | 🚫 forbidden | No resizing; EPS CS6 + raster pair |
+| **Alamy** | copy sheet | portal form | 🚫 forbidden | ≥17 MB uncompressed, JPEG quality ≥8 |
 
-## Requirements
+Platform rules are researched from official contributor docs (November 2026);
+values only documented by the contributor community are marked as such in-app.
+The app **warns, never blocks** — you stay in control of every export.
 
-- Node.js 20.19+ / 22.12+ (22 LTS recommended), npm 10+
-- Optional: Supabase project (cloud sync), optional AI endpoint key
-- Real-ESRGAN needs a Vulkan-capable GPU for speed; CPU works but is slow
-
-## Quick start
+## 🚀 Quick start
 
 ```bash
-npm install          # installs deps + Electron (~120 MB binary)
-npm run dev          # Vite dev server + Electron window with hot reload
-npm run dev:web      # renderer only in a browser (phone testing over LAN)
-npm run verify       # type check + production build
-npm run dist:win     # Windows installer -> release/  (also dist:mac / dist:linux)
+git clone https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro.git
+cd Micro-Stocker-Advanced-Pro
+npm install
+
+npm run dev          # Electron window + Vite dev server
+npm run dev:web      # browser-only preview (no native dialogs)
+npm run verify       # typecheck + 56 runtime tests + production build
+npm run dist:win     # Windows NSIS installer into ./release
 ```
 
-First run of the Upscale studio with the AI engine downloads the portable
-Real-ESRGAN build (~40 MB, BSD-3-Clause) into your user-data folder; after that
-everything runs locally with no uploads.
+Requirements: Node 20+ (22 recommended). The desktop build needs no server,
+no account and no internet after install — apart from the optional
+one-time Real-ESRGAN model download.
 
-## Getting real installers
+### Windows installer without leaving GitHub
 
-Installers are 100–300 MB, so GitHub's runners build them. Copy
-`docs/ci/build-desktop-installers.yml` to `.github/workflows/build.yml`
-(the sandbox cannot create workflow files), then:
+`docs/ci/build-desktop-installers.yml` is a ready-made GitHub Actions
+workflow. Copy it to `.github/workflows/build.yml`, push a `v*.*.*` tag, and
+the release job builds **Windows (NSIS + portable), macOS and Linux**
+artifacts and attaches them to a GitHub Release automatically.
+
+### Optional cloud sync (Supabase)
+
+Paste your project URL + anon key on the **Cloud connection** page, run the
+shown SQL once (also stored in `src/lib/cloud/schema.ts`), and the library,
+releases, planner and sales ledger sync across your machines. Without
+credentials the app is a fully working offline tool.
+
+## 🧪 Testing
 
 ```bash
-git tag v0.2.0 && git push origin v0.2.0
+npm test
 ```
 
-The workflow publishes `.exe` / `.dmg` / `.AppImage` / `.deb` as a GitHub Release.
+The suite bundles the pure domain layer (CSV writers, validators, metadata
+engine, XMP embedding, SVG/EPS analysis, sales parsing, planner) with esbuild
+and runs **56 real assertions** on Node — including binary IPTC/XMP
+round-trips through actual PNG/JPEG/SVG/EPS files and dialect round-trips of
+every CSV writer. `npm run verify` chains typecheck → tests → build.
 
-## Project structure
+## 🗂 Project layout
 
 ```
-electron/            main process + sandboxed preload (file IO, dialogs,
-                     Real-ESRGAN download/spawn, zoom, theme, single instance)
+electron/            main + preload (secure IPC: fs, dialogs, upscaler, watcher)
 src/
-  components/
-    layout/          responsive shell (sidebar/topbar/tab bar/page header)
-    stock/           ItemEditor drawer (metadata / platforms / embed tabs)
-    ui/              design-system kit incl. responsive DataTable
-  lib/stock/         domain core:
-                     types, platforms (researched registry), metadata
-                     generator, csv writers, validators, xmp embedder,
-                     files (probing/sanitising), upscale/{classic,models,engine}
-  pages/             Overview, Library, Prepare, Export, Upscale, Planner,
-                     Releases, Earnings, Bank, Platforms, Cloud,
-                     Responsive lab, Settings, About, 404
-  state/             AppProvider (settings/cloud/zoom), LibraryProvider,
-                     ToastProvider
-resources/           app icons (png + ico)
-docs/ci/             installer workflow template
+  components/        design system (cards, tables, modals, badges…) + shell
+  lib/stock/         platforms, csv, csvimport, validate, metadata, xmp,
+                     files, categories, dupes, filedoctor, vectorcheck,
+                     sales, submissions, sync + upscale/ (models, engine)
+  state/             app, toast, library, bank, releases providers
+  pages/             Overview, Library, File Doctor, Export, Upscale, Planner,
+                     Releases, Earnings, Keyword bank, Platforms, Cloud,
+                     Responsive lab, Settings, About
+tests/               runtime smoke suite + binary fixtures
+docs/                CI template, user guide, assets
 ```
 
-## Honest limitations
+## 🔒 Privacy by design
 
-- PDF-based `.ai` files keep XMP in compressed streams — embed into the paired
-  EPS/JPG instead (the app says so rather than corrupting the file).
-- WebP without an existing XMP chunk needs a VP8X rewrite; export PNG/JPG instead.
-- Real-ESRGAN runs in the desktop build only (native binary); the browser
-  preview uses the built-in resampler.
-- Platform limits change; values tagged `community` in-app are re-check targets.
-- Releases/model/property release PDFs live in each portal — the app tracks the
-  flags and reminds you.
+- Artwork bytes are processed **only on your machine**; the upscaler runs a
+  local binary, the generator is offline unless you add your own endpoint.
+- Cloud sync stores **descriptors** (names, metadata, statuses) — never
+  pixels. Backups are plain JSON files you control.
+- No analytics, no telemetry, no accounts.
 
-## Licence
+##  Licence & trademarks
 
-MIT — © 2026 pritamsarkar711. Real-ESRGAN: BSD-3-Clause (Tencent ARC Lab).
+MIT — see [LICENSE](LICENSE). Third-party notices, including the CC0 brand
+marks used for platform logos and the BSD-3 Real-ESRGAN toolchain, live in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+All marketplace names, logos and trademarks belong to their respective
+owners; they appear for identification only. This project is independent and
+is not affiliated with, endorsed by, or sponsored by any marketplace.
+
+---
+
+<div align="center">
+
+**Made for contributors, by a contributor.**
+[Bugs & ideas → Issues](https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro/issues) ·
+[Releases](https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro/releases) ·
+[User guide](docs/user-guide.md)
+
+</div>

@@ -94,7 +94,7 @@ export function ReleasesPage() {
     <>
       <PageHeader
         title="Releases"
-        description="Model & property release registry. Portals store the signed PDFs on their own templates — this tracks who/what is cleared, expiry, and which files depend on it, so exports warn before you submit an unreleased face."
+        description="Model & property releases: who is cleared, expiry, and the files they cover."
         actions={<Button size="sm" icon={<Plus className="size-4" />} onClick={openNew}>Add release</Button>}
       />
 

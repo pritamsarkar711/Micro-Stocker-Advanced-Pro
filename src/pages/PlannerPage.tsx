@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Field';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/Misc';
+import { PlatformLogo } from '@/components/stock/PlatformLogo';
 import { useLibrary } from '@/state/library';
 import { useToast } from '@/state/ToastState';
 import { PLATFORM_LIST } from '@/lib/stock/platforms';
@@ -136,14 +137,17 @@ export function PlannerPage() {
     <>
       <PageHeader
         title="Submission planner"
-        description="Per-platform queues with real publishing caps: mark files todo → queued → submitted → accepted/rejected, and see first-batch / monthly limits before the portal refuses your batch."
+        description="Per-platform queues with the real publishing caps enforced."
         actions={
-          <Select
-            value={platform}
-            onChange={(event) => setPlatform(event.target.value as PlatformId)}
-            className="w-56"
-            options={PLATFORM_LIST.map((p) => ({ value: p.id, label: p.name }))}
-          />
+          <span className="flex w-full items-center gap-2 sm:w-auto">
+            <PlatformLogo id={platform} size={30} className="hidden sm:inline-flex" />
+            <Select
+              value={platform}
+              onChange={(event) => setPlatform(event.target.value as PlatformId)}
+              className="w-full sm:w-52"
+              options={PLATFORM_LIST.map((p) => ({ value: p.id, label: p.name }))}
+            />
+          </span>
         }
       >
         <div className="grid-auto-fit gap-3">

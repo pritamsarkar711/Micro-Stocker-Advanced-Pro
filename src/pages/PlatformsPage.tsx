@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { desktop } from '@/lib/desktop';
+import { PlatformLogo } from '@/components/stock/PlatformLogo';
 import { AGGREGATORS, PLATFORM_LIST } from '@/lib/stock/platforms';
 
 export function PlatformsPage() {
@@ -11,13 +12,12 @@ export function PlatformsPage() {
     <>
       <PageHeader
         title="Platform requirements"
-        description="Every rule the validators and CSV writers enforce, in one place. Values marked “community” are widely documented but not on an official page — re-check before very large batches."
+        description="The rules every validator and CSV writer enforces."
       >
         <div className="flex flex-wrap gap-2 rounded-xl border border-warn/30 bg-warn-soft p-3 text-xs leading-relaxed text-warn">
           <TriangleAlert className="mt-0.5 size-4 shrink-0" />
           <span>
-            Platforms change limits without notice. This reference was compiled in November 2026 from official contributor
-            docs and current contributor guides; the app never blocks you from exporting, it only warns.
+            Compiled November 2026 from official contributor docs. Platforms change limits without notice — the app warns, it never blocks an export.
           </span>
         </div>
       </PageHeader>
@@ -28,7 +28,7 @@ export function PlatformsPage() {
             key={platform.id}
             title={
               <span className="flex items-center gap-2">
-                <span className="size-2.5 rounded-full" style={{ background: platform.color }} />
+                <PlatformLogo id={platform.id} size={24} />
                 {platform.name}
               </span>
             }

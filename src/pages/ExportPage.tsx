@@ -9,6 +9,7 @@ import { useLibrary } from '@/state/library';
 import { useToast } from '@/state/ToastState';
 import { desktop, isDesktop } from '@/lib/desktop';
 import { buildPlatformCsv, withBom } from '@/lib/stock/csv';
+import { PlatformLogo } from '@/components/stock/PlatformLogo';
 import { PLATFORM_LIST } from '@/lib/stock/platforms';
 import type { PlatformId } from '@/lib/stock/types';
 import { sanitizeFilename } from '@/lib/stock/validate';
@@ -114,7 +115,7 @@ export function ExportPage() {
     <>
       <PageHeader
         title="Export centre"
-        description="One metadata set, every platform's exact CSV dialect — delimiters, headers, quoting, keyword joins and flag columns included. Files can also be renamed to platform-safe names and embedded with IPTC/XMP."
+        description="Every platform's exact CSV dialect, platform-safe filenames, embedded metadata."
         actions={
           <>
             <Button size="sm" variant="outline" loading={busy} icon={<PenLine className="size-4" />} onClick={onEmbedAll} disabled={rows.length === 0}>
@@ -153,7 +154,7 @@ export function ExportPage() {
                   : 'inline-flex items-center gap-2 rounded-full border border-line bg-surface-2 px-3 py-1.5 text-xs font-medium text-fg-muted transition hover:text-fg'
               }
             >
-              <span className="size-2 rounded-full" style={{ background: platform.color }} />
+              <PlatformLogo id={platform.id} size={18} />
               {platform.name}
               {platform.csv ? null : <Badge tone="neutral">sheet</Badge>}
             </button>
@@ -170,8 +171,13 @@ export function ExportPage() {
           {exports.map(({ platform, result, blocking }) => (
             <Card
               key={platform.id}
-              title={platform.name}
-              description={platform.csv ? platform.csv.notes : 'No CSV importer — this sheet is for copy-paste into the portal.'}
+              title={
+                <span className="flex items-center gap-2">
+                  <PlatformLogo id={platform.id} size={20} />
+                  {platform.name}
+                </span>
+              }
+              description={platform.csv ? platform.csv.notes : 'No CSV importer — copy-paste sheet'}
               action={
                 <span className="flex items-center gap-1.5">
                   <Badge tone="neutral">{platform.csv ? `${platform.csv.delimiter === ';' ? 'semicolon' : 'comma'} CSV` : 'copy sheet'}</Badge>

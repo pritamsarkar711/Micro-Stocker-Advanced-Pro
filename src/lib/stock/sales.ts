@@ -1,4 +1,5 @@
 import type { PlatformId } from './types';
+import { sniffDialect, splitFields } from './csvimport';
 
 /**
  * Earnings analytics: parse each portal's sales/earnings CSV with automatic
@@ -37,44 +38,21 @@ const SYNONYMS: Record<keyof ColumnMapping, string[]> = {
   country: ['country', 'country code', 'region', 'buyer country'],
 };
 
+/**
+ * Quote-aware delimited parser. Dialect sniffing is shared with the metadata
+ * CSV importer so a semicolon/single-quoted sheet is never mis-split on the
+ * commas inside its keyword field.
+ */
 export function parseDelimited(text: string): { delimiter: string; headers: string[]; rows: string[][] } {
-  const sample = text.slice(0, 4000);
-  const counts: [string, number][] = [',', ';', '\t'].map((d) => [d, (sample.split('\n')[0]?.split(d).length ?? 0)]);
-  counts.sort((a, b) => b[1] - a[1]);
-  const delimiter = counts[0][1] > 1 ? counts[0][0] : ',';
+  const clean = text.replace(/^\uFEFF/, '');
+  const { delimiter, quote } = sniffDialect(clean);
+  const rows = clean
+    .split(/\r?\n/)
+    .filter((line) => line.trim() !== '')
+    .map((line) => splitFields(line, delimiter, quote))
+    .filter((fields) => fields.some((field) => field.trim() !== ''));
 
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let field = '';
-  let quoted = false;
-  const push = () => {
-    row.push(field);
-    field = '';
-  };
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    if (quoted) {
-      if (char === '"') {
-        if (text[i + 1] === '"') {
-          field += '"';
-          i++;
-        } else quoted = false;
-      } else field += char;
-      continue;
-    }
-    if (char === '"') quoted = true;
-    else if (char === delimiter) push();
-    else if (char === '\n' || char === '\r') {
-      if (char === '\r' && text[i + 1] === '\n') i++;
-      push();
-      if (row.some((c) => c.trim() !== '')) rows.push(row);
-      row = [];
-    } else field += char;
-  }
-  push();
-  if (row.some((c) => c.trim() !== '')) rows.push(row);
-
-  const headers = (rows.shift() ?? []).map((h) => h.trim());
+  const headers = (rows.shift() ?? []).map((header) => header.trim());
   return { delimiter, headers, rows };
 }
 

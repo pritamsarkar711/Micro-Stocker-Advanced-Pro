@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import { Check, Copy, Download, PenLine, Wand2, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { PlatformLogo } from '@/components/stock/PlatformLogo';
 import { Field, Input, Select, Switch, Textarea } from '@/components/ui/Field';
 import { Tabs } from '@/components/ui/Tabs';
 import { useLibrary } from '@/state/library';
@@ -259,7 +260,7 @@ export function ItemEditor({ item, onClose }: { item: StockItem; onClose: () => 
                 return (
                   <details key={platform.id} className="card overflow-hidden">
                     <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5">
-                      <span className="size-2.5 shrink-0 rounded-full" style={{ background: platform.color }} />
+                      <PlatformLogo id={platform.id} size={18} />
                       <span className="flex-1 truncate text-sm font-medium text-fg">{platform.name}</span>
                       <Badge tone={errors.length ? 'danger' : issues.length ? 'warn' : 'ok'} dot>
                         {errors.length ? `${errors.length} error${errors.length === 1 ? '' : 's'}` : issues.length ? 'check' : 'pass'}

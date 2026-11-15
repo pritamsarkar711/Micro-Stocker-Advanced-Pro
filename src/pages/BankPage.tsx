@@ -49,7 +49,7 @@ export function BankPage() {
     <>
       <PageHeader
         title="Keyword bank"
-        description="Your personal vocabulary: synonyms the generator expands, extra category banks, and a mini dictionary used to append ES/DE/FR keywords. Merged over the built-in banks on every generation."
+        description="Your synonyms, category banks and ES/DE/FR dictionary — merged into every generation."
         actions={
           <Button size="sm" variant="ghost" icon={<RotateCcw className="size-4" />} onClick={() => { bank.resetBank(); toast.info('Bank reset', 'Back to the shipped defaults plus nothing.'); }}>
             Reset to defaults

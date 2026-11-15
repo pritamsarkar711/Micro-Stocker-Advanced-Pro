@@ -15,7 +15,9 @@ import { kv } from '@/lib/kv';
 import { desktop, isDesktop } from '@/lib/desktop';
 import { money } from '@/lib/format';
 import { useApp } from '@/state/AppState';
-import { PLATFORM_LIST } from '@/lib/stock/platforms';
+import { PlatformLogo } from '@/components/stock/PlatformLogo';
+import { findPlatform, PLATFORM_LIST } from '@/lib/stock/platforms';
+import { PLATFORM_BRAND } from '@/lib/stock/brand';
 import type { PlatformId } from '@/lib/stock/types';
 import {
   detectMapping, mapRows, monthlySeries, parseDelimited, platformTotals, topTitles,
@@ -108,7 +110,7 @@ export function EarningsPage() {
     <>
       <PageHeader
         title="Earnings analytics"
-        description="Import each portal's sales/earnings CSV — columns are auto-detected (Shutterstock, Adobe, Freepik, Dreamstime…) and normalised into one ledger with monthly trends, per-platform totals and best sellers."
+        description="Import portal sales CSVs — columns auto-detected, one unified ledger."
         actions={
           <>
             <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => e.target.files?.[0] && onPickFile(e.target.files[0])} />
@@ -148,7 +150,7 @@ export function EarningsPage() {
             ))}
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Field label="Platform of this file" className="w-52">
+            <Field label="Platform of this file" className="w-full sm:w-52">
               <Select value={platform} onChange={(e) => setPlatform(e.target.value as PlatformId | 'other')} options={[...PLATFORM_LIST.map((p) => ({ value: p.id, label: p.name })), { value: 'other', label: 'Other / aggregator' }]} />
             </Field>
             <Button onClick={confirmImport} icon={<Upload className="size-4" />}>Import {parsed.rows.length} rows</Button>
@@ -162,7 +164,7 @@ export function EarningsPage() {
           <EmptyState
             icon={<BarChart3 className="size-7" />}
             title="No sales imported yet"
-            description="Download your earnings/sales CSV from each contributor portal (Shutterstock: Earnings → statement; Adobe: Reports → download CSV) and import them here. Everything stays on this computer."
+            description="Import each portal's sales CSV — columns are detected automatically. Everything stays on this computer."
             action={<Button icon={<Upload className="size-4" />} onClick={() => fileRef.current?.click()}>Import first CSV</Button>}
           />
         </Card>
@@ -198,7 +200,15 @@ export function EarningsPage() {
                   <Tooltip contentStyle={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, fontSize: 12, color: 'var(--fg)' }} />
                   <Bar dataKey="earnings" radius={[6, 6, 0, 0]}>
                     {byPlatform.map((entry, index) => (
-                      <Cell key={entry.platform} fill={BAR_COLORS[index % BAR_COLORS.length]} />
+                      <Cell
+                        key={entry.platform}
+                        fill={
+                          (() => {
+                            const known = findPlatform(entry.platform);
+                            return known ? PLATFORM_BRAND[known].color : BAR_COLORS[index % BAR_COLORS.length];
+                          })()
+                        }
+                      />
                     ))}
                   </Bar>
                 </BarChart>
@@ -215,7 +225,15 @@ export function EarningsPage() {
               rows={[...sales].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 50)}
               columns={[
                 { key: 'date', header: 'Date', primary: true, sortable: true, render: (r) => <span className="tabular-nums">{r.date}</span> },
-                { key: 'platform', header: 'Platform', hideBelow: 'sm', render: (r) => <Badge tone="brand">{r.platform}</Badge> },
+                { key: 'platform', header: 'Platform', hideBelow: 'sm', render: (r) => {
+                    const known = findPlatform(r.platform);
+                    return (
+                      <span className="flex items-center gap-1.5">
+                        {known && <PlatformLogo id={known} size={16} />}
+                        <Badge tone="brand">{r.platform}</Badge>
+                      </span>
+                    );
+                  } },
                 { key: 'title', header: 'Title', hideBelow: 'md', render: (r) => <span className="block max-w-72 truncate">{r.title}</span> },
                 { key: 'license', header: 'License', hideBelow: 'xl' },
                 { key: 'downloads', header: 'Dl', align: 'right', hideBelow: 'lg', render: (r) => <span className="tabular-nums">{r.downloads}</span> },

@@ -100,7 +100,7 @@ export function CloudPage() {
     <>
       <PageHeader
         title="Cloud connection"
-        description="Connect a Supabase project so data lives in the cloud. Until credentials are added the app runs fully offline and stores everything on this computer — nothing breaks."
+        description="Optional Supabase sync. Everything runs offline until credentials are added."
         actions={
           <>
             <Button
@@ -218,7 +218,7 @@ export function CloudPage() {
 
           <Card
             title="Database schema"
-            description="Run this once in Supabase Studio → SQL Editor → Run. It creates the base tables, indexes and Row Level Security policies."
+            description="Run once in Supabase Studio → SQL Editor: tables, indexes and RLS policies."
             action={<Badge tone="brand">Postgres</Badge>}
           >
             <CodeBlock code={SUPABASE_SQL} language="sql" maxHeight="22rem" />
