@@ -24,11 +24,15 @@ import { useToast } from '@/state/ToastState';
 import { SUPABASE_SQL } from '@/lib/cloud/schema';
 import { testCloudConnection, type ConnectionReport } from '@/lib/cloud/config';
 import { dateTime } from '@/lib/format';
+import { pushLibrary, pullLibrary } from '@/lib/stock/sync';
+import { useLibrary } from '@/state/library';
 import { isDesktop } from '@/lib/desktop';
 
 export function CloudPage() {
   const { cloud, saveCloud, clearCloud, connection, recheckConnection, runtime, ready } = useApp();
+  const library = useLibrary();
   const toast = useToast();
+  const [syncing, setSyncing] = useState(false);
 
   const [url, setUrl] = useState('');
   const [anonKey, setAnonKey] = useState('');
@@ -281,6 +285,46 @@ export function CloudPage() {
                 </span>
               </li>
             </ul>
+          </Card>
+
+          <Card title="Library sync" description="Share one metadata library between your computers via kv_store">
+            <div className="flex flex-col gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                loading={syncing}
+                disabled={connection.state !== 'online'}
+                onClick={async () => {
+                  setSyncing(true);
+                  const result = await pushLibrary(cloud, library.items);
+                  setSyncing(false);
+                  if (result.ok) toast.success('Library pushed', `${library.items.length} item descriptor(s) uploaded.`);
+                  else toast.error('Push failed', result.error);
+                }}
+              >
+                Push library
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                loading={syncing}
+                disabled={connection.state !== 'online'}
+                onClick={async () => {
+                  setSyncing(true);
+                  const result = await pullLibrary(cloud, library.items);
+                  setSyncing(false);
+                  if (result.ok) {
+                    library.replaceAll(result.merged);
+                    toast.success('Library merged', `${result.merged.length} item(s) after merge (newer updatedAt wins). File bytes stay on each machine.`);
+                  } else toast.error('Pull failed', result.error);
+                }}
+              >
+                Pull & merge
+              </Button>
+              <p className="text-[0.6875rem] leading-relaxed text-fg-muted">
+                Descriptors (names, sizes, metadata, flags) sync — not the artwork itself. Merge is last-write-wins per item.
+              </p>
+            </div>
           </Card>
 
           <Card title="Offline behaviour" description="What the app does without internet">

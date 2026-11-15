@@ -79,6 +79,11 @@ export interface GenerateOptions {
   concepts: string[];
 }
 
+export interface GeneratorBank {
+  synonyms?: Record<string, string[]>;
+  categories?: Record<string, string[]>;
+}
+
 export function tokensFromFilename(name: string): string[] {
   return name
     .replace(/\.[^.]+$/, '')
@@ -87,7 +92,9 @@ export function tokensFromFilename(name: string): string[] {
     .filter((t) => t && !/^\d+$/.test(t) && t.length > 2 && !['final', 'copy', 'new', 'img', 'image', 'file', 'export', 'preview'].includes(t));
 }
 
-export function generateMetadata(item: StockItem, options: GenerateOptions): StockMetadata {
+export function generateMetadata(item: StockItem, options: GenerateOptions, bank?: GeneratorBank): StockMetadata {
+  const SYNONYM_BANK = { ...SYNONYMS, ...(bank?.synonyms ?? {}) };
+  const CATEGORY_BANK_MERGED = { ...CATEGORY_BANK, ...(bank?.categories ?? {}) };
   const isVector = options.style === 'vector' || (options.style === 'auto' && ['eps', 'ai', 'svg'].includes(item.format));
   const styleWords = isVector ? VECTOR_STYLE : PHOTO_STYLE;
 
@@ -98,11 +105,11 @@ export function generateMetadata(item: StockItem, options: GenerateOptions): Sto
   // synonym expansion
   const expanded: string[] = [];
   for (const token of subjectTokens) {
-    expanded.push(...(SYNONYMS[token] ?? [token]));
+    expanded.push(...(SYNONYM_BANK[token] ?? [token]));
   }
   const subjectWords = Array.from(new Set([...subjectTokens, ...expanded]));
 
-  const categoryWords = options.categories.flatMap((c) => CATEGORY_BANK[c] ?? [c]);
+  const categoryWords = options.categories.flatMap((c) => CATEGORY_BANK_MERGED[c] ?? [c]);
   const conceptWords = options.concepts.map((c) => c.trim()).filter(Boolean);
 
   /* ---- keywords, strongest first ---- */

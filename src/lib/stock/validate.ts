@@ -198,6 +198,19 @@ export function validateItem(
     });
   }
 
+  /* ---- releases ---- */
+  const PEOPLE_WORDS = ['woman', 'man', 'people', 'person', 'child', 'kid', 'boy', 'girl', 'portrait', 'face', 'model', 'family'];
+  const looksLikePeople = item.metadata.keywords.some((k) => PEOPLE_WORDS.includes(k.split(' ')[0])) || /people|portrait|woman|man\b/i.test(item.metadata.title);
+  if (looksLikePeople && !item.flags.editorial && !(item.releaseIds ?? []).length) {
+    issues.push({
+      level: 'warn',
+      scope: 'policy',
+      platform: platformId,
+      message: 'Looks like recognisable people but no model release is linked.',
+      hint: 'Link a release in the item editor, or mark the file editorial.',
+    });
+  }
+
   /* ---- embedded metadata ---- */
   if (platform.readsEmbeddedMetadata && !item.embeddedAt && ['jpg', 'png', 'webp', 'svg', 'eps'].includes(item.format)) {
     issues.push({

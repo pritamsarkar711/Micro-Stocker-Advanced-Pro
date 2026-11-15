@@ -46,6 +46,8 @@ export interface StockItem {
   inMemory?: boolean;
   metadata: StockMetadata;
   flags: ItemFlags;
+  /** Release registry ids covering recognisable people/property in this file. */
+  releaseIds?: string[];
   embeddedAt: string | null;
   importedAt: string;
   updatedAt: string;

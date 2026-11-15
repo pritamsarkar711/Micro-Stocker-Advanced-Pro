@@ -9,6 +9,12 @@ import { ExportPage } from '@/pages/ExportPage';
 import { PreparePage } from '@/pages/PreparePage';
 import { UpscalePage } from '@/pages/UpscalePage';
 import { PlatformsPage } from '@/pages/PlatformsPage';
+import { PlannerPage } from '@/pages/PlannerPage';
+import { ReleasesPage } from '@/pages/ReleasesPage';
+import { EarningsPage } from '@/pages/EarningsPage';
+import { BankPage } from '@/pages/BankPage';
+import { BankProvider } from '@/state/bank';
+import { ReleasesProvider } from '@/state/releases';
 import { CloudPage } from '@/pages/CloudPage';
 import { ResponsiveLabPage } from '@/pages/ResponsiveLabPage';
 import { SettingsPage } from '@/pages/SettingsPage';
@@ -24,6 +30,8 @@ export default function App() {
     <AppProvider>
       <ToastProvider>
         <LibraryProvider>
+          <BankProvider>
+            <ReleasesProvider>
           <HashRouter>
             <Routes>
               <Route element={<AppShell />}>
@@ -33,6 +41,10 @@ export default function App() {
                 <Route path="export" element={<ExportPage />} />
                 <Route path="upscale" element={<UpscalePage />} />
                 <Route path="platforms" element={<PlatformsPage />} />
+                <Route path="plan" element={<PlannerPage />} />
+                <Route path="releases" element={<ReleasesPage />} />
+                <Route path="earnings" element={<EarningsPage />} />
+                <Route path="bank" element={<BankPage />} />
                 <Route path="cloud" element={<CloudPage />} />
                 <Route path="responsive" element={<ResponsiveLabPage />} />
                 <Route path="settings" element={<SettingsPage />} />
@@ -42,6 +54,8 @@ export default function App() {
               </Route>
             </Routes>
           </HashRouter>
+            </ReleasesProvider>
+          </BankProvider>
         </LibraryProvider>
       </ToastProvider>
     </AppProvider>

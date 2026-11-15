@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Copy, Download, FileSpreadsheet, PenLine, TriangleAlert } from 'lucide-react';
+import { Copy, Download, FileSpreadsheet, PenLine, Send, TriangleAlert } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -13,6 +13,7 @@ import { PLATFORM_LIST } from '@/lib/stock/platforms';
 import type { PlatformId } from '@/lib/stock/types';
 import { sanitizeFilename } from '@/lib/stock/validate';
 import { validateItem } from '@/lib/stock/validate';
+import { loadSubmissions, saveSubmissions, setStatus } from '@/lib/stock/submissions';
 
 export function ExportPage() {
   const library = useLibrary();
@@ -90,6 +91,14 @@ export function ExportPage() {
     if (result.failed.length) toast.error(`${result.failed.length} failed`, result.failed.slice(0, 3).join(' · '));
   };
 
+  const onMarkQueued = async () => {
+    const map = await loadSubmissions();
+    let next = map;
+    for (const row of rows) for (const platformId of Array.from(enabled)) next = setStatus(next, row.id, platformId, 'queued');
+    await saveSubmissions(next);
+    toast.success(`Queued ${rows.length} file(s)`, `Marked queued on ${enabled.size} platform(s) — track them in the Submission planner.`);
+  };
+
   const onRenameAll = async () => {
     setBusy(true);
     let changed = 0;
@@ -113,6 +122,9 @@ export function ExportPage() {
             </Button>
             <Button size="sm" variant="outline" loading={busy} icon={<FileSpreadsheet className="size-4" />} onClick={onRenameAll} disabled={rows.length === 0}>
               Rename safe
+            </Button>
+            <Button size="sm" variant="ghost" loading={busy} icon={<Send className="size-4" />} onClick={onMarkQueued} disabled={rows.length === 0 || enabled.size === 0}>
+              Mark queued
             </Button>
           </>
         }

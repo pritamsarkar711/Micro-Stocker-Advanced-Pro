@@ -20,6 +20,7 @@ import {
 import { detectFormat, probeRasterDimensions, probeVectorDimensions, bytesToBase64 } from '@/lib/stock/files';
 import { embedMetadata, readEmbeddedMetadata } from '@/lib/stock/xmp';
 import { adaptForPlatform, generateMetadata, generateWithAi, type AiAssistantConfig, type GenerateOptions } from '@/lib/stock/metadata';
+import { DEFAULT_BANK, type KeywordBank } from '@/state/bank';
 import { PLATFORMS } from '@/lib/stock/platforms';
 import { useToast } from '@/state/ToastState';
 
@@ -45,8 +46,10 @@ interface LibraryState {
 
   setMetadata: (id: string, patch: Partial<StockMetadata>) => void;
   setFlags: (id: string, patch: Partial<ItemFlags>) => void;
+  setReleaseIds: (id: string, releaseIds: string[]) => void;
   renameItem: (id: string, name: string) => Promise<boolean>;
   removeItems: (ids: string[]) => void;
+  replaceAll: (items: StockItem[]) => void;
 
   toggleSelect: (id: string) => void;
   setSelection: (ids: string[]) => void;
@@ -284,6 +287,13 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     [mutate],
   );
 
+  const setReleaseIds = useCallback(
+    (id: string, releaseIds: string[]) => {
+      mutate((prev) => prev.map((item) => (item.id === id ? { ...item, releaseIds, updatedAt: new Date().toISOString() } : item)));
+    },
+    [mutate],
+  );
+
   const renameItem = useCallback(
     async (id: string, name: string) => {
       const item = items.find((i) => i.id === id);
@@ -325,6 +335,13 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       });
     },
     [items, mutate],
+  );
+
+  const replaceAll = useCallback(
+    (items: StockItem[]) => {
+      mutate(() => items);
+    },
+    [mutate],
   );
 
   const toggleSelect = useCallback((id: string) => {
@@ -423,6 +440,11 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     async (ids: string[], options: GenerateOptions) => {
       let aiUsed = 0;
       const useAi = Boolean(aiConfig.baseUrl && aiConfig.apiKey);
+      const storedBank = await kv.get<Partial<KeywordBank>>('msap:keyword-bank', {});
+      const bank = {
+        synonyms: { ...DEFAULT_BANK.synonyms, ...storedBank.synonyms },
+        categories: { ...DEFAULT_BANK.categories, ...storedBank.categories },
+      };
       for (const id of ids) {
         const item = items.find((i) => i.id === id);
         if (!item) continue;
@@ -432,10 +454,10 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
             metadata = await generateWithAi(item, aiConfig);
             aiUsed++;
           } catch {
-            metadata = generateMetadata(item, options);
+            metadata = generateMetadata(item, options, bank);
           }
         } else {
-          metadata = generateMetadata(item, options);
+          metadata = generateMetadata(item, options, bank);
         }
         setMetadata(id, metadata);
       }
@@ -509,8 +531,10 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       hasSource,
       setMetadata,
       setFlags,
+      setReleaseIds,
       renameItem,
       removeItems,
+      replaceAll,
       toggleSelect,
       setSelection,
       generateFor,
@@ -534,8 +558,10 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       hasSource,
       setMetadata,
       setFlags,
+      setReleaseIds,
       renameItem,
       removeItems,
+      replaceAll,
       toggleSelect,
       setSelection,
       generateFor,

@@ -11,6 +11,7 @@ import { useToast } from '@/state/ToastState';
 import { formatBytes } from '@/lib/stock/files';
 import { megapixels, type StockItem } from '@/lib/stock/types';
 import { inspectJpeg, reencodeRaster, stripJpegMetadata, type JpegReport } from '@/lib/stock/filedoctor';
+import { analyzeEps, analyzeSvg, sanitizeSvg, type EpsReport, type SvgReport } from '@/lib/stock/vectorcheck';
 import { PLATFORM_LIST } from '@/lib/stock/platforms';
 
 interface Row {
@@ -35,6 +36,7 @@ export function PreparePage() {
   const [sizeTarget, setSizeTarget] = useState('45');
   const [customMB, setCustomMB] = useState(30);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
+  const [vectorReports, setVectorReports] = useState<Record<string, { svg?: SvgReport; eps?: EpsReport }>>({});
 
   const [reports, setReports] = useState<Record<string, JpegReport>>({});
 
@@ -65,6 +67,45 @@ export function PreparePage() {
   };
 
   const maxMB = sizeTarget === 'custom' ? customMB : Number(sizeTarget) || 0;
+
+  const vectorItems = library.items.filter((item) => ['svg', 'eps', 'ai'].includes(item.format));
+
+  const scanVectors = async () => {
+    const next: Record<string, { svg?: SvgReport; eps?: EpsReport }> = {};
+    for (const item of vectorItems) {
+      try {
+        const bytes = await library.getItemBytes(item.id);
+        const text = new TextDecoder().decode(bytes.subarray(0, 400_000));
+        next[item.id] = item.format === 'svg' ? { svg: analyzeSvg(text) } : { eps: analyzeEps(text) };
+      } catch {
+        next[item.id] = {};
+      }
+    }
+    setVectorReports(next);
+    toast.info('Vector scan complete', `${Object.keys(next).length} vector file(s) analysed.`);
+  };
+
+  const sanitizeOne = async (item: (typeof vectorItems)[number]) => {
+    try {
+      const bytes = await library.getItemBytes(item.id);
+      const result = sanitizeSvg(new TextDecoder().decode(bytes));
+      if (result.removed.length === 0) {
+        toast.info('Nothing to sanitize', `${item.name} has no scripts, handlers or editor junk.`);
+        return;
+      }
+      const ok = await library.replaceBytes(item.id, new TextEncoder().encode(result.text), { backup: true });
+      if (ok) {
+        setVectorReports((prev) => {
+          const copy = { ...prev };
+          delete copy[item.id];
+          return copy;
+        });
+        toast.success(`Sanitized ${item.name}`, `Removed: ${result.removed.join(', ')}`);
+      }
+    } catch (error) {
+      toast.error('Sanitize failed', error instanceof Error ? error.message : String(error));
+    }
+  };
 
   const cleanOne = async (row: Row) => {
     setBusyIds((prev) => new Set(prev).add(row.item.id));
@@ -255,6 +296,63 @@ export function PreparePage() {
           </div>
         </Card>
       </div>
+      <Card
+        className="mt-4"
+        title="Vector check"
+        description="SVG security/sanity + EPS technical findings (scripts, external refs, embedded rasters, fonts, CMYK, Illustrator version)"
+        action={<Button size="xs" variant="outline" onClick={scanVectors}>Scan vectors</Button>}
+        flush
+      >
+        {vectorItems.length === 0 ? (
+          <p className="p-6 text-center text-sm text-fg-muted">No SVG/EPS/AI files in the library.</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {vectorItems.map((item) => {
+              const report = vectorReports[item.id];
+              return (
+                <li key={item.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-fg">{item.name}</p>
+                    {!report ? (
+                      <p className="text-[0.6875rem] text-fg-subtle">Not scanned yet.</p>
+                    ) : report.svg ? (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {report.svg.hasScript && <Badge tone="danger">script!</Badge>}
+                        {report.svg.eventHandlers > 0 && <Badge tone="danger">{report.svg.eventHandlers} handlers</Badge>}
+                        {report.svg.externalRefs.length > 0 && <Badge tone="warn">{report.svg.externalRefs.length} external refs</Badge>}
+                        {report.svg.embeddedRasters > 0 && <Badge tone="warn">{report.svg.embeddedRasters} raster(s)</Badge>}
+                        {report.svg.fonts.length > 0 && <Badge tone="neutral">fonts: {report.svg.fonts.slice(0, 3).join(', ')}</Badge>}
+                        {!report.svg.hasViewBox && <Badge tone="warn">no viewBox</Badge>}
+                        {!report.svg.hasMetadata && <Badge tone="neutral">no metadata</Badge>}
+                        {!report.svg.hasScript && report.svg.eventHandlers === 0 && report.svg.externalRefs.length === 0 && <Badge tone="ok" dot>clean</Badge>}
+                      </div>
+                    ) : report.eps ? (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {report.eps.creator && <Badge tone="neutral">{report.eps.creator.slice(0, 40)}</Badge>}
+                        {report.eps.usesCmyk && <Badge tone="warn">CMYK</Badge>}
+                        {report.eps.hasEmbeddedRaster && <Badge tone="warn">embedded raster</Badge>}
+                        {report.eps.documentFonts.length > 0 && <Badge tone="warn">fonts live</Badge>}
+                        {!report.eps.hasXmp && <Badge tone="neutral">no XMP</Badge>}
+                        {report.eps.notes.length === 0 && <Badge tone="ok" dot>no findings</Badge>}
+                      </div>
+                    ) : null}
+                    {report?.eps && report.eps.notes.length > 0 && (
+                      <ul className="mt-1.5 flex flex-col gap-1">
+                        {report.eps.notes.map((note, index) => (
+                          <li key={index} className="text-[0.6875rem] leading-relaxed text-fg-muted">• {note}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  {item.format === 'svg' && (
+                    <Button size="xs" variant="outline" onClick={() => sanitizeOne(item)}>Sanitize SVG</Button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
     </>
   );
 }

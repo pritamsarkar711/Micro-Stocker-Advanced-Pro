@@ -1,8 +1,12 @@
 import type { ReactNode } from 'react';
 import {
+  BarChart3,
+  BookMarked,
   Box,
+  CalendarCheck,
   Cloud,
   FileDown,
+  FileSignature,
   Gauge,
   Info,
   MonitorSmartphone,
@@ -64,6 +68,34 @@ export const NAV_ITEMS: NavItem[] = [
     group: 'main',
     tab: true,
     description: 'Local AI upscaling to 8K with licence-safe models',
+  },
+  {
+    to: '/plan',
+    label: 'Planner',
+    icon: <CalendarCheck className="size-5" />,
+    group: 'main',
+    description: 'Queues, caps and submission status per platform',
+  },
+  {
+    to: '/releases',
+    label: 'Releases',
+    icon: <FileSignature className="size-5" />,
+    group: 'main',
+    description: 'Model & property release registry',
+  },
+  {
+    to: '/earnings',
+    label: 'Earnings',
+    icon: <BarChart3 className="size-5" />,
+    group: 'main',
+    description: 'Unified sales analytics from portal CSVs',
+  },
+  {
+    to: '/bank',
+    label: 'Keyword bank',
+    icon: <BookMarked className="size-5" />,
+    group: 'main',
+    description: 'Your synonyms, categories and translations',
   },
   {
     to: '/platforms',

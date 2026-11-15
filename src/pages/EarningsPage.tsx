@@ -1,0 +1,232 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { BarChart3, Download, LineChart, Trash2, Upload } from 'lucide-react';
+import {
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis,
+} from 'recharts';
+import { PageHeader } from '@/components/layout/PageHeader';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { Field, Select } from '@/components/ui/Field';
+import { DataTable, type Column } from '@/components/ui/DataTable';
+import { EmptyState } from '@/components/ui/Misc';
+import { useToast } from '@/state/ToastState';
+import { kv } from '@/lib/kv';
+import { desktop, isDesktop } from '@/lib/desktop';
+import { money } from '@/lib/format';
+import { useApp } from '@/state/AppState';
+import { PLATFORM_LIST } from '@/lib/stock/platforms';
+import type { PlatformId } from '@/lib/stock/types';
+import {
+  detectMapping, mapRows, monthlySeries, parseDelimited, platformTotals, topTitles,
+  type ColumnMapping, type Sale,
+} from '@/lib/stock/sales';
+
+const SALES_KEY = 'msap:sales';
+
+export function EarningsPage() {
+  const toast = useToast();
+  const { settings } = useApp();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [platform, setPlatform] = useState<PlatformId | 'other'>('shutterstock');
+  const [parsed, setParsed] = useState<{ headers: string[]; rows: string[][]; delimiter: string } | null>(null);
+  const [mapping, setMapping] = useState<ColumnMapping | null>(null);
+
+  useEffect(() => {
+    if (loaded) return;
+    kv.get<Sale[]>(SALES_KEY, []).then((stored) => {
+      setSales(stored);
+      setLoaded(true);
+    });
+  }, [loaded]);
+
+  const persist = (next: Sale[]) => {
+    setSales(next);
+    void kv.set(SALES_KEY, next);
+  };
+
+  const onFileText = (text: string) => {
+    const result = parseDelimited(text);
+    if (result.headers.length < 2) {
+      toast.error('Could not parse', 'No header row detected — is this a CSV export from the portal?');
+      return;
+    }
+    setParsed(result);
+    setMapping(detectMapping(result.headers));
+  };
+
+  const onPickFile = async (file: File) => onFileText(await file.text());
+
+  const confirmImport = () => {
+    if (!parsed || !mapping) return;
+    const mapped = mapRows(parsed.rows, parsed.headers, mapping, platform);
+    if (mapped.length === 0) {
+      toast.error('Nothing mapped', 'Check the column assignment — date or earnings column is missing.');
+      return;
+    }
+    const existingIds = new Set(sales.map((s) => s.id));
+    const fresh = mapped.filter((s) => !existingIds.has(s.id));
+    persist([...fresh, ...sales]);
+    setParsed(null);
+    setMapping(null);
+    toast.success(`Imported ${fresh.length} sales`, `${mapped.length - fresh.length} duplicate rows skipped.`);
+  };
+
+  const monthly = useMemo(() => monthlySeries(sales), [sales]);
+  const byPlatform = useMemo(() => platformTotals(sales), [sales]);
+  const top = useMemo(() => topTitles(sales), [sales]);
+  const totalEarnings = sales.reduce((sum, s) => sum + s.earnings, 0);
+  const totalDownloads = sales.reduce((sum, s) => sum + s.downloads, 0);
+
+  const exportLedger = async () => {
+    const header = 'Date,Platform,Title,License,Country,Downloads,Earnings';
+    const lines = sales.map((s) => [s.date, s.platform, `"${s.title.replace(/"/g, '""')}"`, s.license, s.country, s.downloads, s.earnings.toFixed(2)].join(','));
+    const csv = `${header}\n${lines.join('\n')}\n`;
+    if (isDesktop) await desktop.fs.exportText({ defaultName: 'microstocker-ledger.csv', text: csv, filters: [{ name: 'CSV', extensions: ['csv'] }] });
+    else {
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'microstocker-ledger.csv';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }
+    toast.success('Unified ledger exported');
+  };
+
+  const topColumns: Column<{ title: string; earnings: number; downloads: number }>[] = [
+    { key: 'title', header: 'Title', primary: true, render: (row) => <span className="block truncate text-fg">{row.title}</span> },
+    { key: 'downloads', header: 'Downloads', align: 'right', sortable: true, sortValue: (r) => r.downloads, render: (r) => <span className="tabular-nums">{r.downloads}</span> },
+    { key: 'earnings', header: 'Earnings', align: 'right', sortable: true, sortValue: (r) => r.earnings, render: (r) => <span className="tabular-nums">{money(r.earnings, settings.currency)}</span> },
+  ];
+
+  const BAR_COLORS = ['#6366f1', '#f43f5e', '#10b981', '#f59e0b', '#06b6d4', '#8b5cf6', '#84cc16', '#ec4899', '#14b8a6', '#f97316'];
+
+  return (
+    <>
+      <PageHeader
+        title="Earnings analytics"
+        description="Import each portal's sales/earnings CSV — columns are auto-detected (Shutterstock, Adobe, Freepik, Dreamstime…) and normalised into one ledger with monthly trends, per-platform totals and best sellers."
+        actions={
+          <>
+            <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => e.target.files?.[0] && onPickFile(e.target.files[0])} />
+            <Button size="sm" icon={<Upload className="size-4" />} onClick={() => fileRef.current?.click()}>Import CSV</Button>
+            <Button size="sm" variant="outline" icon={<Download className="size-4" />} onClick={exportLedger} disabled={sales.length === 0}>Export ledger</Button>
+            <Button size="sm" variant="ghost" icon={<Trash2 className="size-4" />} onClick={() => { persist([]); toast.info('Sales data cleared'); }} disabled={sales.length === 0}>Clear</Button>
+          </>
+        }
+      >
+        <div className="grid-auto-fit gap-3">
+          <div className="card p-4">
+            <p className="text-xs tracking-wide text-fg-subtle uppercase">Total earnings</p>
+            <p className="mt-1 text-2xl font-semibold text-fg tabular-nums">{money(totalEarnings, settings.currency)}</p>
+          </div>
+          <div className="card p-4">
+            <p className="text-xs tracking-wide text-fg-subtle uppercase">Total downloads</p>
+            <p className="mt-1 text-2xl font-semibold text-fg tabular-nums">{totalDownloads.toLocaleString()}</p>
+          </div>
+          <div className="card p-4">
+            <p className="text-xs tracking-wide text-fg-subtle uppercase">Platforms reporting</p>
+            <p className="mt-1 text-2xl font-semibold text-fg tabular-nums">{byPlatform.length}</p>
+          </div>
+          <div className="card p-4">
+            <p className="text-xs tracking-wide text-fg-subtle uppercase">Avg per download</p>
+            <p className="mt-1 text-2xl font-semibold text-fg tabular-nums">{money(totalDownloads ? totalEarnings / totalDownloads : 0, settings.currency)}</p>
+          </div>
+        </div>
+      </PageHeader>
+
+      {parsed && mapping && (
+        <Card className="mb-4" title="Confirm column mapping" description={`Delimiter "${parsed.delimiter === '\t' ? 'TAB' : parsed.delimiter}" · ${parsed.rows.length} data rows`}>
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {(Object.keys(mapping) as (keyof ColumnMapping)[]).map((key) => (
+              <Field key={key} label={key}>
+                <Select value={mapping[key]} onChange={(e) => setMapping({ ...mapping, [key]: e.target.value })} options={[{ value: '', label: '— skip —' }, ...parsed!.headers.map((h) => ({ value: h, label: h }))]} />
+              </Field>
+            ))}
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Field label="Platform of this file" className="w-52">
+              <Select value={platform} onChange={(e) => setPlatform(e.target.value as PlatformId | 'other')} options={[...PLATFORM_LIST.map((p) => ({ value: p.id, label: p.name })), { value: 'other', label: 'Other / aggregator' }]} />
+            </Field>
+            <Button onClick={confirmImport} icon={<Upload className="size-4" />}>Import {parsed.rows.length} rows</Button>
+            <Button variant="ghost" onClick={() => { setParsed(null); setMapping(null); }}>Cancel</Button>
+          </div>
+        </Card>
+      )}
+
+      {sales.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={<BarChart3 className="size-7" />}
+            title="No sales imported yet"
+            description="Download your earnings/sales CSV from each contributor portal (Shutterstock: Earnings → statement; Adobe: Reports → download CSV) and import them here. Everything stays on this computer."
+            action={<Button icon={<Upload className="size-4" />} onClick={() => fileRef.current?.click()}>Import first CSV</Button>}
+          />
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <Card title="Monthly trend" description="Earnings area + downloads bars" action={<LineChart className="size-4 text-brand" />}>
+            <div className="h-60 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={monthly} margin={{ top: 6, right: 6, bottom: 0, left: -12 }}>
+                  <defs>
+                    <linearGradient id="earnFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--brand)" stopOpacity={0.4} />
+                      <stop offset="100%" stopColor="var(--brand)" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fill: 'var(--fg-subtle)', fontSize: 10 }} axisLine={false} tickLine={false} minTickGap={16} />
+                  <YAxis tick={{ fill: 'var(--fg-subtle)', fontSize: 10 }} axisLine={false} tickLine={false} width={48} />
+                  <Tooltip contentStyle={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, fontSize: 12, color: 'var(--fg)' }} />
+                  <Area type="monotone" dataKey="earnings" stroke="var(--brand)" strokeWidth={2} fill="url(#earnFill)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+
+          <Card title="Per platform" description="Where the money comes from">
+            <div className="h-60 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={byPlatform} margin={{ top: 6, right: 6, bottom: 0, left: -12 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" vertical={false} />
+                  <XAxis dataKey="platform" tick={{ fill: 'var(--fg-subtle)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: 'var(--fg-subtle)', fontSize: 10 }} axisLine={false} tickLine={false} width={48} />
+                  <Tooltip contentStyle={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, fontSize: 12, color: 'var(--fg)' }} />
+                  <Bar dataKey="earnings" radius={[6, 6, 0, 0]}>
+                    {byPlatform.map((entry, index) => (
+                      <Cell key={entry.platform} fill={BAR_COLORS[index % BAR_COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+
+          <Card className="xl:col-span-2" title="Best sellers" description="Top 10 by earnings across all portals" flush>
+            <DataTable rows={top} columns={topColumns} rowKey={(row) => row.title} dense />
+          </Card>
+
+          <Card className="xl:col-span-2" title="Recent sales" description="Newest 50 rows of the unified ledger" flush>
+            <DataTable
+              rows={[...sales].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 50)}
+              columns={[
+                { key: 'date', header: 'Date', primary: true, sortable: true, render: (r) => <span className="tabular-nums">{r.date}</span> },
+                { key: 'platform', header: 'Platform', hideBelow: 'sm', render: (r) => <Badge tone="brand">{r.platform}</Badge> },
+                { key: 'title', header: 'Title', hideBelow: 'md', render: (r) => <span className="block max-w-72 truncate">{r.title}</span> },
+                { key: 'license', header: 'License', hideBelow: 'xl' },
+                { key: 'downloads', header: 'Dl', align: 'right', hideBelow: 'lg', render: (r) => <span className="tabular-nums">{r.downloads}</span> },
+                { key: 'earnings', header: 'Earnings', align: 'right', sortable: true, sortValue: (r) => r.earnings, render: (r) => <span className="tabular-nums">{money(r.earnings, settings.currency)}</span> },
+              ]}
+              rowKey={(row) => row.id}
+              dense
+            />
+          </Card>
+        </div>
+      )}
+    </>
+  );
+}

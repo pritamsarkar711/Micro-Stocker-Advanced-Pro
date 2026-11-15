@@ -22,6 +22,12 @@
 | **Duplicate scanner** | 64-bit perceptual dHash clustering (≤ 8 bits = near-identical) — catches the similarity rejections Vecteezy/Adobe issue; one click selects all-but-first. |
 | **Batch templates** | Title/description/keyword templates with `{name} {format} {index} {count} {category}` variables applied to selection or whole library. |
 | **Watch folder** | Desktop: pick a folder and every new EPS/AI/SVG/JPG/PNG/WebP that lands in it is imported automatically (debounced, de-duplicated by path). |
+| **Release tracker** | Model/property release registry (kind, signed/expiry dates, stored-file reminder) linked per item; validators warn on commercial files with recognisable people but no linked release. |
+| **Earnings analytics** | Import each portal's sales CSV with automatic column detection + manual remap; unified ledger, monthly trend, per-platform totals, best sellers, ledger export. Stored locally only. |
+| **Keyword bank** | Personal synonym expansions, extra category banks and an EN→ES/DE/FR mini dictionary; merged into every generation, translations appendable from the item editor. |
+| **Vector check** | SVG sanitizer (scripts, inline handlers, CSS @import, editor namespaces) + EPS/AI findings (Illustrator version, CMYK, embedded rasters, live fonts, BoundingBox) with per-portal save-version notes. |
+| **Submission planner** | Per-platform queues (todo → queued → submitted → accepted/rejected), validation-gated "queue all eligible", and real publishing caps — Freepik 150-200 first batch / 200-per-month warnings included. |
+| **Library sync** | Supabase `kv_store` push / pull-and-merge of item descriptors (last-write-wins per item); artwork bytes never leave the machine. |
 | **Responsive shell** | Sidebar rail ⇄ drawer ⇄ bottom tabs, fluid type, 360 px → 4K, dark/light/system, density, 60–200 % UI scale, keyboard shortcuts, Responsive Lab device simulator. |
 | **Cloud (optional)** | Supabase adapter with runtime credentials, connection tester and generated SQL (incl. offline `sync_queue`). App is fully functional offline without it. |
 
@@ -77,8 +83,9 @@ src/
                      types, platforms (researched registry), metadata
                      generator, csv writers, validators, xmp embedder,
                      files (probing/sanitising), upscale/{classic,models,engine}
-  pages/             Overview, Library, Export, Upscale, Platforms,
-                     Cloud, Responsive lab, Settings, About, 404
+  pages/             Overview, Library, Prepare, Export, Upscale, Planner,
+                     Releases, Earnings, Bank, Platforms, Cloud,
+                     Responsive lab, Settings, About, 404
   state/             AppProvider (settings/cloud/zoom), LibraryProvider,
                      ToastProvider
 resources/           app icons (png + ico)

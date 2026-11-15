@@ -16,6 +16,8 @@ import type { PlatformId } from '@/lib/stock/types';
 import { adaptForPlatform } from '@/lib/stock/metadata';
 import { sanitizeFilename, validateItem } from '@/lib/stock/validate';
 import { CATEGORY_KEYS } from '@/lib/stock/categories';
+import { useReleases, isExpired } from '@/state/releases';
+import { useBank } from '@/state/bank';
 
 type EditorTab = 'metadata' | 'platforms' | 'embed';
 
@@ -33,6 +35,23 @@ export function ItemEditor({ item, onClose }: { item: StockItem; onClose: () => 
   const [backup, setBackup] = useState(true);
   const [busy, setBusy] = useState(false);
   const [safeName, setSafeName] = useState(() => sanitizeFilename(item.name).name);
+  const { releases } = useReleases();
+  const { bank } = useBank();
+
+  const appendTranslations = () => {
+    const extra: string[] = [];
+    for (const keyword of item.metadata.keywords) {
+      const entry = bank.translations[keyword];
+      if (!entry) continue;
+      for (const value of Object.values(entry)) if (value && !extra.includes(value)) extra.push(value);
+    }
+    if (extra.length === 0) {
+      toast.info('No dictionary hits', 'Add words in Keyword bank → Translation dictionary first.');
+      return;
+    }
+    library.setMetadata(item.id, { keywords: Array.from(new Set([...item.metadata.keywords, ...extra])).slice(0, 50) });
+    toast.success(`Appended ${extra.length} translated keyword(s)`, 'ES/DE/FR terms from your dictionary.');
+  };
 
   const mp = megapixels(item);
 
@@ -139,6 +158,7 @@ export function ItemEditor({ item, onClose }: { item: StockItem; onClose: () => 
                     { value: 'photo', label: 'Style: photo' },
                   ]} />
                   <Button size="sm" onClick={onGenerate} loading={busy} icon={<Wand2 className="size-4" />}>Generate metadata</Button>
+                  <Button size="sm" variant="ghost" onClick={appendTranslations}>+ ES/DE/FR</Button>
                   {library.aiConfig.apiKey ? <Badge tone="brand" dot>AI endpoint on</Badge> : <Badge tone="neutral" dot>offline generator</Badge>}
                 </div>
               </div>
@@ -301,6 +321,36 @@ export function ItemEditor({ item, onClose }: { item: StockItem; onClose: () => 
                 {item.embeddedAt && (
                   <p className="mt-2 flex items-center gap-1.5 text-[0.6875rem] text-ok"><Check className="size-3.5" /> Embedded {new Date(item.embeddedAt).toLocaleString()}</p>
                 )}
+              </div>
+
+              <div className="card p-3">
+                <p className="text-xs font-semibold text-fg">Releases covering this file</p>
+                <p className="mt-1 text-xs text-fg-muted">Linked releases silence the model-release warning on commercial submissions.</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {releases.length === 0 && <span className="text-[0.6875rem] text-fg-subtle">No releases registered yet — add them on the Releases page.</span>}
+                  {releases.map((release) => {
+                    const linked = (item.releaseIds ?? []).includes(release.id);
+                    return (
+                      <button
+                        key={release.id}
+                        type="button"
+                        onClick={() =>
+                          library.setReleaseIds(
+                            item.id,
+                            linked ? (item.releaseIds ?? []).filter((r) => r !== release.id) : [...(item.releaseIds ?? []), release.id],
+                          )
+                        }
+                        className={clsx(
+                          'rounded-full border px-2.5 py-1 text-[0.6875rem] font-medium transition',
+                          linked ? 'border-ok bg-ok-soft text-ok' : 'border-line bg-surface-2 text-fg-muted hover:text-fg',
+                          isExpired(release) && 'opacity-60 line-through',
+                        )}
+                      >
+                        {release.kind === 'model' ? '👤' : '🏛'} {release.name}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="card p-3">
