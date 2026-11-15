@@ -397,7 +397,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   const setSelection = useCallback((ids: string[]) => setSelectionState(new Set(ids)), []);
 
-  /* --------------------- replace bytes (File Doctor) --------------------- */
+  /* --------------------- replace bytes (Prepare) --------------------- */
 
   const replaceBytes = useCallback(
     async (id: string, bytes: Uint8Array, options: { backup?: boolean } = {}) => {

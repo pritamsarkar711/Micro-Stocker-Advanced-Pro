@@ -3,6 +3,38 @@
 All notable changes to Micro Stocker Advanced Pro are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.1.0] - 2026-11-15
+
+### Changed
+- **Rebuilt the design system on a single primary colour.** Gradients, glossy
+  overlays and glow shadows are gone; cards use 8 px radii, controls 6 px and
+  badges 4 px.
+- **User-facing copy cut by 62%** (1,856 → 705 words): label-repeating
+  descriptions, essay hints, warning banners and the dead currency card removed.
+- Navigation regrouped into Workflow / Data / System with single-word labels.
+- Licence replaced by a source-available proprietary licence (see below).
+
+### Added
+- Four marketplaces: **Pond5, VectorStock, Canva Creators, Envato Elements**
+  with researched limits, CSV dialects and AI policy — 14 in total.
+- Official brand glyphs for 10 marketplaces via simple-icons v16 (CC0).
+- `Kpi` tile component; new single-colour social banner.
+
+### Removed
+- Responsive Lab page, `StatCard`, unused exports and dead bindings
+  (`tsc --noUnusedLocals` is clean).
+
+### Fixed
+- Segmented controls wrap instead of overflowing at 360 px.
+- Mobile drawer capped at 80 vw; skeleton radii and toast chrome aligned with
+  the new design tokens.
+- Platform-count test assertions updated for the expanded registry.
+
+### Licensing
+- Versions up to and including v1.0.0 remain MIT. From v1.1.0 the project is
+  source-available: use official builds personally or commercially, build from
+  source for yourself, but no redistribution, rebranding or resale.
+
 ## [1.0.0] - 2026-11-15
 
 First public release of the complete microstock contributor workbench.

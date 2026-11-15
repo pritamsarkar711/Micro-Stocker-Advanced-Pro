@@ -34,7 +34,7 @@ export function EmptyState({
         className,
       )}
     >
-      <div className="flex size-14 items-center justify-center rounded-2xl bg-surface-3 text-fg-subtle">
+      <div className="flex size-12 items-center justify-center rounded-md bg-surface-3 text-fg-subtle">
         {icon ?? <Inbox className="size-7" />}
       </div>
       <div className="max-w-md">
