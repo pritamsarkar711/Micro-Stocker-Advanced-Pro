@@ -1,25 +1,34 @@
+import { lazy, Suspense } from 'react';
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
+import { PageLoading } from '@/components/layout/PageLoading';
 import { AppProvider } from '@/state/AppState';
 import { ToastProvider } from '@/state/ToastState';
 import { LibraryProvider } from '@/state/library';
-import { OverviewPage } from '@/pages/OverviewPage';
-import { LibraryPage } from '@/pages/LibraryPage';
-import { ExportPage } from '@/pages/ExportPage';
-import { PreparePage } from '@/pages/PreparePage';
-import { UpscalePage } from '@/pages/UpscalePage';
-import { PlatformsPage } from '@/pages/PlatformsPage';
-import { PlannerPage } from '@/pages/PlannerPage';
-import { ReleasesPage } from '@/pages/ReleasesPage';
-import { EarningsPage } from '@/pages/EarningsPage';
-import { BankPage } from '@/pages/BankPage';
 import { BankProvider } from '@/state/bank';
 import { ReleasesProvider } from '@/state/releases';
-import { CloudPage } from '@/pages/CloudPage';
-import { ResponsiveLabPage } from '@/pages/ResponsiveLabPage';
-import { SettingsPage } from '@/pages/SettingsPage';
-import { AboutPage } from '@/pages/AboutPage';
-import { NotFoundPage } from '@/pages/NotFoundPage';
+
+
+/**
+ * Route-level code splitting: each page is its own chunk, so the first paint
+ * only downloads the shell plus the page you actually open. Keeps the packaged
+ * app snappy and the charts/Supabase code out of the startup budget.
+ */
+const OverviewPage = lazy(() => import('@/pages/OverviewPage').then((m) => ({ default: m.OverviewPage })));
+const LibraryPage = lazy(() => import('@/pages/LibraryPage').then((m) => ({ default: m.LibraryPage })));
+const ExportPage = lazy(() => import('@/pages/ExportPage').then((m) => ({ default: m.ExportPage })));
+const PreparePage = lazy(() => import('@/pages/PreparePage').then((m) => ({ default: m.PreparePage })));
+const UpscalePage = lazy(() => import('@/pages/UpscalePage').then((m) => ({ default: m.UpscalePage })));
+const PlatformsPage = lazy(() => import('@/pages/PlatformsPage').then((m) => ({ default: m.PlatformsPage })));
+const PlannerPage = lazy(() => import('@/pages/PlannerPage').then((m) => ({ default: m.PlannerPage })));
+const ReleasesPage = lazy(() => import('@/pages/ReleasesPage').then((m) => ({ default: m.ReleasesPage })));
+const EarningsPage = lazy(() => import('@/pages/EarningsPage').then((m) => ({ default: m.EarningsPage })));
+const BankPage = lazy(() => import('@/pages/BankPage').then((m) => ({ default: m.BankPage })));
+const CloudPage = lazy(() => import('@/pages/CloudPage').then((m) => ({ default: m.CloudPage })));
+const ResponsiveLabPage = lazy(() => import('@/pages/ResponsiveLabPage').then((m) => ({ default: m.ResponsiveLabPage })));
+const SettingsPage = lazy(() => import('@/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const AboutPage = lazy(() => import('@/pages/AboutPage').then((m) => ({ default: m.AboutPage })));
+const NotFoundPage = lazy(() => import('@/pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
 
 /**
  * HashRouter (not BrowserRouter) on purpose: the packaged desktop app is loaded
@@ -33,6 +42,7 @@ export default function App() {
           <BankProvider>
             <ReleasesProvider>
           <HashRouter>
+            <Suspense fallback={<PageLoading />}>
             <Routes>
               <Route element={<AppShell />}>
                 <Route index element={<OverviewPage />} />
@@ -53,6 +63,7 @@ export default function App() {
                 <Route path="*" element={<Navigate to="/404" replace />} />
               </Route>
             </Routes>
+            </Suspense>
           </HashRouter>
             </ReleasesProvider>
           </BankProvider>

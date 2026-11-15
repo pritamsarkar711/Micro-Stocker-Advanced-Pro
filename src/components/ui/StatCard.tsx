@@ -73,7 +73,9 @@ export function StatCard({
           )}
           {deltaLabel && <span className="text-xs text-fg-subtle">{deltaLabel}</span>}
         </div>
-        {hint && <p className="mt-2 text-xs leading-relaxed text-fg-muted">{hint}</p>}
+        {hint && (
+          <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-fg-muted">{hint}</p>
+        )}
       </div>
     </article>
   );

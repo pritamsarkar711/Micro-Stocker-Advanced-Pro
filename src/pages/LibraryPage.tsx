@@ -485,8 +485,8 @@ export function LibraryPage() {
               />
             </Field>
 
-            <div className="overflow-hidden rounded-xl border border-line">
-              <table className="w-full text-left text-xs">
+            <div className="overflow-x-auto rounded-xl border border-line">
+              <table className="w-full min-w-[26rem] text-left text-xs">
                 <thead className="bg-surface-2 text-[0.6875rem] tracking-wide text-fg-subtle uppercase">
                   <tr>
                     <th className="px-3 py-2">File</th>
@@ -501,7 +501,7 @@ export function LibraryPage() {
                     return (
                       <tr key={`${row.filename}-${index}`} className="bg-surface">
                         <td className="max-w-40 truncate px-3 py-2 font-mono text-fg" title={row.filename}>{row.filename}</td>
-                        <td className="max-w-56 truncate px-3 py-2 text-fg-muted" title={row.title ?? ''}>{row.title || '—'}</td>
+                        <td className="max-w-40 truncate px-3 py-2 text-fg-muted sm:max-w-56" title={row.title ?? ''}>{row.title || '—'}</td>
                         <td className="px-3 py-2 text-right text-fg tabular-nums">{row.keywords?.length ?? 0}</td>
                         <td className="px-3 py-2 text-right">
                           {matched ? <Badge tone="ok">yes</Badge> : <Badge tone="warn">no</Badge>}

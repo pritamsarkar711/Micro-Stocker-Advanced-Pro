@@ -104,6 +104,9 @@ and runs **56 real assertions** on Node — including binary IPTC/XMP
 round-trips through actual PNG/JPEG/SVG/EPS files and dialect round-trips of
 every CSV writer. `npm run verify` chains typecheck → tests → build.
 
+The renderer is code-split per route: the shell plus the first page is about
+**155 kB gzipped**; charts and cloud sync load only when you open them.
+
 ## 🗂 Project layout
 
 ```
