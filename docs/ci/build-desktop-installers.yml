@@ -1,0 +1,120 @@
+# ============================================================================
+#  INSTALLER BUILD WORKFLOW (template)
+#
+#  This file ships inside the repository at docs/ci/ because the sandbox that
+#  develops this project is not allowed to write to .github/workflows/.
+#
+#  To activate it on GitHub, do ONE of:
+#    a) GitHub web UI -> Add file -> Create new file, name it
+#       .github/workflows/build.yml and paste this content, or
+#    b) on your own machine:
+#         mkdir -p .github/workflows
+#         cp docs/ci/build-desktop-installers.yml .github/workflows/build.yml
+#         git add .github/workflows/build.yml && git commit && git push
+#
+#  After that, `git tag v1.0.0 && git push --tags` builds the Windows .exe,
+#  macOS .dmg and Linux .AppImage/.deb on GitHub's runners and publishes them
+#  as a GitHub Release.
+# ============================================================================
+name: Build desktop installers
+
+# Produces REAL downloadable installers (Windows .exe, Linux AppImage/.deb,
+# macOS .dmg) using GitHub's own runners - the sandbox used for development
+# cannot ship 200 MB binaries.
+#
+# Trigger:
+#   * push a tag like  v1.0.0   -> builds AND publishes a GitHub Release
+#   * or run it manually from the Actions tab (workflow_dispatch)
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Also publish a GitHub Release with the installers'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            args: --win
+            label: windows
+          - os: ubuntu-latest
+            args: --linux
+            label: linux
+          - os: macos-latest
+            args: --mac
+            label: macos
+
+    name: Build (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build renderer
+        run: npm run build
+
+      - name: Package installer
+        run: npx electron-builder ${{ matrix.args }} --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.label }}
+          path: |
+            release/*.exe
+            release/*.AppImage
+            release/*.deb
+            release/*.dmg
+          if-no-files-found: warn
+          retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
