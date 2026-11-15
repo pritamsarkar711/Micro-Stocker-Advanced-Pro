@@ -212,7 +212,7 @@ export function SegmentedControl<T extends string>({
   return (
     <div
       className={clsx(
-        'inline-flex items-center gap-0.5 rounded-[0.375rem] border border-line bg-surface-2 p-0.5',
+        'inline-flex max-w-full flex-wrap items-center gap-0.5 rounded-[0.375rem] border border-line bg-surface-2 p-0.5',
         className,
       )}
       role="tablist"

@@ -21,7 +21,7 @@ import {
   YAxis,
 } from 'recharts';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Card, SectionTitle } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import { Kpi } from '@/components/ui/Kpi';
 import { Badge } from '@/components/ui/Badge';
 import { PlatformLogo } from '@/components/stock/PlatformLogo';

@@ -148,7 +148,7 @@ export function Sidebar({
         />
         <div
           className={clsx(
-            'absolute inset-y-0 left-0 h-full transition-transform duration-150 ease-out',
+            'absolute inset-y-0 left-0 h-full max-w-[80vw] transition-transform duration-150 ease-out',
             mobileOpen ? 'translate-x-0' : '-translate-x-full',
           )}
         >

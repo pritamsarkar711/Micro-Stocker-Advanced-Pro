@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Cpu, Download, Gauge, Library, Scale, Sparkles, TriangleAlert, Zap } from 'lucide-react';
+import { Cpu, Download, Gauge, Library, Scale, Sparkles, Zap } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
