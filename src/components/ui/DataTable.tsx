@@ -55,7 +55,7 @@ export function DataTable<T>({
   columns,
   rowKey,
   onRowClick,
-  emptyTitle = 'Nothing here yet',
+  emptyTitle = 'Empty',
   emptyDescription,
   emptyAction,
   dense = false,
@@ -99,13 +99,13 @@ export function DataTable<T>({
 
   const primary = columns.find((c) => c.primary) ?? columns[0];
   const secondary = columns.filter((c) => c !== primary);
-  const cellPad = dense ? 'px-3 py-1.5' : 'px-3 py-2.5 sm:px-4 sm:py-3';
+  const cellPad = dense ? 'px-2.5 py-1.5' : 'px-3 py-2';
 
   return (
     <div className="w-full">
       {/* ---------- table view (md and up) ---------- */}
       <div className="hidden w-full overflow-x-auto md:block">
-        <table className="w-full border-collapse text-sm">
+        <table className="w-full border-collapse text-[0.8125rem]">
           <thead>
             <tr className="border-b border-line bg-surface-2">
               {columns.map((column) => (
@@ -115,7 +115,7 @@ export function DataTable<T>({
                   style={column.width ? { width: column.width } : undefined}
                   className={clsx(
                     cellPad,
-                    'text-xs font-semibold tracking-wide text-fg-subtle uppercase',
+                    'text-[0.6875rem] font-semibold tracking-[0.04em] text-fg-subtle uppercase',
                     ALIGN[column.align ?? 'left'],
                     column.hideBelow ? HIDE_BELOW[column.hideBelow] : undefined,
                     column.sortable && 'cursor-pointer select-none hover:text-fg',
@@ -189,22 +189,22 @@ export function DataTable<T>({
             <div
               onClick={onRowClick ? () => onRowClick(row) : undefined}
               className={clsx(
-                'rounded-xl border border-line bg-surface p-3',
+                'rounded-md border border-line bg-surface p-2.5',
                 onRowClick && 'cursor-pointer active:bg-surface-2',
               )}
             >
-              <div className="text-sm font-semibold text-fg">
+              <div className="text-[0.8125rem] font-semibold text-fg">
                 {primary.render
                   ? primary.render(row)
                   : String((row as Record<string, unknown>)[primary.key] ?? '—')}
               </div>
-              <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
+              <dl className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1">
                 {secondary.map((column) => (
                   <div key={column.key} className="min-w-0">
-                    <dt className="truncate text-[0.6875rem] tracking-wide text-fg-subtle uppercase">
+                    <dt className="truncate text-[0.625rem] tracking-wide text-fg-subtle uppercase">
                       {column.header}
                     </dt>
-                    <dd className="truncate text-sm text-fg">
+                    <dd className="truncate text-[0.8125rem] text-fg">
                       {column.render
                         ? column.render(row)
                         : String((row as Record<string, unknown>)[column.key] ?? '—')}
@@ -217,7 +217,7 @@ export function DataTable<T>({
         ))}
       </ul>
 
-      {footer && <div className="border-t border-line px-4 py-3 text-xs text-fg-muted">{footer}</div>}
+      {footer && <div className="border-t border-line px-3 py-2 text-[0.75rem] text-fg-muted">{footer}</div>}
     </div>
   );
 }

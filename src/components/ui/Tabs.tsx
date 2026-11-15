@@ -27,7 +27,7 @@ export function Tabs<T extends string>({
     <div
       role="tablist"
       className={clsx(
-        'no-scrollbar -mx-1 flex gap-1 overflow-x-auto border-b border-line px-1',
+        'no-scrollbar flex gap-3 overflow-x-auto border-b border-line',
         className,
       )}
     >
@@ -42,7 +42,7 @@ export function Tabs<T extends string>({
             disabled={item.disabled}
             onClick={() => onChange(item.value)}
             className={clsx(
-              'relative inline-flex shrink-0 items-center gap-2 px-3 py-2.5 text-sm font-medium transition',
+              'relative inline-flex shrink-0 items-center gap-1.5 py-2 text-[0.8125rem] font-medium transition-colors',
               'disabled:cursor-not-allowed disabled:opacity-50',
               active ? 'text-brand-fg' : 'text-fg-muted hover:text-fg',
             )}
@@ -52,7 +52,7 @@ export function Tabs<T extends string>({
             {item.badge}
             <span
               className={clsx(
-                'absolute inset-x-1 -bottom-px h-0.5 rounded-full transition-opacity',
+                '-bottom-px absolute inset-x-0 h-[2px] rounded-full',
                 active ? 'bg-brand opacity-100' : 'opacity-0',
               )}
             />

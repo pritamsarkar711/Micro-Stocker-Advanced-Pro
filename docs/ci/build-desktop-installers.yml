@@ -12,9 +12,9 @@
 #         cp docs/ci/build-desktop-installers.yml .github/workflows/build.yml
 #         git add .github/workflows/build.yml && git commit && git push
 #
-#  After that, `git tag v1.0.0 && git push --tags` builds the Windows .exe,
-#  macOS .dmg and Linux .AppImage/.deb on GitHub's runners and publishes them
-#  as a GitHub Release.
+#  After that, `git tag v1.1.0 && git push --tags` builds the Windows .exe,
+#  macOS .dmg and Linux .AppImage on GitHub's runners and publishes them as a
+#  GitHub Release.
 # ============================================================================
 name: Build desktop installers
 
@@ -78,6 +78,9 @@ jobs:
 
       - name: Type check
         run: npm run typecheck
+
+      - name: Domain tests
+        run: npm test
 
       - name: Build renderer
         run: npm run build

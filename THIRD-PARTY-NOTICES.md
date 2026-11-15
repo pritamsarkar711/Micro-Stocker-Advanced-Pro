@@ -1,32 +1,50 @@
 # Third-party notices
 
-Micro Stocker Advanced Pro is MIT-licensed (see `LICENSE`). It builds on the
-following third-party assets and projects:
-
-## Brand marks
-
-Platform glyphs shown next to marketplace names (Freepik, Pixabay, Dreamstime,
-Depositphotos, Alamy) are single-path marks taken from the
-[simple-icons](https://github.com/simple-icons/simple-icons) project, licensed
-CC0-1.0. Where a marketplace does not publish an openly-licensed glyph
-(Shutterstock, Adobe Stock, Getty/iStock, Vecteezy, 123RF) the app renders a
-neutral monogram tile in the brand colour instead of embedding trademarked
-artwork.
-
-All product names, logos and trademarks are the property of their respective
-owners and are used for identification only. This project is not affiliated
-with, endorsed by, or sponsored by any marketplace listed.
-
-## AI upscaling models
-
-The upscaler downloads [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN)
-NCNN-Vulkan portable builds and model weights, licensed BSD-3-Clause
-(copyright (c) 2021, Xintao Wang). BSD-3 permits commercial use. The app only
-automates the download of the official release archives from GitHub; models
-run entirely on the user's machine.
+Micro Stocker Advanced Pro is © 2026 pritamsarkar711 and is distributed under
+the licence in [LICENSE](LICENSE). It bundles or derives from the components
+below. Their licences continue to govern those components.
 
 ## Runtime dependencies
 
-React, React Router, Recharts, Lucide icons, Tailwind CSS, Vite, Electron,
-electron-builder and supabase-js are used under their own open-source licences
-(MIT / ISC / Apache-2.0). See `package.json` for the exact versions.
+| Component | Licence | Use |
+| --- | --- | --- |
+| Electron | MIT | Desktop runtime |
+| React / React DOM | MIT | UI renderer |
+| React Router | MIT | Routing |
+| Recharts (+ d3 packages) | MIT / ISC | Charts |
+| Lucide icons | ISC | Icon set |
+| Supabase JS client | Apache-2.0 | Optional cloud sync |
+| Tailwind CSS | MIT | Styling |
+| clsx | MIT | Class utilities |
+| Vite, TypeScript, esbuild | MIT / Apache-2.0 | Build tooling (not shipped) |
+
+## Brand marks
+
+Platform marks are drawn from **simple-icons** (CC0-1.0, public domain data)
+where a mark exists, and rendered as wordmark monograms where the project does
+not publish one. CC0 places no restrictions on use; the underlying trademarks
+remain the property of their owners and this project claims no rights in them.
+
+Marketplace names, logos and trademarks belong to their respective owners and
+appear in this application **only to identify the portal a file is prepared
+for** (nominative use). Nothing here implies affiliation, endorsement or
+sponsorship by any marketplace.
+
+## AI upscaling
+
+| Component | Licence | Notes |
+| --- | --- | --- |
+| Real-ESRGAN (NCNN-Vulkan portable build) | BSD-3-Clause | Downloaded by the user on first use, runs locally, never uploaded |
+| Real-ESRGAN model weights | BSD-3-Clause, © 2021 Xintao Wang | Commercial use permitted by the licence |
+
+The application does **not** ship these binaries; it downloads them from the
+official GitHub release into the user's own data folder and executes them
+locally.
+
+## Data sources
+
+Platform rules in `src/lib/stock/platforms.ts` summarise publicly documented
+contributor requirements (official help pages and public contributor guides,
+2026). Values that are community-documented rather than officially published are
+flagged in the app. Requirements change: always re-check a portal's own help page
+before a large submission.

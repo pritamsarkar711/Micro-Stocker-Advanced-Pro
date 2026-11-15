@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/Misc';
 export function PageLoading() {
   return (
     <div className="mx-auto w-full max-w-[110rem] px-3 py-4 sm:px-5 sm:py-6 lg:px-8 lg:py-8">
-      <div aria-busy="true" aria-live="polite" className="flex flex-col gap-4">
+      <div aria-busy="true" aria-live="polite" className="flex flex-col gap-2">
         <span className="sr-only">Loading page…</span>
         <div className="flex flex-col gap-2">
           <Skeleton className="h-7 w-56" />

@@ -7,52 +7,56 @@
 /* Design tokens                                                       */
 /* ------------------------------------------------------------------ */
 :root {
-  --bg: #f4f6fb;
+  /* One primary. Everything interactive uses it; semantic tones stay muted. */
+  --bg: #f7f8fa;
   --bg-elevated: #ffffff;
   --surface: #ffffff;
-  --surface-2: #f8fafc;
-  --surface-3: #eef2f7;
-  --line: #e2e8f0;
-  --line-strong: #cbd5e1;
-  --fg: #0f172a;
-  --fg-muted: #475569;
-  --fg-subtle: #94a3b8;
-  --brand: #4f46e5;
-  --brand-hover: #4338ca;
+  --surface-2: #f4f5f7;
+  --surface-3: #eceef2;
+  --line: #e4e6eb;
+  --line-strong: #cfd3da;
+  --fg: #12161d;
+  --fg-muted: #575e6b;
+  --fg-subtle: #8b929e;
+  --brand: #1d4ed8;
+  --brand-hover: #1e40af;
   --brand-soft: #eef2ff;
-  --brand-fg: #3730a3;
-  --ok: #059669;
-  --ok-soft: #ecfdf5;
-  --warn: #d97706;
-  --warn-soft: #fffbeb;
-  --danger: #dc2626;
-  --danger-soft: #fef2f2;
-  --shadow-color: 220 40% 20%;
-  --radius-card: 0.875rem;
+  --brand-fg: #1e40af;
+  --ok: #15803d;
+  --ok-soft: #eefaf1;
+  --warn: #a16207;
+  --warn-soft: #fdf8ec;
+  --danger: #b91c1c;
+  --danger-soft: #fdf2f2;
+  --shadow-color: 220 30% 20%;
+  --radius-card: 0.5rem;
+  --radius-control: 0.375rem;
 }
 
 .dark {
-  --bg: #070b16;
-  --bg-elevated: #0b1020;
-  --surface: #0e1426;
-  --surface-2: #131b31;
-  --surface-3: #1b2440;
-  --line: #1f2942;
-  --line-strong: #2c3a5c;
-  --fg: #e6ebf5;
-  --fg-muted: #a3b0c9;
-  --fg-subtle: #6b7a99;
-  --brand: #6366f1;
-  --brand-hover: #818cf8;
-  --brand-soft: #1a1f3d;
-  --brand-fg: #c7d2fe;
-  --ok: #34d399;
-  --ok-soft: #0d2b23;
-  --warn: #fbbf24;
-  --warn-soft: #2c2310;
-  --danger: #f87171;
-  --danger-soft: #2e1517;
-  --shadow-color: 225 60% 2%;
+  --bg: #0b0d11;
+  --bg-elevated: #101318;
+  --surface: #12151b;
+  --surface-2: #171b22;
+  --surface-3: #1e232b;
+  --line: #242a33;
+  --line-strong: #333b47;
+  --fg: #e9ecf1;
+  --fg-muted: #9aa3b2;
+  --fg-subtle: #69717f;
+  --brand: #3b82f6;
+  --brand-hover: #60a5fa;
+  --brand-soft: #16233d;
+  --brand-fg: #93b4f8;
+  --ok: #4ade80;
+  --ok-soft: #10231a;
+  --warn: #d9a441;
+  --warn-soft: #241d10;
+  --danger: #e5797a;
+  --danger-soft: #2a1416;
+  --shadow-color: 220 40% 2%;
+  --radius-card: 0.5rem;
+  --radius-control: 0.375rem;
 }
 
 @theme inline {
@@ -84,10 +88,10 @@
     monospace;
 
   --radius-card: var(--radius-card);
+  --radius-control: var(--radius-control);
 
-  --shadow-card: 0 1px 2px hsl(var(--shadow-color) / 0.06),
-    0 8px 24px -12px hsl(var(--shadow-color) / 0.18);
-  --shadow-pop: 0 12px 40px -8px hsl(var(--shadow-color) / 0.35);
+  --shadow-card: 0 1px 2px hsl(var(--shadow-color) / 0.04);
+  --shadow-pop: 0 10px 30px -12px hsl(var(--shadow-color) / 0.28);
 }
 
 /* ------------------------------------------------------------------ */
@@ -136,7 +140,7 @@
   :focus-visible {
     outline: 2px solid var(--brand);
     outline-offset: 2px;
-    border-radius: 0.375rem;
+    border-radius: var(--radius-control);
   }
 
   ::selection {
@@ -145,14 +149,14 @@
 
   /* Scrollbars */
   ::-webkit-scrollbar {
-    width: 11px;
-    height: 11px;
+    width: 10px;
+    height: 10px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: color-mix(in oklab, var(--fg-subtle) 45%, transparent);
+    background: color-mix(in oklab, var(--fg-subtle) 40%, transparent);
     border-radius: 999px;
     border: 3px solid transparent;
     background-clip: content-box;
@@ -183,7 +187,12 @@
     background-color: var(--surface);
     border: 1px solid var(--line);
     border-radius: var(--radius-card);
-    box-shadow: var(--shadow-card);
+  }
+
+  /* Tabular figures for every number we surface (KPIs, counts, money). */
+  .nums {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
   }
 
   .surface-2 {
@@ -221,7 +230,12 @@
   }
 
   .animate-in-fast {
-    animation: fade-slide-in 160ms ease-out both;
+    animation: fade-slide-in 140ms ease-out both;
+  }
+
+  /* Buttons/badges stay square-ish: 6px, never pill-shaped noise. */
+  .r-control {
+    border-radius: var(--radius-control);
   }
 }
 

@@ -94,7 +94,7 @@ export function ReleasesPage() {
     <>
       <PageHeader
         title="Releases"
-        description="Model & property releases: who is cleared, expiry, and the files they cover."
+        
         actions={<Button size="sm" icon={<Plus className="size-4" />} onClick={openNew}>Add release</Button>}
       />
 
@@ -103,7 +103,7 @@ export function ReleasesPage() {
           <EmptyState
             icon={<FileSignature className="size-7" />}
             title="No releases registered"
-            description="Add one per recognisable person or private property that appears in your commercial content. Editorial content never needs releases."
+            
             action={<Button icon={<Plus className="size-4" />} onClick={openNew}>Add release</Button>}
           />
         ) : (
@@ -115,7 +115,7 @@ export function ReleasesPage() {
         open={open}
         onClose={() => setOpen(false)}
         title={editing ? 'Edit release' : 'Add release'}
-        description="Signed forms must use each portal's own template when you upload; this registry is your memory."
+        
         size="sm"
         footer={
           <>

@@ -110,7 +110,7 @@ export function EarningsPage() {
     <>
       <PageHeader
         title="Earnings analytics"
-        description="Import portal sales CSVs — columns auto-detected, one unified ledger."
+        
         actions={
           <>
             <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => e.target.files?.[0] && onPickFile(e.target.files[0])} />
@@ -122,26 +122,26 @@ export function EarningsPage() {
       >
         <div className="grid-auto-fit gap-3">
           <div className="card p-4">
-            <p className="text-xs tracking-wide text-fg-subtle uppercase">Total earnings</p>
+            <p className="text-[0.6875rem] text-fg-subtle">Earnings</p>
             <p className="mt-1 text-2xl font-semibold text-fg tabular-nums">{money(totalEarnings, settings.currency)}</p>
           </div>
           <div className="card p-4">
-            <p className="text-xs tracking-wide text-fg-subtle uppercase">Total downloads</p>
+            <p className="text-[0.6875rem] text-fg-subtle">Downloads</p>
             <p className="mt-1 text-2xl font-semibold text-fg tabular-nums">{totalDownloads.toLocaleString()}</p>
           </div>
           <div className="card p-4">
-            <p className="text-xs tracking-wide text-fg-subtle uppercase">Platforms reporting</p>
+            <p className="text-[0.6875rem] text-fg-subtle">Platforms</p>
             <p className="mt-1 text-2xl font-semibold text-fg tabular-nums">{byPlatform.length}</p>
           </div>
           <div className="card p-4">
-            <p className="text-xs tracking-wide text-fg-subtle uppercase">Avg per download</p>
+            <p className="text-[0.6875rem] text-fg-subtle">Avg / download</p>
             <p className="mt-1 text-2xl font-semibold text-fg tabular-nums">{money(totalDownloads ? totalEarnings / totalDownloads : 0, settings.currency)}</p>
           </div>
         </div>
       </PageHeader>
 
       {parsed && mapping && (
-        <Card className="mb-4" title="Confirm column mapping" description={`Delimiter "${parsed.delimiter === '\t' ? 'TAB' : parsed.delimiter}" · ${parsed.rows.length} data rows`}>
+        <Card className="mb-2" title="Column mapping" description={`${parsed.rows.length} rows`}>
           <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {(Object.keys(mapping) as (keyof ColumnMapping)[]).map((key) => (
               <Field key={key} label={key}>
@@ -164,13 +164,13 @@ export function EarningsPage() {
           <EmptyState
             icon={<BarChart3 className="size-7" />}
             title="No sales imported yet"
-            description="Import each portal's sales CSV — columns are detected automatically. Everything stays on this computer."
+            
             action={<Button icon={<Upload className="size-4" />} onClick={() => fileRef.current?.click()}>Import first CSV</Button>}
           />
         </Card>
       ) : (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <Card title="Monthly trend" description="Earnings area + downloads bars" action={<LineChart className="size-4 text-brand" />}>
+        <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
+          <Card title="Trend" action={<LineChart className="size-4 text-fg-subtle" />}>
             <div className="h-60 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={monthly} margin={{ top: 6, right: 6, bottom: 0, left: -12 }}>
@@ -190,7 +190,7 @@ export function EarningsPage() {
             </div>
           </Card>
 
-          <Card title="Per platform" description="Where the money comes from">
+          <Card title="By platform">
             <div className="h-60 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={byPlatform} margin={{ top: 6, right: 6, bottom: 0, left: -12 }}>
@@ -216,11 +216,11 @@ export function EarningsPage() {
             </div>
           </Card>
 
-          <Card className="xl:col-span-2" title="Best sellers" description="Top 10 by earnings across all portals" flush>
+          <Card className="xl:col-span-2" title="Best sellers" flush>
             <DataTable rows={top} columns={topColumns} rowKey={(row) => row.title} dense />
           </Card>
 
-          <Card className="xl:col-span-2" title="Recent sales" description="Newest 50 rows of the unified ledger" flush>
+          <Card className="xl:col-span-2" title="Recent" flush>
             <DataTable
               rows={[...sales].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 50)}
               columns={[

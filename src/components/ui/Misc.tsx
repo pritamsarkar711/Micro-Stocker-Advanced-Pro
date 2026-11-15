@@ -40,7 +40,7 @@ export function EmptyState({
       <div className="max-w-md">
         <p className="text-sm font-semibold text-fg sm:text-base">{title}</p>
         {description && (
-          <p className="mt-1 text-xs leading-relaxed text-fg-muted sm:text-sm">{description}</p>
+          <p className="mt-1 text-xs text-fg-muted sm:text-sm">{description}</p>
         )}
       </div>
       {action && <div className="mt-1 flex flex-wrap items-center justify-center gap-2">{action}</div>}
@@ -78,7 +78,7 @@ export function CodeBlock({
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-surface-2">
+    <div className="overflow-hidden rounded-[0.375rem] border border-line bg-surface-2">
       <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-2">
         <span className="font-mono text-[0.6875rem] tracking-wide text-fg-subtle uppercase">
           {language}
@@ -93,7 +93,7 @@ export function CodeBlock({
         </Button>
       </div>
       <pre
-        className="overflow-auto p-3 font-mono text-xs leading-relaxed text-fg-muted"
+        className="overflow-auto p-3 font-mono text-xs text-fg-muted"
         style={{ maxHeight }}
       >
         <code>{code}</code>

@@ -9,7 +9,7 @@ const TONES: Record<BadgeTone, string> = {
   ok: 'bg-ok-soft text-ok',
   warn: 'bg-warn-soft text-warn',
   danger: 'bg-danger-soft text-danger',
-  outline: 'border border-line-strong text-fg-muted',
+  outline: 'border border-line text-fg-muted',
 };
 
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
@@ -31,8 +31,9 @@ export function Badge({
   return (
     <span
       className={clsx(
-        'inline-flex items-center gap-1.5 rounded-full font-medium whitespace-nowrap',
-        size === 'sm' ? 'px-2 py-0.5 text-[0.6875rem]' : 'px-2.5 py-1 text-xs',
+        'inline-flex items-center gap-1.5 font-medium whitespace-nowrap',
+        'rounded-[0.25rem]',
+        size === 'sm' ? 'px-1.5 py-0.5 text-[0.6875rem]' : 'px-2 py-0.5 text-xs',
         TONES[tone],
         className,
       )}
@@ -60,10 +61,5 @@ export function StatusDot({
         : state === 'error'
           ? 'bg-danger'
           : 'bg-fg-subtle';
-  return (
-    <span className={clsx('relative inline-flex size-2', className)}>
-      <span className={clsx('absolute inline-flex size-2 rounded-full opacity-60', color)} />
-      <span className={clsx('relative inline-flex size-2 rounded-full', color)} />
-    </span>
-  );
+  return <span className={clsx('inline-block size-1.5 rounded-full', color, className)} />;
 }

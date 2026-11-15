@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { EyeOff, MapPin, ShieldCheck, Sparkles, Stethoscope, TriangleAlert } from 'lucide-react';
+import { EyeOff, MapPin, ShieldCheck, Stethoscope } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -63,7 +63,7 @@ export function PreparePage() {
       }
     }
     setReports(next);
-    toast.info('Metadata scan complete', `${Object.values(next).filter((r) => r.hasExif || r.hasGps).length} file(s) carry EXIF/GPS data.`);
+    toast.info('Scanned', `${Object.values(next).filter((r) => r.hasExif || r.hasGps).length} with EXIF/GPS`);
   };
 
   const maxMB = sizeTarget === 'custom' ? customMB : Number(sizeTarget) || 0;
@@ -82,7 +82,7 @@ export function PreparePage() {
       }
     }
     setVectorReports(next);
-    toast.info('Vector scan complete', `${Object.keys(next).length} vector file(s) analysed.`);
+    toast.info('Scanned', `${Object.keys(next).length} vectors`);
   };
 
   const sanitizeOne = async (item: (typeof vectorItems)[number]) => {
@@ -90,7 +90,7 @@ export function PreparePage() {
       const bytes = await library.getItemBytes(item.id);
       const result = sanitizeSvg(new TextDecoder().decode(bytes));
       if (result.removed.length === 0) {
-        toast.info('Nothing to sanitize', `${item.name} has no scripts, handlers or editor junk.`);
+        toast.info('Already clean', item.name);
         return;
       }
       const ok = await library.replaceBytes(item.id, new TextEncoder().encode(result.text), { backup: true });
@@ -100,7 +100,7 @@ export function PreparePage() {
           delete copy[item.id];
           return copy;
         });
-        toast.success(`Sanitized ${item.name}`, `Removed: ${result.removed.join(', ')}`);
+        toast.success('Sanitized', result.removed.join(', '));
       }
     } catch (error) {
       toast.error('Sanitize failed', error instanceof Error ? error.message : String(error));
@@ -143,7 +143,7 @@ export function PreparePage() {
           delete next[row.item.id];
           return next;
         });
-        toast.success(`Cleaned ${row.item.name}`, notes.join(' · ') || 'No changes needed');
+        toast.success('Cleaned', notes.join(' · ') || row.item.name);
       }
     } catch (error) {
       toast.error('Clean failed', error instanceof Error ? error.message : String(error));
@@ -224,87 +224,70 @@ export function PreparePage() {
   return (
     <>
       <PageHeader
-        title="File Doctor"
-        description="Strip EXIF/GPS, re-encode to sRGB, hit size caps, clean vectors."
+        title="Prepare"
+        description="EXIF/GPS, sRGB, size caps, vector safety"
         actions={
           <>
-            <Button size="sm" variant="outline" onClick={refreshReports}>Scan metadata</Button>
-            <Button size="sm" onClick={cleanAll} icon={<ShieldCheck className="size-4" />}>Clean all raster</Button>
+            <Button size="sm" variant="outline" onClick={refreshReports}>Scan</Button>
+            <Button size="sm" onClick={cleanAll} icon={<ShieldCheck className="size-4" />}>Clean all</Button>
           </>
         }
-      >
-        <div className="flex flex-wrap gap-2 rounded-xl border border-warn/30 bg-warn-soft p-3 text-xs leading-relaxed text-warn">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-          <span>
-            JPEG EXIF can carry GPS coordinates, camera serials and lens data — a privacy leak and, on some portals, a
-            rejection trigger. Cleaning keeps your embedded keywords (XMP) and colour profile; a <code>.msap-backup</code> copy
-            is written next to the original on desktop.
-          </span>
-        </div>
-      </PageHeader>
+      />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <Card className="xl:col-span-2" title="Library health" description="Raster files can be cleaned; vectors pass through untouched" flush>
+      <div className="grid grid-cols-1 gap-2 xl:grid-cols-3">
+        <Card className="xl:col-span-2" title="Files" flush>
           <DataTable
             rows={rows}
             columns={columns}
             rowKey={(row) => row.item.id}
             dense
-            emptyTitle="Nothing to clean yet"
-            emptyDescription="Import files in the Library first."
+            emptyTitle="No files"
           />
         </Card>
 
-        <Card title="Cleaning recipe" description="Applied per file or to the whole batch">
-          <div className="flex flex-col gap-4">
-            <div className="rounded-xl border border-line bg-surface-2 p-3.5">
-              <Switch checked={stripPhotoshop} onChange={setStripPhotoshop} label="Remove Photoshop IRB segment" description="Paths/clipping metadata; harmless to remove for stock JPEGs." />
-            </div>
-            <div className="rounded-xl border border-line bg-surface-2 p-3.5">
-              <Switch checked={reencode} onChange={setReencode} label="Re-encode via sRGB canvas" description="Normalises colour space and lets us hit exact size targets." />
-            </div>
+        <Card title="Recipe">
+          <div className="flex flex-col gap-3">
+            <Switch checked={stripPhotoshop} onChange={setStripPhotoshop} label="Strip Photoshop data" />
+            <Switch checked={reencode} onChange={setReencode} label="Re-encode to sRGB" />
 
             {reencode && (
               <>
                 <Field label="Output format">
                   <Select value={format} onChange={(e) => setFormat(e.target.value as typeof format)} options={[
-                    { value: 'keep', label: 'Keep current format' },
-                    { value: 'jpg', label: 'JPEG (stock standard)' },
-                    { value: 'png', label: 'PNG (lossless / transparency)' },
-                    { value: 'webp', label: 'WebP (small previews)' },
+                    { value: 'keep', label: 'Keep format' },
+                    { value: 'jpg', label: 'JPEG' },
+                    { value: 'png', label: 'PNG' },
+                    { value: 'webp', label: 'WebP' },
                   ]} />
                 </Field>
-                <Field label={`JPEG/WebP quality ${Math.round(quality * 100)}%`} hint="Portals expect 90-100; the doctor lowers it only if a size cap forces it.">
+                <Field label={`Quality ${Math.round(quality * 100)}%`}>
                   <input type="range" min={0.6} max={1} step={0.01} value={quality} onChange={(e) => setQuality(Number(e.target.value))} className="w-full accent-[var(--brand)]" />
                 </Field>
-                <Field label="Size target" hint="Quality steps down first; resolution only as a last resort.">
+                <Field label="Size cap">
                   <Select value={sizeTarget} onChange={(e) => setSizeTarget(e.target.value)} options={SIZE_TARGETS} />
                 </Field>
                 {sizeTarget === 'custom' && (
                   <Field label="Custom cap (MB)">
-                    <input type="number" min={1} max={500} value={customMB} onChange={(e) => setCustomMB(Number(e.target.value))} className="h-10 w-28 rounded-lg border border-line bg-surface-2 px-3 text-sm text-fg" />
+                    <input type="number" min={1} max={500} value={customMB} onChange={(e) => setCustomMB(Number(e.target.value))} className="h-10 w-28 rounded-[0.375rem] border border-line bg-surface-2 px-3 text-sm text-fg" />
                   </Field>
                 )}
               </>
             )}
 
-            <p className="flex items-start gap-2 text-[0.6875rem] leading-relaxed text-fg-subtle">
-              <Sparkles className="mt-0.5 size-3.5 shrink-0 text-brand" />
-              After cleaning, re-run validation on the Platforms tab of each item — resolution and size rules are re-checked
-              against every marketplace automatically.
+            <p className="text-[0.6875rem] text-fg-subtle">
+              Backups are written next to each original.
             </p>
           </div>
         </Card>
       </div>
       <Card
         className="mt-4"
-        title="Vector check"
-        description="SVG security/sanity + EPS technical findings (scripts, external refs, embedded rasters, fonts, CMYK, Illustrator version)"
-        action={<Button size="xs" variant="outline" onClick={scanVectors}>Scan vectors</Button>}
+        title="Vectors"
+        action={<Button size="xs" variant="outline" onClick={scanVectors}>Scan</Button>}
         flush
       >
         {vectorItems.length === 0 ? (
-          <p className="p-6 text-center text-sm text-fg-muted">No SVG/EPS/AI files in the library.</p>
+          <p className="px-3 py-6 text-center text-[0.8125rem] text-fg-subtle">No vector files</p>
         ) : (
           <ul className="divide-y divide-line">
             {vectorItems.map((item) => {
@@ -314,34 +297,34 @@ export function PreparePage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-fg">{item.name}</p>
                     {!report ? (
-                      <p className="text-[0.6875rem] text-fg-subtle">Not scanned yet.</p>
+                      <p className="text-[0.6875rem] text-fg-subtle">Unscanned</p>
                     ) : report.svg ? (
                       <div className="mt-1 flex flex-wrap gap-1">
                         {report.svg.hasScript && <Badge tone="danger">script!</Badge>}
-                        {report.svg.eventHandlers > 0 && <Badge tone="danger">{report.svg.eventHandlers} handlers</Badge>}
-                        {report.svg.externalRefs.length > 0 && <Badge tone="warn">{report.svg.externalRefs.length} external refs</Badge>}
-                        {report.svg.embeddedRasters > 0 && <Badge tone="warn">{report.svg.embeddedRasters} raster(s)</Badge>}
+                        {report.svg.eventHandlers > 0 && <Badge tone="danger">{report.svg.eventHandlers} handler</Badge>}
+                        {report.svg.externalRefs.length > 0 && <Badge tone="warn">{report.svg.externalRefs.length} ext ref</Badge>}
+                        {report.svg.embeddedRasters > 0 && <Badge tone="warn">{report.svg.embeddedRasters} raster</Badge>}
                         {report.svg.fonts.length > 0 && <Badge tone="neutral">fonts: {report.svg.fonts.slice(0, 3).join(', ')}</Badge>}
                         {report.svg.hasImportCss && <Badge tone="danger">@import CSS</Badge>}
                         {report.svg.editorJunk.length > 0 && <Badge tone="warn">{report.svg.editorJunk.join(', ')} junk</Badge>}
                         {!report.svg.hasViewBox && <Badge tone="warn">no viewBox</Badge>}
-                        {!report.svg.hasMetadata && <Badge tone="neutral">no metadata</Badge>}
+                        {!report.svg.hasMetadata && <Badge tone="neutral">no meta</Badge>}
                         {report.svg.ok && <Badge tone="ok" dot>clean</Badge>}
                       </div>
                     ) : report.eps ? (
                       <div className="mt-1 flex flex-wrap gap-1">
                         {report.eps.creator && <Badge tone="neutral">{report.eps.creator.slice(0, 40)}</Badge>}
                         {report.eps.usesCmyk && <Badge tone="warn">CMYK</Badge>}
-                        {report.eps.hasEmbeddedRaster && <Badge tone="warn">embedded raster</Badge>}
-                        {report.eps.documentFonts.length > 0 && <Badge tone="warn">fonts live</Badge>}
+                        {report.eps.hasEmbeddedRaster && <Badge tone="warn">raster</Badge>}
+                        {report.eps.documentFonts.length > 0 && <Badge tone="warn">live fonts</Badge>}
                         {!report.eps.hasXmp && <Badge tone="neutral">no XMP</Badge>}
-                        {report.eps.ok && <Badge tone="ok" dot>submission ready</Badge>}
+                        {report.eps.ok && <Badge tone="ok" dot>ready</Badge>}
                       </div>
                     ) : null}
                     {report?.eps && report.eps.notes.length > 0 && (
                       <ul className="mt-1.5 flex flex-col gap-1">
                         {report.eps.notes.map((note, index) => (
-                          <li key={index} className="text-[0.6875rem] leading-relaxed text-fg-muted">• {note}</li>
+                          <li key={index} className="text-[0.6875rem] text-fg-muted">• {note}</li>
                         ))}
                       </ul>
                     )}
