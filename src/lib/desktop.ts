@@ -102,6 +102,11 @@ export interface DesktopBridge {
     ensure: (url: string, binary: string, models: string[]) => Promise<{ ok: boolean; path?: string; models?: string[]; error?: string }>;
     run: (args: UpscalerRunArgs) => Promise<UpscalerRunResult>;
   };
+  watch: {
+    start: () => Promise<{ ok: boolean; dir?: string; error?: string }>;
+    stop: () => Promise<{ ok: boolean }>;
+    onFile: (callback: (file: PickedFile) => void) => () => void;
+  };
 }
 
 declare global {
@@ -249,6 +254,11 @@ const browserBridge: DesktopBridge = {
   upscaler: {
     ensure: async () => ({ ok: false, error: 'Real-ESRGAN runs in the desktop build only.' }),
     run: async () => ({ ok: false, error: 'Real-ESRGAN runs in the desktop build only. Use the built-in resampler here.' }),
+  },
+  watch: {
+    start: async () => ({ ok: false, error: 'Folder watching runs in the desktop build only.' }),
+    stop: async () => ({ ok: true }),
+    onFile: () => () => undefined,
   },
 };
 

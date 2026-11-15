@@ -6,6 +6,7 @@ import { LibraryProvider } from '@/state/library';
 import { OverviewPage } from '@/pages/OverviewPage';
 import { LibraryPage } from '@/pages/LibraryPage';
 import { ExportPage } from '@/pages/ExportPage';
+import { PreparePage } from '@/pages/PreparePage';
 import { UpscalePage } from '@/pages/UpscalePage';
 import { PlatformsPage } from '@/pages/PlatformsPage';
 import { CloudPage } from '@/pages/CloudPage';
@@ -28,6 +29,7 @@ export default function App() {
               <Route element={<AppShell />}>
                 <Route index element={<OverviewPage />} />
                 <Route path="library" element={<LibraryPage />} />
+                <Route path="prepare" element={<PreparePage />} />
                 <Route path="export" element={<ExportPage />} />
                 <Route path="upscale" element={<UpscalePage />} />
                 <Route path="platforms" element={<PlatformsPage />} />

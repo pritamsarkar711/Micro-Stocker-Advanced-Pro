@@ -75,6 +75,16 @@ const api = {
     rename: (from, to) => ipcRenderer.invoke('fs:rename', from, to),
   },
 
+  watch: {
+    start: () => ipcRenderer.invoke('watch:start'),
+    stop: () => ipcRenderer.invoke('watch:stop'),
+    onFile: (callback) => {
+      const listener = (_event, file) => callback(file);
+      ipcRenderer.on('watch:file', listener);
+      return () => ipcRenderer.removeListener('watch:file', listener);
+    },
+  },
+
   upscaler: {
     ensure: (url, binary, models) => ipcRenderer.invoke('upscaler:ensure', { url, binary, models }),
     run: async (args) => {

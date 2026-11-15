@@ -2,14 +2,18 @@ import { useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import {
   Box,
+  Copy,
   Download,
   FileImage,
+  FolderSearch,
   HardDrive,
   Layers,
   PenLine,
   Plus,
+  ScanSearch,
   Search,
   Sparkles,
+  Stethoscope,
   Trash2,
   Upload,
   Wand2,
@@ -19,16 +23,16 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Input, Select, Switch, Field } from '@/components/ui/Field';
-import { Tabs } from '@/components/ui/Tabs';
-import { EmptyState } from '@/components/ui/Misc';
+import { Input, Select, Field, Textarea } from '@/components/ui/Field';
+import { Modal } from '@/components/ui/Modal';
+import { EmptyState, Spinner } from '@/components/ui/Misc';
 import { useLibrary } from '@/state/library';
 import { useToast } from '@/state/ToastState';
 import { isDesktop } from '@/lib/desktop';
 import { formatBytes } from '@/lib/stock/files';
 import { megapixels, type StockItem } from '@/lib/stock/types';
 import { validateEverywhere, worstLevel } from '@/lib/stock/validate';
-import { PLATFORM_LIST } from '@/lib/stock/platforms';
+import { findDuplicateClusters, type DuplicateCluster } from '@/lib/stock/dupes';
 import { ItemEditor } from '@/components/stock/ItemEditor';
 
 const LEVEL_TONE = { error: 'danger', warn: 'warn', info: 'neutral', ok: 'ok' } as const;
@@ -41,6 +45,17 @@ export function LibraryPage() {
   const [formatFilter, setFormatFilter] = useState('all');
   const [editorId, setEditorId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  /* duplicate scanner */
+  const [dupOpen, setDupOpen] = useState(false);
+  const [dupState, setDupState] = useState<{ running: boolean; done: number; total: number }>({ running: false, done: 0, total: 0 });
+  const [clusters, setClusters] = useState<DuplicateCluster[] | null>(null);
+
+  /* batch templates */
+  const [tplOpen, setTplOpen] = useState(false);
+  const [tplTitle, setTplTitle] = useState('{name} vector illustration, flat design element');
+  const [tplDesc, setTplDesc] = useState('A clean {format} asset of {name}, part of a {count} piece series, ready for commercial use.');
+  const [tplKeywords, setTplKeywords] = useState('set, collection, series');
 
   const filtered = useMemo(
     () =>
@@ -56,10 +71,9 @@ export function LibraryPage() {
   );
 
   const health = useMemo(() => {
-    const map = new Map<string, ReturnType<typeof worstLevel>>();
+    const map = new Map<string, keyof typeof LEVEL_TONE>();
     for (const item of library.items) {
-      const all = Object.values(validateEverywhere(item, library.items)).flat();
-      map.set(item.id, worstLevel(all));
+      map.set(item.id, worstLevel(Object.values(validateEverywhere(item, library.items)).flat()));
     }
     return map;
   }, [library.items]);
@@ -97,6 +111,39 @@ export function LibraryPage() {
     if (result.failed.length) toast.error(`${result.failed.length} file(s) could not be embedded`, result.failed.slice(0, 3).join(' · '));
   };
 
+  const onScanDupes = async () => {
+    setDupOpen(true);
+    setClusters(null);
+    setDupState({ running: true, done: 0, total: library.items.length });
+    const raster = library.items.filter((i) => ['jpg', 'png', 'webp'].includes(i.format));
+    setDupState({ running: true, done: 0, total: raster.length });
+    const found = await findDuplicateClusters(raster, library.getItemBlob, 8, (done, total) => setDupState({ running: true, done, total }));
+    setClusters(found);
+    setDupState({ running: false, done: raster.length, total: raster.length });
+    if (found.length === 0) toast.success('No near-duplicates found', 'Every raster file hashes uniquely at thumbnail scale.');
+  };
+
+  const applyTemplate = () => {
+    const targets = selectedIds.length ? library.items.filter((i) => library.selection.has(i.id)) : library.items;
+    const render = (tpl: string, item: StockItem, index: number) =>
+      tpl
+        .replaceAll('{name}', item.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim())
+        .replaceAll('{format}', item.format.toUpperCase())
+        .replaceAll('{index}', String(index + 1))
+        .replaceAll('{count}', String(targets.length))
+        .replaceAll('{category}', item.metadata.categories[0] ?? 'creative');
+    targets.forEach((item, index) => {
+      const extra = tplKeywords.split(',').map((k) => k.trim().toLowerCase()).filter(Boolean);
+      library.setMetadata(item.id, {
+        title: render(tplTitle, item, index).slice(0, 180),
+        description: render(tplDesc, item, index).slice(0, 400),
+        keywords: Array.from(new Set([...item.metadata.keywords, ...extra])).slice(0, 50),
+      });
+    });
+    setTplOpen(false);
+    toast.success(`Template applied to ${targets.length} file${targets.length === 1 ? '' : 's'}`, 'Variables: {name} {format} {index} {count} {category}');
+  };
+
   return (
     <>
       <PageHeader
@@ -112,12 +159,7 @@ export function LibraryPage() {
               className="hidden"
               onChange={(event) => onImport(event.target.files)}
             />
-            <Button
-              size="sm"
-              loading={busy}
-              icon={isDesktop ? <HardDrive className="size-4" /> : <Upload className="size-4" />}
-              onClick={() => (isDesktop ? onImport() : fileInputRef.current?.click())}
-            >
+            <Button size="sm" loading={busy} icon={isDesktop ? <HardDrive className="size-4" /> : <Upload className="size-4" />} onClick={() => (isDesktop ? onImport() : fileInputRef.current?.click())}>
               Import files
             </Button>
             <Button size="sm" variant="outline" loading={busy} icon={<Wand2 className="size-4" />} onClick={onBulkGenerate}>
@@ -136,23 +178,47 @@ export function LibraryPage() {
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-fg-subtle" />
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name, title or keyword…" className="pl-9" />
         </div>
-        <Select value={formatFilter} onChange={(e) => setFormatFilter(e.target.value)} className="sm:w-44" options={[
-          { value: 'all', label: 'All formats' },
-          { value: 'jpg', label: 'JPG' },
-          { value: 'png', label: 'PNG' },
-          { value: 'webp', label: 'WebP' },
-          { value: 'eps', label: 'EPS' },
-          { value: 'ai', label: 'AI' },
-          { value: 'svg', label: 'SVG' },
-        ]} />
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => library.setSelection(library.selection.size === library.items.length ? [] : library.items.map((i) => i.id))}
-        >
+        <Select
+          value={formatFilter}
+          onChange={(e) => setFormatFilter(e.target.value)}
+          className="sm:w-40"
+          options={[
+            { value: 'all', label: 'All formats' },
+            { value: 'jpg', label: 'JPG' },
+            { value: 'png', label: 'PNG' },
+            { value: 'webp', label: 'WebP' },
+            { value: 'eps', label: 'EPS' },
+            { value: 'ai', label: 'AI' },
+            { value: 'svg', label: 'SVG' },
+          ]}
+        />
+        <Button size="sm" variant="outline" icon={<ScanSearch className="size-4" />} onClick={onScanDupes} disabled={library.items.length < 2}>
+          Find duplicates
+        </Button>
+        <Button size="sm" variant="outline" icon={<Copy className="size-4" />} onClick={() => setTplOpen(true)} disabled={library.items.length === 0}>
+          Template
+        </Button>
+        {isDesktop && (
+          <Button
+            size="sm"
+            variant={library.watching ? 'success' : 'ghost'}
+            icon={<FolderSearch className="size-4" />}
+            onClick={() => (library.watching ? library.stopWatch() : library.startWatch())}
+            title={library.watching ?? 'Watch a folder for new files'}
+          >
+            {library.watching ? 'Watching' : 'Watch folder'}
+          </Button>
+        )}
+        <Button size="sm" variant="ghost" onClick={() => library.setSelection(library.selection.size === library.items.length ? [] : library.items.map((i) => i.id))}>
           {library.selection.size === library.items.length && library.items.length > 0 ? 'Clear selection' : 'Select all'}
         </Button>
       </div>
+
+      {library.watching && (
+        <p className="mb-3 flex items-center gap-2 rounded-lg border border-ok/30 bg-ok-soft px-3 py-2 text-xs text-ok">
+          <FolderSearch className="size-4 shrink-0" /> Auto-importing new stock files from <code className="truncate font-mono">{library.watching}</code>
+        </p>
+      )}
 
       {filtered.length === 0 ? (
         <Card>
@@ -174,7 +240,14 @@ export function LibraryPage() {
       ) : (
         <ul className="grid-auto-fill gap-3">
           {filtered.map((item) => (
-            <LibraryCard key={item.id} item={item} level={health.get(item.id) ?? 'ok'} selected={library.selection.has(item.id)} onSelect={() => library.toggleSelect(item.id)} onOpen={() => setEditorId(item.id)} />
+            <LibraryCard
+              key={item.id}
+              item={item}
+              level={health.get(item.id) ?? 'ok'}
+              selected={library.selection.has(item.id)}
+              onSelect={() => library.toggleSelect(item.id)}
+              onOpen={() => setEditorId(item.id)}
+            />
           ))}
         </ul>
       )}
@@ -186,7 +259,26 @@ export function LibraryPage() {
             <Badge tone="brand" dot>{selectedIds.length} selected</Badge>
             <Button size="xs" variant="outline" icon={<Wand2 className="size-3.5" />} onClick={onBulkGenerate}>Generate</Button>
             <Button size="xs" variant="outline" icon={<PenLine className="size-3.5" />} onClick={onBulkEmbed}>Embed</Button>
-            <Button size="xs" variant="outline" icon={<Download className="size-3.5" />} onClick={() => { sessionStorage.setItem('msap:export-selection', JSON.stringify(selectedIds)); window.location.hash = '#/export'; }}>
+            <Button size="xs" variant="outline" icon={<Copy className="size-3.5" />} onClick={() => setTplOpen(true)}>Template</Button>
+            <Button
+              size="xs"
+              variant="outline"
+              icon={<Stethoscope className="size-3.5" />}
+              onClick={() => {
+                window.location.hash = '#/prepare';
+              }}
+            >
+              File Doctor
+            </Button>
+            <Button
+              size="xs"
+              variant="outline"
+              icon={<Download className="size-3.5" />}
+              onClick={() => {
+                sessionStorage.setItem('msap:export-selection', JSON.stringify(selectedIds));
+                window.location.hash = '#/export';
+              }}
+            >
               Export CSV
             </Button>
             <Button size="xs" variant="ghost" icon={<Trash2 className="size-3.5" />} onClick={() => library.removeItems(selectedIds)}>Remove</Button>
@@ -194,6 +286,81 @@ export function LibraryPage() {
           </div>
         </div>
       )}
+
+      {/* duplicates modal */}
+      <Modal open={dupOpen} onClose={() => setDupOpen(false)} title="Near-duplicate scan" description="64-bit perceptual dHash; ≤ 8 differing bits = visually near-identical at thumbnail scale — the similarity check Vecteezy and Adobe reject batches for." size="lg">
+        {dupState.running ? (
+          <div className="flex flex-col items-center gap-3 py-10">
+            <Spinner size={5} />
+            <p className="text-sm text-fg-muted tabular-nums">Hashing {dupState.done}/{dupState.total}…</p>
+          </div>
+        ) : clusters === null ? (
+          <p className="py-8 text-center text-sm text-fg-muted">Starting scan…</p>
+        ) : clusters.length === 0 ? (
+          <EmptyState icon={<ScanSearch className="size-7" />} title="No near-duplicates" description="Every raster file in the library hashes uniquely. Safe to submit together." />
+        ) : (
+          <div className="flex flex-col gap-4">
+            {clusters.map((cluster, index) => (
+              <div key={index} className="card p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-fg">Cluster {index + 1} · {cluster.items.length} files</p>
+                  <Badge tone="warn" dot>max distance {cluster.maxDistance}</Badge>
+                </div>
+                <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+                  {cluster.items.map((item, position) => (
+                    <li key={item.id} className="flex items-center gap-2 rounded-lg border border-line bg-surface-2 p-2">
+                      {item.thumbUrl ? <img src={item.thumbUrl} alt="" className="size-10 rounded-md border border-line object-cover" /> : <FileImage className="size-10 text-fg-subtle" />}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-medium text-fg">{item.name}</span>
+                        <span className="block text-[0.625rem] text-fg-subtle">{position === 0 ? 'keep (first)' : 'possible duplicate'}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  className="mt-2"
+                  onClick={() => {
+                    library.setSelection(cluster.items.slice(1).map((i) => i.id));
+                    setDupOpen(false);
+                    toast.info('Duplicates selected', 'Review them, then Remove or clean from the bulk bar.');
+                  }}
+                >
+                  Select all but the first
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
+
+      {/* template modal */}
+      <Modal
+        open={tplOpen}
+        onClose={() => setTplOpen(false)}
+        title="Batch metadata template"
+        description={`Applies to ${selectedIds.length || library.items.length} file(s). Variables: {name} {format} {index} {count} {category}`}
+        size="md"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setTplOpen(false)}>Cancel</Button>
+            <Button onClick={applyTemplate} icon={<Copy className="size-4" />}>Apply template</Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <Field label="Title template">
+            <Input value={tplTitle} onChange={(e) => setTplTitle(e.target.value)} />
+          </Field>
+          <Field label="Description template">
+            <Textarea value={tplDesc} onChange={(e) => setTplDesc(e.target.value)} />
+          </Field>
+          <Field label="Keywords to append (comma separated)" hint="Merged with existing keywords, de-duplicated, capped at 50.">
+            <Input value={tplKeywords} onChange={(e) => setTplKeywords(e.target.value)} />
+          </Field>
+        </div>
+      </Modal>
 
       {editorItem && <ItemEditor item={editorItem} onClose={() => setEditorId(null)} />}
     </>
@@ -216,12 +383,7 @@ function LibraryCard({
   const mp = megapixels(item);
   return (
     <li>
-      <div
-        className={clsx(
-          'card group relative overflow-hidden transition hover:border-line-strong',
-          selected && 'ring-2 ring-brand/60',
-        )}
-      >
+      <div className={clsx('card group relative overflow-hidden transition hover:border-line-strong', selected && 'ring-2 ring-brand/60')}>
         <button type="button" onClick={onOpen} className="block w-full text-left">
           <div className="relative flex h-36 items-center justify-center overflow-hidden bg-surface-2 sm:h-40">
             {item.thumbUrl ? (
@@ -260,8 +422,4 @@ function LibraryCard({
       </div>
     </li>
   );
-}
-
-export function PlatformCountNote() {
-  return <p className="text-xs text-fg-subtle">{PLATFORM_LIST.length} platforms configured</p>;
 }

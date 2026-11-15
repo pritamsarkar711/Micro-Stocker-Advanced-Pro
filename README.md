@@ -18,6 +18,10 @@
 | **Validation** | Per platform: formats, MP window, file-size min/max, filename charset/length, keyword min/max/special chars, title/description rules, EPS+JPG pairing, AI policy (forbidden vs disclosure), embedded-metadata reminders. |
 | **Upscale studio** | Engines: built-in high-quality resampler (everywhere) + **Real-ESRGAN NCNN-Vulkan** (desktop: one-click download of the BSD-3 portable binary from GitHub, runs on your GPU, models `realesrgan-x4plus/-x2plus/-x4plus-anime/realesrnet-x4plus/realesr-animevideov3`). Scale plans chain 2/3/4× passes to hit presets incl. **8K (7680×4320)** and per-platform minimums. Custom NCNN model folder supported. |
 | **Platforms reference** | 10 marketplaces with researched limits (Nov 2026), CSV dialects, vector rules, AI policies and source tags (official / community). |
+| **File Doctor** | JPEG segment inspector (EXIF / **GPS** / Photoshop IRB / ICC / XMP), privacy stripping that keeps XMP + ICC, sRGB canvas re-encode with per-platform size caps (quality steps down first, resolution last), `.msap-backup` safety copies. |
+| **Duplicate scanner** | 64-bit perceptual dHash clustering (≤ 8 bits = near-identical) — catches the similarity rejections Vecteezy/Adobe issue; one click selects all-but-first. |
+| **Batch templates** | Title/description/keyword templates with `{name} {format} {index} {count} {category}` variables applied to selection or whole library. |
+| **Watch folder** | Desktop: pick a folder and every new EPS/AI/SVG/JPG/PNG/WebP that lands in it is imported automatically (debounced, de-duplicated by path). |
 | **Responsive shell** | Sidebar rail ⇄ drawer ⇄ bottom tabs, fluid type, 360 px → 4K, dark/light/system, density, 60–200 % UI scale, keyboard shortcuts, Responsive Lab device simulator. |
 | **Cloud (optional)** | Supabase adapter with runtime credentials, connection tester and generated SQL (incl. offline `sync_queue`). App is fully functional offline without it. |
 

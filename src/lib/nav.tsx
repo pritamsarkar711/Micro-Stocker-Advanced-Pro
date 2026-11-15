@@ -7,6 +7,7 @@ import {
   Info,
   MonitorSmartphone,
   Settings,
+  ShieldCheck,
   Store,
   Zap,
 } from 'lucide-react';
@@ -40,6 +41,13 @@ export const NAV_ITEMS: NavItem[] = [
     group: 'main',
     tab: true,
     description: 'Import, edit and embed stock metadata',
+  },
+  {
+    to: '/prepare',
+    label: 'File Doctor',
+    icon: <ShieldCheck className="size-5" />,
+    group: 'main',
+    description: 'Strip EXIF/GPS, sRGB re-encode, hit size caps',
   },
   {
     to: '/export',

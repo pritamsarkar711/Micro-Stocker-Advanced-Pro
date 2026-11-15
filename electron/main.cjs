@@ -206,6 +206,56 @@ function registerIpc() {
     }
   });
 
+  /* ---------------- watch folder: auto-import new stock files ---------------- */
+
+  let folderWatcher = null;
+
+  ipcMain.handle('watch:start', async () => {
+    if (folderWatcher) return { ok: true, dir: folderWatcher.dir };
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+      title: 'Choose a folder to watch for new stock files',
+      properties: ['openDirectory'],
+    });
+    if (canceled || !filePaths || !filePaths[0]) return { ok: false, error: 'canceled' };
+    const dir = filePaths[0];
+    const fsSync = require('node:fs');
+    const nodePath = require('node:path');
+    const EXT = new Set(['.jpg', '.jpeg', '.png', '.eps', '.ai', '.svg', '.webp']);
+    const pending = new Map();
+    try {
+      const watcher = fsSync.watch(dir, (_event, filename) => {
+        if (!filename) return;
+        const ext = nodePath.extname(String(filename)).toLowerCase();
+        if (!EXT.has(ext)) return;
+        const fullPath = nodePath.join(dir, String(filename));
+        clearTimeout(pending.get(filename));
+        pending.set(
+          filename,
+          setTimeout(async () => {
+            try {
+              const stat = await fs.stat(fullPath);
+              if (mainWindow) mainWindow.webContents.send('watch:file', { path: fullPath, name: String(filename), size: stat.size });
+            } catch {
+              /* file gone again */
+            }
+          }, 1200),
+        );
+      });
+      folderWatcher = { watcher, dir };
+      return { ok: true, dir };
+    } catch (error) {
+      return { ok: false, error: String(error && error.message ? error.message : error) };
+    }
+  });
+
+  ipcMain.handle('watch:stop', async () => {
+    if (folderWatcher) {
+      folderWatcher.watcher.close();
+      folderWatcher = null;
+    }
+    return { ok: true };
+  });
+
   /* ---------------- Real-ESRGAN NCNN-Vulkan (local AI upscaling) ---------------- */
 
   const upscalerDir = () => path.join(app.getPath('userData'), 'upscaler');

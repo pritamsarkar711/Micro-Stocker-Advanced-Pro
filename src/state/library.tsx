@@ -53,6 +53,11 @@ interface LibraryState {
 
   generateFor: (ids: string[], options: GenerateOptions) => Promise<{ done: number; aiUsed: number }>;
   embedFor: (ids: string[], options: { backup: boolean }) => Promise<{ done: number; failed: string[] }>;
+  replaceBytes: (id: string, bytes: Uint8Array, options?: { backup?: boolean }) => Promise<boolean>;
+
+  watching: string | null;
+  startWatch: () => Promise<void>;
+  stopWatch: () => Promise<void>;
 }
 
 const LibraryContext = createContext<LibraryState | null>(null);
@@ -67,6 +72,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<StockItem[]>([]);
   const [selection, setSelectionState] = useState<Set<string>>(new Set());
   const [aiConfig, setAiConfigState] = useState<AiAssistantConfig>(EMPTY_AI_CONFIG);
+  const [watching, setWatching] = useState<string | null>(null);
   const sources = useRef(new Map<string, Uint8Array | File>());
   const toast = useToast();
 
@@ -332,6 +338,80 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   const setSelection = useCallback((ids: string[]) => setSelectionState(new Set(ids)), []);
 
+  /* --------------------- replace bytes (File Doctor) --------------------- */
+
+  const replaceBytes = useCallback(
+    async (id: string, bytes: Uint8Array, options: { backup?: boolean } = {}) => {
+      const item = items.find((i) => i.id === id);
+      if (!item) return false;
+      const raster = ['jpg', 'png', 'webp'].includes(item.format);
+      if (isDesktop && item.path) {
+        if (options.backup !== false) {
+          const old = await getItemBytes(id).catch(() => null);
+          if (old) await desktop.fs.writeBytes(`${item.path}.msap-backup`, old).catch(() => undefined);
+        }
+        const write = await desktop.fs.writeBytes(item.path, bytes);
+        if (!write.ok) {
+          toast.error('Could not write file', write.error);
+          return false;
+        }
+      }
+      sources.current.set(id, bytes);
+      if (item.thumbUrl) URL.revokeObjectURL(item.thumbUrl);
+      const dims = raster ? await probeRasterDimensions(new Blob([bytes as unknown as BlobPart])) : {};
+      mutate((prev) =>
+        prev.map((i) =>
+          i.id === id
+            ? {
+                ...i,
+                sizeBytes: bytes.length,
+                width: dims.width ?? i.width,
+                height: dims.height ?? i.height,
+                thumbUrl: raster || i.format === 'svg' ? URL.createObjectURL(new Blob([bytes as unknown as BlobPart])) : i.thumbUrl,
+                updatedAt: new Date().toISOString(),
+              }
+            : i,
+        ),
+      );
+      return true;
+    },
+    [getItemBytes, items, mutate, toast],
+  );
+
+  /* ------------------------- watch folder (desktop) ------------------------- */
+
+  const importDesktopPath = useCallback(
+    async (path: string, name: string, size: number) => {
+      if (!detectFormat(name)) return;
+      const bytes = await desktop.fs.readBytes(path).catch(() => null);
+      const item = await buildItem(name, size, bytes);
+      item.path = path;
+      if (bytes && ['jpg', 'png', 'webp', 'svg'].includes(item.format)) {
+        item.thumbUrl = URL.createObjectURL(new Blob([bytes as unknown as BlobPart]));
+      }
+      mutate((prev) => (prev.some((p) => p.path === path) ? prev : [item, ...prev]));
+    },
+    [buildItem, mutate],
+  );
+
+  const startWatch = useCallback(async () => {
+    const result = await desktop.watch.start();
+    if (result.ok && result.dir) {
+      setWatching(result.dir);
+      toast.info('Watching folder', `New stock files in ${result.dir} are imported automatically.`);
+    } else if (result.error !== 'canceled') {
+      toast.error('Watch failed', result.error);
+    }
+  }, [toast]);
+
+  const stopWatch = useCallback(async () => {
+    await desktop.watch.stop();
+    setWatching(null);
+    toast.info('Folder watch stopped');
+  }, [toast]);
+
+  useEffect(() => desktop.watch.onFile((file) => void importDesktopPath(file.path, file.name, file.size)), [importDesktopPath]);
+
   /* --------------------------- generate / embed --------------------------- */
 
   const setAiConfig = useCallback(async (config: AiAssistantConfig) => {
@@ -435,6 +515,10 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       setSelection,
       generateFor,
       embedFor,
+      replaceBytes,
+      watching,
+      startWatch,
+      stopWatch,
     }),
     [
       ready,
@@ -456,6 +540,10 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       setSelection,
       generateFor,
       embedFor,
+      replaceBytes,
+      watching,
+      startWatch,
+      stopWatch,
     ],
   );
 
