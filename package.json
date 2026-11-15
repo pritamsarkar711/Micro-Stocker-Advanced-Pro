@@ -90,5 +90,24 @@
   },
   "bugs": {
     "url": "https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro/issues"
+  },
+  "build": {
+    "appId": "com.pritamsarkar.microstocker.advancedpro",
+    "productName": "Micro Stocker Advanced Pro",
+    "directories": {
+      "output": "release",
+      "buildResources": "resources"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "releaseType": "release"
+      }
+    ]
   }
 }
