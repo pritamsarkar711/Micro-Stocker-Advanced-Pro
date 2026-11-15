@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  Bot,
   Download,
   Eraser,
   HardDrive,
@@ -14,11 +15,12 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Field, SegmentedControl, Select, Switch } from '@/components/ui/Field';
+import { Field, Input, SegmentedControl, Select, Switch } from '@/components/ui/Field';
 import { KeyHint } from '@/components/ui/Misc';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { Modal } from '@/components/ui/Modal';
 import { useApp } from '@/state/AppState';
+import { useLibrary } from '@/state/library';
 import { useToast } from '@/state/ToastState';
 import { kv } from '@/lib/kv';
 import { desktop, isDesktop } from '@/lib/desktop';
@@ -36,6 +38,9 @@ const SHORTCUTS: [string, string][] = [
 
 export function SettingsPage() {
   const { settings, updateSettings, resetSettings, zoom, setZoom, cloud, runtime } = useApp();
+  const { aiConfig, setAiConfig } = useLibrary();
+  const [aiDraft, setAiDraft] = useState(aiConfig);
+  const patchAi = (patch: Partial<typeof aiDraft>) => setAiDraft((prev) => ({ ...prev, ...patch }));
   const toast = useToast();
   const [keys, setKeys] = useState<string[]>([]);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -223,6 +228,32 @@ export function SettingsPage() {
                 </li>
               ))}
             </ul>
+          </div>
+        </Card>
+
+        <Card
+          title="AI assistant (optional, your own key)"
+          description="The metadata generator works fully offline. If you add an OpenAI-compatible endpoint, generation tries it first and falls back to the local generator."
+          action={<Bot className="size-4 text-brand" />}
+        >
+          <div className="flex flex-col gap-3">
+            <Field label="Base URL" hint="e.g. https://api.openai.com/v1 or a local Ollama/LM Studio server">
+              <Input value={aiDraft.baseUrl} onChange={(e) => patchAi({ baseUrl: e.target.value })} placeholder="https://api.openai.com/v1" spellCheck={false} />
+            </Field>
+            <Field label="API key" hint="Stored only on this computer; sent only to the base URL above.">
+              <Input type="password" value={aiDraft.apiKey} onChange={(e) => patchAi({ apiKey: e.target.value })} placeholder="sk-…" spellCheck={false} />
+            </Field>
+            <Field label="Model">
+              <Input value={aiDraft.model} onChange={(e) => patchAi({ model: e.target.value })} placeholder="gpt-4o-mini / llama3.1 / qwen2.5" spellCheck={false} />
+            </Field>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={async () => { await setAiConfig(aiDraft); toast.success('AI assistant saved', aiDraft.apiKey ? 'Generation will try your endpoint first.' : 'Endpoint cleared — offline generator only.'); }}>
+                Save AI settings
+              </Button>
+              <Button size="sm" variant="ghost" onClick={async () => { setAiDraft({ baseUrl: '', apiKey: '', model: '' }); await setAiConfig({ baseUrl: '', apiKey: '', model: '' }); toast.info('AI assistant cleared'); }}>
+                Clear
+              </Button>
+            </div>
           </div>
         </Card>
 

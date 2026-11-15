@@ -155,6 +155,149 @@ function registerIpc() {
     }
   });
 
+  /* ---------------- raw file IO for the stock toolkit ---------------- */
+
+  ipcMain.handle('fs:read-base64', async (_event, path) => {
+    try {
+      const buffer = await fs.readFile(String(path));
+      return { ok: true, base64: buffer.toString('base64'), size: buffer.length };
+    } catch (error) {
+      return { ok: false, error: String(error && error.message ? error.message : error) };
+    }
+  });
+
+  ipcMain.handle('fs:write-base64', async (_event, path, base64) => {
+    try {
+      await fs.writeFile(String(path), Buffer.from(String(base64), 'base64'));
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: String(error && error.message ? error.message : error) };
+    }
+  });
+
+  ipcMain.handle('fs:pick-files', async (_event, title) => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+      title: title || 'Import stock files',
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        { name: 'Stock assets', extensions: ['jpg', 'jpeg', 'png', 'eps', 'ai', 'svg', 'webp'] },
+        { name: 'All files', extensions: ['*'] },
+      ],
+    });
+    if (canceled) return { canceled: true, files: [] };
+    const files = [];
+    for (const path of filePaths) {
+      try {
+        const stat = await fs.stat(path);
+        files.push({ path, name: require('node:path').basename(path), size: stat.size });
+      } catch {
+        /* skip unreadable entries */
+      }
+    }
+    return { canceled: false, files };
+  });
+
+  ipcMain.handle('fs:rename', async (_event, from, to) => {
+    try {
+      await fs.rename(String(from), String(to));
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: String(error && error.message ? error.message : error) };
+    }
+  });
+
+  /* ---------------- Real-ESRGAN NCNN-Vulkan (local AI upscaling) ---------------- */
+
+  const upscalerDir = () => path.join(app.getPath('userData'), 'upscaler');
+
+  ipcMain.handle('upscaler:ensure', async (_event, { url, binary, models }) => {
+    try {
+      const dir = upscalerDir();
+      await fs.mkdir(dir, { recursive: true });
+      const binaryPath = path.join(dir, binary);
+      const modelsDir = path.join(dir, 'models');
+
+      const exists = await fs
+        .access(binaryPath)
+        .then(() => true)
+        .catch(() => false);
+
+      if (!exists) {
+        mainWindow?.webContents.send('upscaler:log', `Downloading Real-ESRGAN from ${url} …`);
+        const response = await fetch(url, { redirect: 'follow' });
+        if (!response.ok) throw new Error(`Download failed: HTTP ${response.status}`);
+        const buffer = Buffer.from(await response.arrayBuffer());
+        const zipPath = path.join(dir, 'realesrgan-ncnn-vulkan.zip');
+        await fs.writeFile(zipPath, buffer);
+        const extractZip = require('extract-zip');
+        await extractZip(zipPath, { dir });
+        await fs.unlink(zipPath).catch(() => {});
+        if (process.platform !== 'win32') {
+          await fs.chmod(binaryPath, 0o755).catch(() => {});
+        }
+      }
+
+      const found = [];
+      for (const model of models || []) {
+        const ok = await fs
+          .access(path.join(modelsDir, `${model}.bin`))
+          .then(() => true)
+          .catch(() => false);
+        if (ok) found.push(model);
+      }
+      return { ok: true, path: binaryPath, models: found };
+    } catch (error) {
+      return { ok: false, error: String(error && error.message ? error.message : error) };
+    }
+  });
+
+  ipcMain.handle('upscaler:run', async (_event, args) => {
+    const { spawn } = require('node:child_process');
+    const os = require('node:os');
+    try {
+      const dir = upscalerDir();
+      const binaryPath = path.join(dir, args.binary);
+      const modelsDir = path.join(dir, 'models');
+      const workDir = await fs.mkdtemp(path.join(os.tmpdir(), 'msap-up-'));
+
+      let inputPath = args.inPath;
+      if (!inputPath) {
+        inputPath = path.join(workDir, `input.${args.outFormat === 'jpg' ? 'jpg' : args.outFormat}`);
+        await fs.writeFile(inputPath, Buffer.from(String(args.inBase64), 'base64'));
+      }
+
+      const runPass = (scale, inFile, outFile) =>
+        new Promise((resolve, reject) => {
+          const child = spawn(
+            binaryPath,
+            ['-i', inFile, '-o', outFile, '-s', String(scale), '-n', String(args.modelId), '-m', modelsDir, '-f', String(args.outFormat)],
+            { cwd: dir },
+          );
+          let stderr = '';
+          child.stderr.on('data', (d) => {
+            stderr += d.toString();
+            mainWindow?.webContents.send('upscaler:log', d.toString().trim());
+          });
+          child.on('error', reject);
+          child.on('close', (code) => (code === 0 ? resolve(outFile) : reject(new Error(`realesrgan exited ${code}: ${stderr.slice(-400)}`))));
+        });
+
+      let current = inputPath;
+      const passes = Array.isArray(args.passes) && args.passes.length ? args.passes : [4];
+      for (let i = 0; i < passes.length; i++) {
+        const out = path.join(workDir, `pass${i}.${args.outFormat}`);
+        mainWindow?.webContents.send('upscaler:log', `Pass ${i + 1}/${passes.length} at ${passes[i]}×`);
+        current = await runPass(passes[i], current, out);
+      }
+
+      const outBuffer = await fs.readFile(current);
+      await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
+      return { ok: true, base64: outBuffer.toString('base64') };
+    } catch (error) {
+      return { ok: false, error: String(error && error.message ? error.message : error) };
+    }
+  });
+
   ipcMain.handle('dialog:open-json', async () => {
     try {
       const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {

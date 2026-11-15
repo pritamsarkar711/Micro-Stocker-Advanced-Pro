@@ -2,7 +2,7 @@
   "name": "micro-stocker-advanced-pro",
   "productName": "Micro Stocker Advanced Pro",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Micro Stocker Advanced Pro - fully responsive cross-platform desktop application (Electron + React + TypeScript).",
   "author": "pritamsarkar711",
   "license": "MIT",
@@ -27,6 +27,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",
     "clsx": "^2.1.1",
+    "extract-zip": "^2.0.1",
     "lucide-react": "^1.73.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

@@ -55,6 +55,54 @@ const api = {
   fs: {
     exportText: (payload) => ipcRenderer.invoke('fs:export-text', payload),
     openJson: () => ipcRenderer.invoke('dialog:open-json'),
+    readBytes: async (path) => {
+      const result = await ipcRenderer.invoke('fs:read-base64', path);
+      if (!result.ok) throw new Error(result.error || 'Read failed');
+      const binary = atob(result.base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return bytes;
+    },
+    writeBytes: (path, bytes) => {
+      let binary = '';
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)));
+      }
+      return ipcRenderer.invoke('fs:write-base64', path, btoa(binary));
+    },
+    pickFiles: (title) => ipcRenderer.invoke('fs:pick-files', title),
+    rename: (from, to) => ipcRenderer.invoke('fs:rename', from, to),
+  },
+
+  upscaler: {
+    ensure: (url, binary, models) => ipcRenderer.invoke('upscaler:ensure', { url, binary, models }),
+    run: async (args) => {
+      let inBase64 = args.inBase64;
+      if (!inBase64 && !args.inPath && args.blob) {
+        const bytes = new Uint8Array(await args.blob.arrayBuffer());
+        let binary = '';
+        const chunk = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunk) {
+          binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)));
+        }
+        inBase64 = btoa(binary);
+      }
+      const result = await ipcRenderer.invoke('upscaler:run', {
+        inPath: args.inPath,
+        inBase64,
+        binary: args.binary,
+        modelId: args.modelId,
+        passes: args.passes,
+        outFormat: args.outFormat,
+        quality: args.quality,
+      });
+      if (!result.ok) return { ok: false, error: result.error, log: result.log };
+      const binary = atob(result.base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return { ok: true, blob: new Blob([bytes], { type: `image/${args.outFormat === 'jpg' ? 'jpeg' : args.outFormat}` }), log: result.log };
+    },
   },
 };
 

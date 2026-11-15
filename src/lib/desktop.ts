@@ -2,7 +2,8 @@
  * Typed access to the Electron preload bridge (`window.desktop`).
  *
  * The exact same React code runs in three places:
- *   1. packaged desktop app  -> real bridge (files on disk, native dialogs)
+ *   1. packaged desktop app  -> real bridge (files on disk, native dialogs,
+ *                               native Real-ESRGAN binary)
  *   2. `npm run dev`         -> real bridge
  *   3. plain browser preview -> the fallbacks below (localStorage / downloads)
  *
@@ -36,6 +37,32 @@ export interface ExportPayload {
   filters?: { name: string; extensions: string[] }[];
 }
 
+export interface PickedFile {
+  path: string;
+  name: string;
+  size: number;
+}
+
+export interface UpscalerRunArgs {
+  inPath?: string;
+  inBase64?: string;
+  /** Renderer-side source; the preload converts it to base64 for the IPC call. */
+  blob?: Blob;
+  binary: string;
+  modelId: string;
+  passes: number[];
+  outFormat: 'png' | 'jpg' | 'webp';
+  quality: number;
+  onLog?: (label: string) => void;
+}
+
+export interface UpscalerRunResult {
+  ok: boolean;
+  blob?: Blob;
+  error?: string;
+  log?: string;
+}
+
 export interface DesktopBridge {
   isDesktop: boolean;
   platform: string;
@@ -66,6 +93,14 @@ export interface DesktopBridge {
   fs: {
     exportText: (payload: ExportPayload) => Promise<KvResult<null> & { filePath?: string }>;
     openJson: () => Promise<KvResult<unknown>>;
+    readBytes: (path: string) => Promise<Uint8Array>;
+    writeBytes: (path: string, bytes: Uint8Array) => Promise<KvResult<null>>;
+    pickFiles: (title?: string) => Promise<{ canceled: boolean; files: PickedFile[] }>;
+    rename: (from: string, to: string) => Promise<KvResult<null>>;
+  };
+  upscaler: {
+    ensure: (url: string, binary: string, models: string[]) => Promise<{ ok: boolean; path?: string; models?: string[]; error?: string }>;
+    run: (args: UpscalerRunArgs) => Promise<UpscalerRunResult>;
   };
 }
 
@@ -83,14 +118,13 @@ const LS_PREFIX = 'msap:data:';
 
 const browserInfo = (): AppInfo => ({
   name: 'Micro Stocker Advanced Pro',
-  version: '0.1.0',
+  version: '0.2.0',
   chrome: navigator.userAgent.match(/Chrome\/([\d.]+)/)?.[1] ?? 'unknown',
   platform: 'browser',
   isDev: import.meta.env.DEV,
 });
 
-function downloadText(filename: string, text: string) {
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+function downloadBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -99,6 +133,10 @@ function downloadText(filename: string, text: string) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+function downloadText(filename: string, text: string) {
+  downloadBlob(filename, new Blob([text], { type: 'text/plain;charset=utf-8' }));
 }
 
 function pickJsonFile(): Promise<KvResult<unknown>> {
@@ -125,6 +163,9 @@ function pickJsonFile(): Promise<KvResult<unknown>> {
 }
 
 let browserZoom = 1;
+function applyBrowserZoom() {
+  document.documentElement.style.fontSize = `${browserZoom * 100}%`;
+}
 
 const browserBridge: DesktopBridge = {
   isDesktop: false,
@@ -195,13 +236,21 @@ const browserBridge: DesktopBridge = {
       return { ok: true, value: null };
     },
     openJson: pickJsonFile,
+    readBytes: async () => {
+      throw new Error('Direct disk access requires the desktop build. Import files with the picker instead.');
+    },
+    writeBytes: async (_path, bytes) => {
+      downloadBlob(_path.split(/[\\/]/).pop() ?? 'file.bin', new Blob([bytes as unknown as BlobPart]));
+      return { ok: true, value: null };
+    },
+    pickFiles: async () => ({ canceled: true, files: [] }),
+    rename: async () => ({ ok: false, error: 'Renaming on disk requires the desktop build.' }),
+  },
+  upscaler: {
+    ensure: async () => ({ ok: false, error: 'Real-ESRGAN runs in the desktop build only.' }),
+    run: async () => ({ ok: false, error: 'Real-ESRGAN runs in the desktop build only. Use the built-in resampler here.' }),
   },
 };
-
-function applyBrowserZoom() {
-  // rem-based layout: scaling the root font size scales the whole UI.
-  document.documentElement.style.fontSize = `${browserZoom * 100}%`;
-}
 
 export const desktop: DesktopBridge = window.desktop ?? browserBridge;
 export const isDesktop = desktop.isDesktop;

@@ -1,131 +1,97 @@
 # Micro Stocker Advanced Pro
 
-> Fully responsive **cross-platform desktop application** — Electron + React + TypeScript.
-> Status: **foundation complete**, feature modules pending the business spec.
+> All-in-one **desktop workbench for microstock contributors** — metadata generation,
+> per-platform CSV export, embedded IPTC/XMP writing, platform validation and
+> local open-source AI upscaling to 8K. Electron + React + TypeScript.
 
 ![icon](resources/icon-256.png)
 
-## What this repository currently is
+## What it does
 
-A production-grade desktop-app skeleton you can actually run:
-
-| Area | Delivered |
+| Module | Delivered |
 | --- | --- |
-| **Responsive shell** | Sidebar ⇄ icon rail ⇄ drawer ⇄ bottom tab bar; tables collapse into cards; fluid `clamp()` typography; works from **360 px to 4K** |
-| **Desktop runtime** | Electron 45 main process with sandboxed preload, secure IPC (files, dialogs, zoom, theme, external links), single-instance lock, native menu |
-| **Data layer** | Offline key/value store (JSON files in `userData` on desktop, `localStorage` in browser) **plus** a Supabase cloud adapter with runtime credential entry, connection tester and generated SQL schema (incl. offline `sync_queue`) |
-| **UI kit** | Buttons, cards, badges, fields, switches, segmented control, modal/bottom-sheet, tabs, responsive `DataTable` with sorting, stat cards, toasts, empty states, code block with copy |
-| **Theming** | Light/dark/system, compact density, reduced motion, user UI-scale 60–200 % (`Ctrl +/-/0`), currency-aware formatting (BDT default) |
-| **QA tooling** | Built-in **Responsive Lab**: live viewport readout, breakpoint ruler, real app rendered inside device-width frames (360/390/768/1024/1280/1600 px) |
-| **Packaging** | electron-builder config for Windows NSIS installer + portable, macOS dmg, Linux AppImage/deb; GitHub Actions workflow builds and publishes real installers on tag push |
+| **Library** | Import EPS / AI / SVG / JPG / PNG / WebP (native picker on desktop, file chooser in preview). Existing IPTC/XMP is read on import. Vector sizes parsed from `%%BoundingBox` / `viewBox`; raster sizes probed without full decode. |
+| **Metadata generation** | Offline generator: filename tokens → subject synonyms → style & category banks → ordered, de-duplicated keywords, title + description sentences. Optional BYO OpenAI-compatible endpoint (Settings → AI assistant) with automatic fallback. |
+| **Per-platform adaptation** | Caps, minimums, comma-safety and keyword ordering (Adobe/Vecteezy/Getty put title words in the top 10) applied at export time per platform. |
+| **CSV export** | Exact dialects: Shutterstock (header, comma, Description = title, Categories/flags), Adobe Stock (exact template, ≤5 000 rows / 1 MB, 30-char filenames), **Freepik (semicolon, single quotes, NO header, `_ai_generated` tag)**, Dreamstime, 123RF (+Country), Depositphotos (Editorial/Nudity), Vecteezy (License column, quoted keywords). Pixabay/Getty/Alamy get a copy-paste sheet (they have no CSV importer). UTF-8 + BOM. |
+| **Embedded metadata** | Pure-TS XMP/IPTC writer: JPEG APP1, PNG iTXt (CRC-fixed), SVG `<metadata>`, EPS/AI PostScript header; WebP replace-only with honest limitation message. 2 KB padding for in-place edits. `.msap-backup` copies on desktop. |
+| **Validation** | Per platform: formats, MP window, file-size min/max, filename charset/length, keyword min/max/special chars, title/description rules, EPS+JPG pairing, AI policy (forbidden vs disclosure), embedded-metadata reminders. |
+| **Upscale studio** | Engines: built-in high-quality resampler (everywhere) + **Real-ESRGAN NCNN-Vulkan** (desktop: one-click download of the BSD-3 portable binary from GitHub, runs on your GPU, models `realesrgan-x4plus/-x2plus/-x4plus-anime/realesrnet-x4plus/realesr-animevideov3`). Scale plans chain 2/3/4× passes to hit presets incl. **8K (7680×4320)** and per-platform minimums. Custom NCNN model folder supported. |
+| **Platforms reference** | 10 marketplaces with researched limits (Nov 2026), CSV dialects, vector rules, AI policies and source tags (official / community). |
+| **Responsive shell** | Sidebar rail ⇄ drawer ⇄ bottom tabs, fluid type, 360 px → 4K, dark/light/system, density, 60–200 % UI scale, keyboard shortcuts, Responsive Lab device simulator. |
+| **Cloud (optional)** | Supabase adapter with runtime credentials, connection tester and generated SQL (incl. offline `sync_queue`). App is fully functional offline without it. |
+
+## Supported marketplaces
+
+Shutterstock · Adobe Stock · Freepik (Magnific) · Pixabay · Dreamstime · 123RF ·
+Depositphotos · Vecteezy · Getty Images/iStock · Alamy — plus aggregator notes
+(Wirestock etc.). See **Platforms** page in-app for the full rule matrix.
 
 ## Requirements
 
-- **Node.js 20.19+ / 22.12+** (22 LTS recommended)
-- npm 10+
-- Optional: a [Supabase](https://supabase.com) project if you want cloud sync (the app runs fully offline without one)
+- Node.js 20.19+ / 22.12+ (22 LTS recommended), npm 10+
+- Optional: Supabase project (cloud sync), optional AI endpoint key
+- Real-ESRGAN needs a Vulkan-capable GPU for speed; CPU works but is slow
 
 ## Quick start
 
 ```bash
 npm install          # installs deps + Electron (~120 MB binary)
 npm run dev          # Vite dev server + Electron window with hot reload
-```
-
-Other useful commands:
-
-```bash
-npm run dev:web      # renderer only in a browser — test on your phone over LAN
+npm run dev:web      # renderer only in a browser (phone testing over LAN)
 npm run verify       # type check + production build
-npm run dist:win     # Windows installer   -> release/
-npm run dist:mac     # macOS dmg           -> release/
-npm run dist:linux   # AppImage + deb      -> release/
+npm run dist:win     # Windows installer -> release/  (also dist:mac / dist:linux)
 ```
 
-> The dev window opens with DevTools detached. Minimum window size is
-> **360 × 560** on purpose — the layout is designed to stay usable down to phone width.
+First run of the Upscale studio with the AI engine downloads the portable
+Real-ESRGAN build (~40 MB, BSD-3-Clause) into your user-data folder; after that
+everything runs locally with no uploads.
 
-## Cloud (Supabase)
+## Getting real installers
 
-1. Create a project at supabase.com.
-2. Open the app → **Cloud connection** → copy the SQL shown there into
-   *Supabase Studio → SQL Editor* and run it (creates `app_meta`, `kv_store`,
-   `sync_queue` + RLS policies).
-3. Paste the **project URL** and the **anon public key** into the same screen and
-   press **Save & connect**. The badge in the top bar turns green when reachable.
-
-Alternatively bake them in at build time via `.env.local` (see `.env.example`).
-**Never** put a `service_role` key in the desktop app.
-
-Credentials are stored only on the local machine
-(`userData/app-data/msap:cloud-config.json` on desktop, `localStorage` in preview).
-
-## Getting real installers (without building here)
-
-Installers are 100–300 MB, so they are produced by GitHub's runners using the
-workflow template shipped at **`docs/ci/build-desktop-installers.yml`**.
-The sandbox is not allowed to create files under `.github/workflows/`, so copy
-that file into `.github/workflows/build.yml` once (via the GitHub web UI or a
-local push — instructions are written at the top of the file). Then:
+Installers are 100–300 MB, so GitHub's runners build them. Copy
+`docs/ci/build-desktop-installers.yml` to `.github/workflows/build.yml`
+(the sandbox cannot create workflow files), then:
 
 ```bash
-git tag v0.1.0 && git push origin v0.1.0
+git tag v0.2.0 && git push origin v0.2.0
 ```
 
-The workflow builds Windows/macOS/Linux artifacts and publishes a
-**GitHub Release** with the `.exe`, `.dmg`, `.AppImage` and `.deb`.
-You can also trigger it manually from the **Actions** tab.
+The workflow publishes `.exe` / `.dmg` / `.AppImage` / `.deb` as a GitHub Release.
 
 ## Project structure
 
 ```
-electron/            main process (CJS, no build step) + sandboxed preload
-  main.cjs           window, menus, secure IPC handlers, local file store
-  preload.cjs        contextBridge -> window.desktop
+electron/            main process + sandboxed preload (file IO, dialogs,
+                     Real-ESRGAN download/spawn, zoom, theme, single instance)
 src/
-  App.tsx            HashRouter + providers (file:// safe routing)
-  index.css          Tailwind v4 design tokens, light/dark, print, a11y
   components/
-    layout/          AppShell, Sidebar, Topbar, MobileTabBar, PageHeader, Logo
-    ui/              Button, Card, Badge, Field, Modal, Tabs, DataTable, …
-  hooks/             useViewport, useMediaQuery (breakpoint logic)
-  lib/               desktop bridge, kv store, formatters, cloud (Supabase)
-  pages/             Overview, Cloud, ResponsiveLab, Settings, About, 404
-  state/             AppProvider (settings/cloud/zoom), ToastProvider
-resources/           app icons (png + ico) used by electron-builder
-.github/workflows/   installer builds + GitHub Release publishing
+    layout/          responsive shell (sidebar/topbar/tab bar/page header)
+    stock/           ItemEditor drawer (metadata / platforms / embed tabs)
+    ui/              design-system kit incl. responsive DataTable
+  lib/stock/         domain core:
+                     types, platforms (researched registry), metadata
+                     generator, csv writers, validators, xmp embedder,
+                     files (probing/sanitising), upscale/{classic,models,engine}
+  pages/             Overview, Library, Export, Upscale, Platforms,
+                     Cloud, Responsive lab, Settings, About, 404
+  state/             AppProvider (settings/cloud/zoom), LibraryProvider,
+                     ToastProvider
+resources/           app icons (png + ico)
+docs/ci/             installer workflow template
 ```
 
-## Responsive guarantees
+## Honest limitations
 
-| Width | Navigation | Content |
-| --- | --- | --- |
-| < 640 px | drawer + bottom tab bar | single column, dialogs = bottom sheets |
-| 640–1023 px | drawer | 2-column grids, tables replace card lists |
-| 1024–1279 px | auto-collapsed icon rail | 3-column dashboards |
-| ≥ 1280 px | full labelled sidebar | dense multi-column workspace |
-| ≥ 1536 px | full sidebar | extra columns instead of stretched content |
-
-Everything is rem-based, so Windows display scaling (125 %/150 %) and the in-app
-**UI scale** slider both reflow the layout instead of clipping it. Touch devices
-automatically get 44 px minimum hit targets.
-
-## Keyboard shortcuts
-
-| Combo | Action |
-| --- | --- |
-| `Ctrl/⌘ K` | focus search |
-| `Ctrl/⌘ B` | collapse/expand sidebar |
-| `Ctrl/⌘ =` / `Ctrl/⌘ -` | UI scale up / down |
-| `Ctrl/⌘ 0` | reset UI scale |
-| `Esc` | close dialog / drawer |
-
-## What comes next (blocked on the spec)
-
-The business description of “Micro Stocker Advanced Pro” has not been provided
-yet. Once it is, the first complete module (UI + local data + cloud sync +
-tests) will be built here as the pattern for the rest.
+- PDF-based `.ai` files keep XMP in compressed streams — embed into the paired
+  EPS/JPG instead (the app says so rather than corrupting the file).
+- WebP without an existing XMP chunk needs a VP8X rewrite; export PNG/JPG instead.
+- Real-ESRGAN runs in the desktop build only (native binary); the browser
+  preview uses the built-in resampler.
+- Platform limits change; values tagged `community` in-app are re-check targets.
+- Releases/model/property release PDFs live in each portal — the app tracks the
+  flags and reminds you.
 
 ## Licence
 
-MIT — © 2026 pritamsarkar711
+MIT — © 2026 pritamsarkar711. Real-ESRGAN: BSD-3-Clause (Tencent ARC Lab).
