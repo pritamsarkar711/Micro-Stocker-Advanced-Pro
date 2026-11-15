@@ -49,15 +49,15 @@ export function AboutPage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
         <Card>
           <div className="flex items-center gap-3">
-            <Logo size={40} />
+            <Logo size={44} />
             <div className="min-w-0 flex-1">
-              <p className="text-[0.9375rem] font-semibold tracking-tight text-fg">
+              <p className="display truncate text-[1rem] font-extrabold tracking-[-0.02em] text-fg">
                 Micro Stocker Advanced Pro
               </p>
-              <p className="text-[0.75rem] text-fg-muted">
+              <p className="nums truncate text-[0.75rem] text-fg-muted">
                 v{runtime.version} · © 2026 pritamsarkar711
               </p>
             </div>
@@ -66,12 +66,10 @@ export function AboutPage() {
             </Badge>
           </div>
 
-          <dl className="mt-3 divide-y divide-line border-t border-line">
+          <dl className="mt-4 divide-y divide-line border-t border-line">
             {rows.map(([label, value]) => (
-              <div key={label} className="flex items-baseline justify-between gap-3 py-1.5">
-                <dt className="shrink-0 text-[0.6875rem] tracking-[0.04em] text-fg-subtle uppercase">
-                  {label}
-                </dt>
+              <div key={label} className="flex items-baseline justify-between gap-3 py-2">
+                <dt className="shrink-0 text-[0.75rem] text-fg-subtle">{label}</dt>
                 <dd className="truncate font-mono text-[0.6875rem] text-fg-muted" title={value}>
                   {value}
                 </dd>
@@ -80,11 +78,11 @@ export function AboutPage() {
           </dl>
         </Card>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           <Card title="Stack">
             <ul className="divide-y divide-line">
               {STACK.map(([name, role]) => (
-                <li key={name} className="flex items-center gap-2 py-1.5">
+                <li key={name} className="flex items-center gap-2 py-2">
                   <Layers className="size-3.5 shrink-0 text-brand" />
                   <span className="flex-1 truncate text-[0.8125rem] text-fg">{name}</span>
                   <span className="text-[0.6875rem] text-fg-subtle">{role}</span>
@@ -94,11 +92,10 @@ export function AboutPage() {
           </Card>
 
           <Card title="Licence">
-            <p className="text-[0.75rem] text-fg-muted">
-              Source-available proprietary licence. Personal and commercial use of
-              official builds; no redistribution, rebranding or resale.
+            <p className="text-[0.75rem] leading-relaxed text-fg-muted">
+              Source-available. Free for personal and commercial work; no resale.
             </p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
+            <div className="mt-3 flex flex-wrap gap-1.5">
               <Button
                 size="xs"
                 variant="outline"

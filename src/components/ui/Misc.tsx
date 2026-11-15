@@ -34,11 +34,11 @@ export function EmptyState({
         className,
       )}
     >
-      <div className="flex size-12 items-center justify-center rounded-md bg-surface-3 text-fg-subtle">
-        {icon ?? <Inbox className="size-7" />}
+      <div className="flex size-12 items-center justify-center r-control border border-line bg-surface-2 text-fg-subtle">
+        {icon ?? <Inbox className="size-6" />}
       </div>
       <div className="max-w-md">
-        <p className="text-sm font-semibold text-fg sm:text-base">{title}</p>
+        <p className="display text-[0.9375rem] font-semibold text-fg">{title}</p>
         {description && (
           <p className="mt-1 text-xs text-fg-muted sm:text-sm">{description}</p>
         )}
@@ -78,7 +78,7 @@ export function CodeBlock({
   };
 
   return (
-    <div className="overflow-hidden rounded-[0.375rem] border border-line bg-surface-2">
+    <div className="overflow-hidden r-control border border-line bg-surface-2">
       <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-2">
         <span className="font-mono text-[0.6875rem] tracking-wide text-fg-subtle uppercase">
           {language}
@@ -104,12 +104,12 @@ export function CodeBlock({
 
 export function KeyHint({ children }: { children: ReactNode }) {
   return (
-    <kbd className="rounded-md border border-line-strong bg-surface-2 px-1.5 py-0.5 font-mono text-[0.6875rem] text-fg-muted">
+    <kbd className="r-chip border border-line-strong bg-surface-2 px-1.5 py-0.5 font-mono text-[0.6875rem] text-fg-muted">
       {children}
     </kbd>
   );
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={clsx('animate-pulse rounded-md bg-surface-3', className)} />;
+  return <div className={clsx('animate-pulse r-control bg-surface-3', className)} />;
 }

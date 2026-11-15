@@ -108,7 +108,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <div
               key={toast.id}
               className={clsx(
-                'pointer-events-auto flex w-full max-w-sm items-start gap-2.5 rounded-md border bg-surface p-2.5 shadow-[var(--shadow-pop)]',
+                'pointer-events-auto flex w-full max-w-sm items-start gap-2.5 rounded-xl border border-line bg-surface p-3 shadow-[var(--shadow-pop)]',
                 tone.box,
               )}
               style={{ animation: 'toast-in 180ms ease-out both' }}
@@ -124,7 +124,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 type="button"
                 onClick={() => dismiss(toast.id)}
                 aria-label="Dismiss notification"
-                className="rounded-md p-1 text-fg-subtle transition hover:bg-surface-3 hover:text-fg"
+                className="r-control p-1 text-fg-subtle transition hover:bg-surface-3 hover:text-fg"
               >
                 <X className="size-4" />
               </button>

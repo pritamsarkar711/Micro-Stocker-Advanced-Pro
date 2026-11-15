@@ -20,16 +20,16 @@ export function PageHeader({
   return (
     <div
       className={clsx(
-        'mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2',
+        'mb-4 flex flex-wrap items-end justify-between gap-x-3 gap-y-2',
         className,
       )}
     >
       <div className="min-w-0">
-        <h1 className="truncate text-[1.0625rem] font-semibold tracking-tight text-fg">
+        <h1 className="display truncate text-[1.375rem] leading-tight font-extrabold tracking-[-0.025em] text-fg">
           {title}
         </h1>
         {description && (
-          <p className="mt-0.5 truncate text-[0.75rem] text-fg-muted">{description}</p>
+          <p className="mt-1 truncate text-[0.8125rem] text-fg-muted">{description}</p>
         )}
       </div>
       {actions && (

@@ -13,10 +13,9 @@ export function PlatformsPage() {
     <>
       <PageHeader
         title="Platforms"
-        description={`${PLATFORM_LIST.length} marketplaces · verified Nov 2026`}
       />
 
-      <div className="grid grid-cols-1 gap-2 lg:grid-cols-2 2xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3">
         {PLATFORM_LIST.map((platform) => (
           <Card
             key={platform.id}
@@ -37,7 +36,7 @@ export function PlatformsPage() {
               </Button>
             }
           >
-            <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5">
               <Row label="Photo" value={platform.formats.photo.map((f) => f.toUpperCase()).join(', ') || '—'} />
               <Row label="Vector" value={platform.formats.vector.map((f) => f.toUpperCase()).join(', ') || '—'} />
               <Row
@@ -52,7 +51,7 @@ export function PlatformsPage() {
               <Row label="CSV" value={platform.csv ? (platform.csv.delimiter === ';' ? 'semicolon · no header' : 'comma · header') : 'portal form'} />
             </dl>
 
-            <div className="mt-2 flex flex-wrap gap-1">
+            <div className="mt-3 flex flex-wrap gap-1">
               <Badge tone={platform.aiPolicy === 'forbidden' ? 'danger' : 'warn'}>
                 {platform.aiPolicy === 'forbidden' ? 'No AI' : 'AI labelled'}
               </Badge>

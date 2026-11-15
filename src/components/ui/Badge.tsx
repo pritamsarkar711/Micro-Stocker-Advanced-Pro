@@ -9,7 +9,7 @@ const TONES: Record<BadgeTone, string> = {
   ok: 'bg-ok-soft text-ok',
   warn: 'bg-warn-soft text-warn',
   danger: 'bg-danger-soft text-danger',
-  outline: 'border border-line text-fg-muted',
+  outline: 'border border-line-strong bg-surface text-fg-muted',
 };
 
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
@@ -32,8 +32,8 @@ export function Badge({
     <span
       className={clsx(
         'inline-flex items-center gap-1.5 font-medium whitespace-nowrap',
-        'rounded-[0.25rem]',
-        size === 'sm' ? 'px-1.5 py-0.5 text-[0.6875rem]' : 'px-2 py-0.5 text-xs',
+        'r-chip',
+        size === 'sm' ? 'px-1.5 py-[0.125rem] text-[0.6875rem]' : 'px-2 py-0.5 text-xs',
         TONES[tone],
         className,
       )}

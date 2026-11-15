@@ -18,6 +18,17 @@ import { SHUTTERSTOCK_CATEGORIES } from '@/lib/stock/categories';
 import { detectFormat, formatBytes, bytesToBase64, base64ToBytes } from '@/lib/stock/files';
 import { buildXmpPacket, embedMetadata, parseXmpPacket, readEmbeddedMetadata } from '@/lib/stock/xmp';
 import { analyzeEps, analyzeSvg, sanitizeSvg } from '@/lib/stock/vectorcheck';
+import {
+  AI_PROVIDERS,
+  EMPTY_AI_SETTINGS,
+  getProvider,
+  isAiReady,
+  normalizeMetadata,
+  resolvedModel,
+} from '@/lib/stock/ai';
+import { planScale, TARGET_PRESETS } from '@/lib/stock/upscale/engine';
+import { can, entitlements, FREE_FEATURES, PRO_FEATURES, resolveEdition } from '@/lib/edition';
+import { UPSCALE_MODELS, isBundledModel } from '@/lib/stock/upscale/models';
 import { detectMapping, mapRows, monthlySeries, parseDelimited, platformTotals, topTitles } from '@/lib/stock/sales';
 import { PLATFORM_CAPS, STATUS_ORDER, countByStatus, setStatus, statusOf } from '@/lib/stock/submissions';
 import { DEFAULT_FLAGS, EMPTY_METADATA, kindOf, megapixels, type StockItem } from '@/lib/stock/types';
@@ -549,6 +560,137 @@ test('base64 conversion round-trips binary data', () => {
   const restored = base64ToBytes(bytesToBase64(bytes));
   equal(restored.length, bytes.length, 'length preserved');
   equal(restored[0], bytes[0], 'first byte preserved');
+});
+
+
+/* =========================== AI provider layer =========================== */
+
+group('AI providers');
+
+test('every provider has a usable default model and base URL shape', () => {
+  for (const provider of AI_PROVIDERS) {
+    if (provider.id === 'offline') {
+      equal(provider.defaultModel, '', 'offline has no model');
+      continue;
+    }
+    assert(provider.defaultModel.length > 0, `${provider.id} has a default model`);
+    assert(/^https?:\/\//.test(provider.baseUrl), `${provider.id} has an absolute base URL`);
+    equal(provider.baseUrl.endsWith('/'), false, `${provider.id} has no trailing slash`);
+  }
+});
+
+test('the built-in generator is always available; cloud needs a key', () => {
+  equal(isAiReady(EMPTY_AI_SETTINGS), false, 'offline is never "AI ready"');
+  equal(isAiReady({ ...EMPTY_AI_SETTINGS, provider: 'ollama' }), true, 'local needs no key');
+  equal(
+    isAiReady({ ...EMPTY_AI_SETTINGS, provider: 'openrouter', apiKey: '  ' }),
+    false,
+    'blank key is not a key',
+  );
+  equal(
+    isAiReady({ ...EMPTY_AI_SETTINGS, provider: 'openrouter', apiKey: 'sk-x' }),
+    true,
+    'key + default model is ready',
+  );
+});
+
+test('an empty model falls back to the provider default, an override wins', () => {
+  const settings = { ...EMPTY_AI_SETTINGS, provider: 'gemini' as const };
+  equal(resolvedModel(settings), getProvider('gemini').defaultModel);
+  equal(resolvedModel({ ...settings, model: 'gemini-1.5-flash' }), 'gemini-1.5-flash');
+});
+
+test('unknown provider ids fall back to the built-in generator', () => {
+  equal(getProvider('nope' as never).id, 'offline');
+});
+
+test('model JSON is normalised: weak keywords dropped, limits enforced', () => {
+  const raw = {
+    title: '  A golden retriever puppy sits on grass  ',
+    description: 'A puppy in a field.',
+    keywords: ['Dog', 'dog', 'a', 'golden retriever', ' puppy ', '', 'pet'],
+  };
+  const result = normalizeMetadata(raw, 'shutterstock');
+  equal(result.title.startsWith('A golden'), true, 'title trimmed, not lowercased');
+  includes(result.keywords.join(' '), 'dog', 'keywords lowercased');
+  equal(result.keywords.filter((k) => k === 'dog').length, 1, 'duplicates removed');
+  equal(result.keywords.includes('a'), false, 'one-letter noise removed');
+  equal(result.keywords.every((k) => k === k.trim()), true, 'keywords trimmed');
+});
+
+test('an empty AI reply normalises to empty fields, never undefined', () => {
+  const result = normalizeMetadata({}, 'adobe');
+  equal(result.title, '');
+  equal(result.description, '');
+  equal(result.keywords.length, 0);
+  equal(result.categories.length, 0);
+});
+
+/* ============================ upscale engine ============================= */
+
+group('Upscale planning');
+
+test('every bundled model is 4x — the NCNN build has no other weights', () => {
+  for (const model of UPSCALE_MODELS) {
+    equal(model.nativeScale, 4, `${model.id} is 4x`);
+    equal(isBundledModel(model.id), true);
+    equal(model.commercialUse, true, `${model.id} is commercially usable`);
+  }
+  equal(isBundledModel('realesrgan-x2plus'), false, 'the Python-only 2x model is not listed');
+});
+
+test('a 4x pass is used when one pass reaches the target', () => {
+  const item = { id: 'a', width: 2000, height: 1500 } as never;
+  const plan = planScale(item, TARGET_PRESETS.find((p) => p.id === '4k')!);
+  equal(plan.passes.length, 1);
+  equal(plan.passes[0], 4);
+});
+
+test('a 2-8 MP source needs 4x4x4 to reach 8K and never asks for 2x/3x', () => {
+  const item = { id: 'a', width: 1000, height: 750 } as never;
+  const plan = planScale(item, TARGET_PRESETS.find((p) => p.id === '8k')!);
+  equal(plan.passes.every((p) => p === 4), true, 'only 4x passes are ever issued');
+  assert(plan.finalScale >= 7680 / 1000, 'reaches the target width');
+  assert(plan.tailScale >= 1, 'tail resize is never a downscale');
+});
+
+test('the exact target is met by the tail resize, not by a fake model scale', () => {
+  const item = { id: 'a', width: 1500, height: 1000 } as never;
+  const plan = planScale(item, TARGET_PRESETS.find((p) => p.id === 'adobe')!);
+  const landed = 1500 * plan.passes.reduce((a, b) => a * b, 1) * plan.tailScale;
+  assert(landed >= 1500 * plan.finalScale - 1, 'tail resize closes the gap');
+});
+
+test('an already-large image is never enlarged past the cap', () => {
+  const item = { id: 'a', width: 12000, height: 9000 } as never;
+  const plan = planScale(item, TARGET_PRESETS.find((p) => p.id === 'min-all')!);
+  assert(plan.finalScale <= 1.001, 'no enlargement needed');
+  assert(plan.tailScale >= 1, 'tail never downscales');
+});
+
+/* ================================ editions =============================== */
+
+group('Editions');
+
+test('the shipped edition is free and grants every feature it declares', () => {
+  equal(resolveEdition(), 'free');
+  const current = entitlements();
+  for (const feature of FREE_FEATURES) {
+    assert(current.can(feature), `${feature} must work without paying`);
+  }
+});
+
+test('no feature is gated yet — Pro exists only as a seam', () => {
+  equal(PRO_FEATURES.length, 0, 'nothing is reserved for the paid edition');
+  equal(can('metadata.ai.local'), true);
+  equal(can('metadata.ai.byok'), true);
+});
+
+test('a hypothetical pro edition is a superset of free, never a subset', () => {
+  const free = entitlements('free');
+  const pro = entitlements('pro');
+  equal(pro.edition, 'pro');
+  for (const feature of free.features) assert(pro.can(feature), `${feature} lost in pro`);
 });
 
 /* ================================ summary ================================ */

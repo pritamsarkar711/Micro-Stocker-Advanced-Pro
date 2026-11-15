@@ -164,7 +164,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void desktop.theme.set(settings.theme);
 
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', dark ? '#070b16' : '#f4f6fb');
+    if (meta) meta.setAttribute('content', dark ? '#0e1216' : '#f4f6f8');
 
     if (settings.theme !== 'system') return;
     const mql = window.matchMedia('(prefers-color-scheme: dark)');

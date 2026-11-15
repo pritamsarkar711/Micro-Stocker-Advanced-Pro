@@ -18,6 +18,33 @@ below. Their licences continue to govern those components.
 | clsx | MIT | Class utilities |
 | Vite, TypeScript, esbuild | MIT / Apache-2.0 | Build tooling (not shipped) |
 
+## Bundled assets
+
+| Asset | Licence | Use |
+| --- | --- | --- |
+| Inter (variable, latin) | SIL Open Font License 1.1 | UI body text, self-hosted in `public/fonts/` |
+| Manrope (variable, latin) | SIL Open Font License 1.1 | Display/headings, self-hosted in `public/fonts/` |
+
+Both font files are unmodified latin subsets redistributed under the OFL; the
+licence text ships with the packages published on npm as
+`@fontsource-variable/inter` and `@fontsource-variable/manrope`. No font is
+fetched from a third-party server at runtime.
+
+## Bundled upscaling engine (downloaded on request)
+
+| Component | Licence | Use |
+| --- | --- | --- |
+| Real-ESRGAN weights (`realesrgan-x4plus`, `realesrnet-x4plus`, `realesrgan-x4plus-anime`, `realesr-animevideov3`) | BSD-3-Clause | Local GPU upscaling |
+| Real-ESRGAN ncnn-vulkan binary | MIT | Runs the weights on the user's GPU, downloaded on request |
+
+The binary is **not** redistributed with this repository. It is downloaded from
+the upstream `xinntao/Real-ESRGAN` release at the user's request and run
+entirely offline afterwards. Output produced with it may be sold; check each
+marketplace's AI-disclosure policy separately.
+
+Models deliberately **not** bundled: 4x-UltraSharp (CC BY-NC-SA 4.0),
+SUPIR (non-commercial) and NMKD Siax (custom terms).
+
 ## Brand marks
 
 Platform marks are drawn from **simple-icons** (CC0-1.0, public domain data)

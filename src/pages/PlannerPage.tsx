@@ -85,7 +85,7 @@ export function PlannerPage() {
       primary: true,
       render: (row) => (
         <span className="flex min-w-0 items-center gap-2">
-          {row.item.thumbUrl ? <img src={row.item.thumbUrl} alt="" className="size-8 shrink-0 rounded-md border border-line object-cover" /> : <span className="size-8 shrink-0 rounded-md border border-line bg-surface-2" />}
+          {row.item.thumbUrl ? <img src={row.item.thumbUrl} alt="" className="size-8 shrink-0 r-chip border border-line object-cover" /> : <span className="size-8 shrink-0 r-chip border border-line bg-surface-2" />}
           <span className="min-w-0">
             <span className="block truncate font-medium text-fg">{row.item.name}</span>
             <span className="block truncate text-[0.625rem] text-fg-subtle">{row.item.metadata.title || 'no title'}</span>
@@ -136,7 +136,7 @@ export function PlannerPage() {
   return (
     <>
       <PageHeader
-        title="Submission planner"
+        title="Planner"
         
         actions={
           <span className="flex w-full items-center gap-2 sm:w-auto">
@@ -154,9 +154,13 @@ export function PlannerPage() {
           {STATUS_ORDER.map((status) => {
             const StatusIcon = STATUS_ICON[status];
             return (
-              <div key={status} className="card flex items-center gap-3 p-3.5">
-                <Badge tone={STATUS_TONE[status]} icon={<StatusIcon className="size-3" />}>{status}</Badge>
-                <p className="ml-auto text-xl font-semibold text-fg tabular-nums">{counts[status]}</p>
+              <div key={status} className="card flex items-center gap-2.5 px-3.5 py-2.5">
+                <Badge tone={STATUS_TONE[status]} icon={<StatusIcon className="size-3" />}>
+                  {status}
+                </Badge>
+                <p className="nums display ml-auto text-[1.25rem] leading-none font-extrabold text-fg">
+                  {counts[status]}
+                </p>
               </div>
             );
           })}
@@ -164,15 +168,15 @@ export function PlannerPage() {
       </PageHeader>
 
       {(firstBatchIssue || monthlyIssue || cap) && (
-        <Card className="mb-4" title={`${spec.name} publishing caps`} action={<CalendarClock className="size-4 text-brand" />}>
+        <Card className="mb-3" title={`${spec.name} caps`} action={<CalendarClock className="size-4 text-brand" />}>
           {cap && <p className="text-xs text-fg-muted">{cap.note}</p>}
           {firstBatchIssue && (
-            <p className="mt-2 flex items-start gap-2 rounded-lg bg-warn-soft px-3 py-2 text-xs leading-relaxed text-warn">
+            <p className="mt-2 flex items-start gap-2 r-control bg-warn-soft px-3 py-2 text-[0.75rem] leading-relaxed text-warn">
               <TriangleAlert className="mt-0.5 size-4 shrink-0" /> {firstBatchIssue}
             </p>
           )}
           {monthlyIssue && (
-            <p className="mt-2 flex items-start gap-2 rounded-lg bg-surface-2 px-3 py-2 text-xs text-fg-muted">
+            <p className="mt-2 flex items-start gap-2 r-control bg-surface-2 px-3 py-2 text-[0.75rem] text-fg-muted">
               <CalendarClock className="mt-0.5 size-4 shrink-0" /> {monthlyIssue}
             </p>
           )}
@@ -187,7 +191,7 @@ export function PlannerPage() {
                 toast.success('Eligible files queued', `${eligible.length} validation-clean file(s) marked queued for ${spec.name}.`);
               }}
             >
-              Queue all eligible ({eligible.length})
+              Queue eligible ({eligible.length})
             </Button>
             <Button
               size="sm"
@@ -207,9 +211,9 @@ export function PlannerPage() {
 
       <Card flush>
         {!ready ? (
-          <p className="p-6 text-center text-sm text-fg-muted">Loading planner…</p>
+          <p className="p-6 text-center text-[0.8125rem] text-fg-subtle">Loading…</p>
         ) : rows.length === 0 ? (
-          <EmptyState icon={<ListChecks className="size-7" />} title="No files" description="Import files to start tracking." />
+          <EmptyState icon={<ListChecks className="size-7" />} title="No files" />
         ) : (
           <DataTable rows={rows} columns={columns} rowKey={(row) => row.item.id} dense footer={`${eligible.length} of ${rows.length} files currently pass ${spec.name} validation.`} />
         )}

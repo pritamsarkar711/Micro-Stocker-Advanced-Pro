@@ -120,7 +120,11 @@ export function LibraryPage() {
       concepts: [],
     });
     setBusy(false);
-    toast.success(`Metadata generated for ${result.done} file${result.done === 1 ? '' : 's'}`, result.aiUsed ? `${result.aiUsed} via your AI endpoint` : 'Local generator (offline)');
+    const detail = result.aiUsed
+      ? `${result.aiUsed} of ${result.done} via ${result.providerLabel}`
+      : 'Built-in generator (offline)';
+    if (result.error) toast.error(`AI failed — used offline instead`, result.error);
+    else toast.success(`Metadata generated for ${result.done} file${result.done === 1 ? '' : 's'}`, detail);
   };
 
   const onBulkEmbed = async () => {
@@ -217,9 +221,9 @@ export function LibraryPage() {
         }
       />
 
-      {/* toolbar */}
-      <div className="mb-2 flex flex-col gap-1.5 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
+      {/* search + secondary tools */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="relative min-w-0 flex-1 sm:max-w-xs">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-fg-subtle" />
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search…" className="pl-9" />
         </div>
@@ -281,7 +285,7 @@ export function LibraryPage() {
       </div>
 
       {library.watching && (
-        <p className="mb-2 flex items-center gap-2 border-l-2 border-ok pl-2 text-[0.6875rem] text-ok">
+        <p className="mb-3 flex items-center gap-2 r-chip border border-ok/25 bg-ok-soft px-2 py-1 text-[0.6875rem] text-ok">
           <FolderSearch className="size-3.5 shrink-0" />
           <span className="truncate font-mono">{library.watching}</span>
         </p>
@@ -322,7 +326,7 @@ export function LibraryPage() {
       {/* bulk bar */}
       {selectedIds.length > 0 && (
         <div className="fixed inset-x-0 bottom-14 z-40 flex justify-center px-3 safe-bottom lg:bottom-4">
-          <div className="card flex flex-wrap items-center gap-2 px-3 py-2 shadow-[var(--shadow-pop)]">
+          <div className="card flex flex-wrap items-center gap-2 px-4 py-2.5 shadow-[var(--shadow-pop)]">
             <Badge tone="brand" dot>{selectedIds.length} selected</Badge>
             <Button size="xs" variant="outline" icon={<Wand2 className="size-3.5" />} onClick={onBulkGenerate}>Generate</Button>
             <Button size="xs" variant="outline" icon={<PenLine className="size-3.5" />} onClick={onBulkEmbed}>Embed</Button>
@@ -373,10 +377,10 @@ export function LibraryPage() {
                   <p className="text-[0.8125rem] font-semibold text-fg">{cluster.items.length} files</p>
                   <Badge tone="warn">Δ {cluster.maxDistance}</Badge>
                 </div>
-                <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+                <ul className="mt-3 grid gap-2 sm:grid-cols-2">
                   {cluster.items.map((item, position) => (
-                    <li key={item.id} className="flex items-center gap-2 rounded-[0.375rem] border border-line bg-surface-2 p-2">
-                      {item.thumbUrl ? <img src={item.thumbUrl} alt="" className="size-10 rounded-md border border-line object-cover" /> : <FileImage className="size-10 text-fg-subtle" />}
+                    <li key={item.id} className="flex items-center gap-2 r-control border border-line bg-surface-2 p-2">
+                      {item.thumbUrl ? <img src={item.thumbUrl} alt="" className="size-10 r-chip border border-line object-cover" /> : <FileImage className="size-10 text-fg-subtle" />}
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-xs font-medium text-fg">{item.name}</span>
                         <span className="block text-[0.625rem] text-fg-subtle">{position === 0 ? 'keep' : 'duplicate'}</span>
@@ -484,14 +488,14 @@ export function LibraryPage() {
               />
             </Field>
 
-            <div className="overflow-x-auto rounded-[0.375rem] border border-line">
+            <div className="overflow-x-auto r-control border border-line">
               <table className="w-full min-w-[26rem] text-left text-xs">
                 <thead className="bg-surface-2 text-[0.6875rem] tracking-wide text-fg-subtle uppercase">
                   <tr>
                     <th className="px-3 py-2">File</th>
                     <th className="px-3 py-2">Title</th>
-                    <th className="px-3 py-2 text-right">Keywords</th>
-                    <th className="px-3 py-2 text-right">Match</th>
+                    <th className="px-4 py-2.5 text-right">Keywords</th>
+                    <th className="px-4 py-2.5 text-right">Match</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
@@ -499,10 +503,10 @@ export function LibraryPage() {
                     const matched = Boolean(csvMatch?.get(row));
                     return (
                       <tr key={`${row.filename}-${index}`} className="bg-surface">
-                        <td className="max-w-40 truncate px-3 py-2 font-mono text-fg" title={row.filename}>{row.filename}</td>
-                        <td className="max-w-40 truncate px-3 py-2 text-fg-muted sm:max-w-56" title={row.title ?? ''}>{row.title || '—'}</td>
-                        <td className="px-3 py-2 text-right text-fg tabular-nums">{row.keywords?.length ?? 0}</td>
-                        <td className="px-3 py-2 text-right">
+                        <td className="max-w-40 truncate px-4 py-2.5 font-mono text-fg" title={row.filename}>{row.filename}</td>
+                        <td className="max-w-40 truncate px-4 py-2.5 text-fg-muted sm:max-w-56" title={row.title ?? ''}>{row.title || '—'}</td>
+                        <td className="px-4 py-2.5 text-right text-fg tabular-nums">{row.keywords?.length ?? 0}</td>
+                        <td className="px-4 py-2.5 text-right">
                           {matched ? <Badge tone="ok">yes</Badge> : <Badge tone="warn">no</Badge>}
                         </td>
                       </tr>
@@ -545,42 +549,77 @@ function LibraryCard({
   const mp = megapixels(item);
   return (
     <li>
-      <div className={clsx('card group relative overflow-hidden transition-colors hover:border-line-strong', selected && 'ring-1 ring-brand')}>
+      <div
+        className={clsx(
+          'card group relative overflow-hidden transition-[border-color,box-shadow] duration-150',
+          'hover:border-line-strong hover:shadow-[var(--elev-2)]',
+          selected && 'border-brand ring-2 ring-brand/25',
+        )}
+      >
         <button type="button" onClick={onOpen} className="block w-full text-left">
-          <div className="relative flex h-32 items-center justify-center overflow-hidden bg-surface-2">
+          <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-surface-2">
             {item.thumbUrl ? (
-              <img src={item.thumbUrl} alt={item.name} className="h-full w-full object-cover" loading="lazy" />
+              <img
+                src={item.thumbUrl}
+                alt={item.name}
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                loading="lazy"
+              />
             ) : (
               <span className="flex flex-col items-center gap-2 text-fg-subtle">
-                {item.format === 'eps' || item.format === 'ai' || item.format === 'svg' ? <Layers className="size-8" /> : <FileImage className="size-8" />}
+                {item.format === 'eps' || item.format === 'ai' || item.format === 'svg' ? (
+                  <Layers className="size-8" strokeWidth={1.5} />
+                ) : (
+                  <FileImage className="size-8" strokeWidth={1.5} />
+                )}
                 <span className="font-mono text-[0.6875rem] uppercase">{item.format}</span>
               </span>
             )}
             <span className="absolute top-2 left-2 flex gap-1">
-              <Badge tone="neutral" className="bg-black/55 text-white backdrop-blur">{item.format.toUpperCase()}</Badge>
-              {mp !== null && <Badge tone="neutral" className="bg-black/55 text-white backdrop-blur tabular-nums">{mp.toFixed(1)} MP</Badge>}
+              <Badge tone="neutral" className="bg-black/60 text-white backdrop-blur">
+                {item.format.toUpperCase()}
+              </Badge>
+              {mp !== null && (
+                <Badge tone="neutral" className="bg-black/60 text-white tabular-nums backdrop-blur">
+                  {mp.toFixed(1)} MP
+                </Badge>
+              )}
             </span>
             <span className="absolute top-2 right-2">
-              <Badge tone={LEVEL_TONE[level]} dot>{level === 'ok' ? 'ready' : level}</Badge>
+              <Badge tone={LEVEL_TONE[level]} dot>
+                {level === 'ok' ? 'ready' : level}
+              </Badge>
             </span>
           </div>
-          <div className="px-2.5 py-2">
-            <p className="truncate text-[0.8125rem] font-medium text-fg" title={item.name}>{item.name}</p>
+          <div className="px-3 py-2.5">
+            <p className="truncate text-[0.8125rem] font-medium text-fg" title={item.name}>
+              {item.name}
+            </p>
             <p className="mt-0.5 truncate text-[0.6875rem] text-fg-muted">{item.metadata.title || '—'}</p>
-            <div className="mt-1.5 flex items-center justify-between gap-2 text-[0.625rem] text-fg-subtle">
+            <div className="mt-2 flex items-center justify-between gap-2 text-[0.625rem] text-fg-subtle">
               <span className="nums">{formatBytes(item.sizeBytes)}</span>
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1.5">
                 {item.metadata.keywords.length} kw
-                {item.embeddedAt && <span className="size-1.5 rounded-full bg-ok" title="Embedded" />}
+                {item.embeddedAt && (
+                  <span className="size-1.5 rounded-full bg-ok" title="Metadata embedded" />
+                )}
               </span>
             </div>
           </div>
         </button>
         <label
-          className="absolute bottom-2 left-2 flex cursor-pointer items-center rounded-[0.25rem] bg-black/55 p-1 backdrop-blur"
+          className={clsx(
+            'absolute bottom-2 left-2 flex cursor-pointer items-center r-chip p-1 transition-colors',
+            selected ? 'bg-brand' : 'bg-black/55 hover:bg-black/70',
+          )}
           aria-label={`Select ${item.name}`}
         >
-          <input type="checkbox" checked={selected} onChange={onSelect} className="size-3.5 accent-[var(--brand)]" />
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onSelect}
+            className="size-3.5 accent-[var(--brand)]"
+          />
         </label>
       </div>
     </li>

@@ -64,14 +64,15 @@ export function ItemEditor({ item, onClose }: { item: StockItem; onClose: () => 
 
   const onGenerate = async () => {
     setBusy(true);
-    await library.generateFor([item.id], {
+    const result = await library.generateFor([item.id], {
       subject: subject || undefined,
       style,
       categories: item.metadata.categories,
       concepts: concepts.split(',').map((c) => c.trim()).filter(Boolean),
     });
     setBusy(false);
-    toast.success('Generated', library.aiConfig.apiKey ? 'AI endpoint' : 'Offline');
+    if (result.error) toast.error('AI failed — used built-in instead', result.error);
+    else toast.success('Generated', result.aiUsed ? result.providerLabel : 'Built-in generator');
   };
 
   const onEmbed = async () => {
@@ -110,12 +111,12 @@ export function ItemEditor({ item, onClose }: { item: StockItem; onClose: () => 
         {/* header */}
         <header className="flex items-start gap-3 border-b border-line px-4 py-3">
           {item.thumbUrl ? (
-            <img src={item.thumbUrl} alt="" className="size-10 shrink-0 rounded-[0.3rem] border border-line object-cover" />
+            <img src={item.thumbUrl} alt="" className="size-10 shrink-0 r-chip border border-line object-cover" />
           ) : (
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-[0.3rem] border border-line bg-surface-2 font-mono text-[0.625rem] text-fg-subtle uppercase">{item.format}</span>
+            <span className="flex size-10 shrink-0 items-center justify-center r-chip border border-line bg-surface-2 font-mono text-[0.625rem] text-fg-subtle uppercase">{item.format}</span>
           )}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-fg" title={item.name}>{item.name}</p>
+            <p className="display truncate text-[0.9375rem] font-semibold text-fg" title={item.name}>{item.name}</p>
             <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.6875rem] text-fg-subtle">
               <Badge tone="neutral">{item.format.toUpperCase()}</Badge>
               {item.width && item.height && <span className="tabular-nums">{item.width}×{item.height}</span>}
@@ -159,7 +160,7 @@ export function ItemEditor({ item, onClose }: { item: StockItem; onClose: () => 
                   ]} />
                   <Button size="sm" onClick={onGenerate} loading={busy} icon={<Wand2 className="size-4" />}>Generate</Button>
                   <Button size="sm" variant="ghost" onClick={appendTranslations}>+ ES/DE/FR</Button>
-                  {library.aiConfig.apiKey ? <Badge tone="brand" dot>AI</Badge> : <Badge tone="neutral" dot>Offline</Badge>}
+                  {library.aiReady ? <Badge tone="brand" dot>AI</Badge> : <Badge tone="neutral" dot>Built-in</Badge>}
                 </div>
               </div>
 
@@ -173,9 +174,9 @@ export function ItemEditor({ item, onClose }: { item: StockItem; onClose: () => 
 
               <Field label={`Keywords ${item.metadata.keywords.length}/50`}>
                 {!bulkMode ? (
-                  <div className="flex flex-wrap gap-1.5 rounded-[0.375rem] border border-line bg-surface-2 p-2">
+                  <div className="flex flex-wrap gap-1.5 r-control border border-line bg-surface-2 p-2">
                     {item.metadata.keywords.map((keyword) => (
-                      <span key={keyword} className="inline-flex items-center gap-1 rounded-[0.25rem] bg-brand-soft px-1.5 py-0.5 text-[0.6875rem] font-medium text-brand-fg">
+                      <span key={keyword} className="inline-flex items-center gap-1 r-chip bg-brand-soft px-1.5 py-0.5 text-[0.6875rem] font-medium text-brand-fg">
                         {keyword}
                         <button type="button" aria-label={`Remove ${keyword}`} onClick={() => library.setMetadata(item.id, { keywords: item.metadata.keywords.filter((k) => k !== keyword) })}>
                           <X className="size-3" />
@@ -220,7 +221,7 @@ export function ItemEditor({ item, onClose }: { item: StockItem; onClose: () => 
                           })
                         }
                         className={clsx(
-                          'rounded-[0.25rem] border px-1.5 py-0.5 text-[0.6875rem] font-medium transition-colors',
+                          'r-chip border px-1.5 py-0.5 text-[0.6875rem] font-medium transition-colors',
                           active ? 'border-brand bg-brand-soft text-brand-fg' : 'border-line bg-surface-2 text-fg-muted hover:text-fg',
                         )}
                       >
@@ -272,7 +273,7 @@ export function ItemEditor({ item, onClose }: { item: StockItem; onClose: () => 
                       {issues.length > 0 && (
                         <ul className="mt-2 flex flex-col gap-1.5">
                           {issues.map((issue, index) => (
-                            <li key={index} className={clsx('rounded-md px-2 py-1.5 text-[0.6875rem] leading-relaxed', issue.level === 'error' ? 'bg-danger-soft text-danger' : issue.level === 'warn' ? 'bg-warn-soft text-warn' : 'bg-surface-2 text-fg-muted')}>
+                            <li key={index} className={clsx('r-chip px-2 py-1.5 text-[0.6875rem] leading-relaxed', issue.level === 'error' ? 'bg-danger-soft text-danger' : issue.level === 'warn' ? 'bg-warn-soft text-warn' : 'bg-surface-2 text-fg-muted')}>
                               {issue.message}
                               {issue.hint && <span className="block opacity-80">{issue.hint}</span>}
                             </li>
@@ -305,7 +306,7 @@ export function ItemEditor({ item, onClose }: { item: StockItem; onClose: () => 
                 <p className="mt-1 text-[0.6875rem] text-fg-muted">
                   Title, description and keywords written into the file; portals pre-fill on ingest.
                 </p>
-                <div className="mt-3 rounded-[0.375rem] border border-line bg-surface-2 p-3">
+                <div className="mt-3 r-control border border-line bg-surface-2 p-3">
                   <Switch checked={backup} onChange={setBackup} label="Keep backup copy" />
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -341,7 +342,7 @@ export function ItemEditor({ item, onClose }: { item: StockItem; onClose: () => 
                           )
                         }
                         className={clsx(
-                          'rounded-[0.25rem] border px-1.5 py-0.5 text-[0.6875rem] font-medium transition-colors',
+                          'r-chip border px-1.5 py-0.5 text-[0.6875rem] font-medium transition-colors',
                           linked ? 'border-ok bg-ok-soft text-ok' : 'border-line bg-surface-2 text-fg-muted hover:text-fg',
                           isExpired(release) && 'opacity-60 line-through',
                         )}

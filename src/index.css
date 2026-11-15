@@ -1,62 +1,119 @@
 @import 'tailwindcss';
 
+/* ==================================================================== */
+/*  Fonts — self-hosted variable woff2, OFL 1.1                         */
+/* ==================================================================== */
+@font-face {
+  font-family: 'InterVar';
+  src: url('/fonts/inter-var-latin.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'ManropeVar';
+  src: url('/fonts/manrope-var-latin.woff2') format('woff2-variations');
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* Dark mode = class strategy (we toggle `.dark` on <html>). */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ------------------------------------------------------------------ */
-/* Design tokens                                                       */
-/* ------------------------------------------------------------------ */
+/* ==================================================================== */
+/*  Design tokens — Material-inspired, single primary, elevation scale   */
+/* ==================================================================== */
 :root {
-  /* One primary. Everything interactive uses it; semantic tones stay muted. */
-  --bg: #f7f8fa;
+  color-scheme: light;
+
+  /* Surfaces (Material 3 style tonal steps) */
+  --bg: #f4f6f8;
   --bg-elevated: #ffffff;
   --surface: #ffffff;
-  --surface-2: #f4f5f7;
-  --surface-3: #eceef2;
-  --line: #e4e6eb;
-  --line-strong: #cfd3da;
-  --fg: #12161d;
-  --fg-muted: #575e6b;
-  --fg-subtle: #8b929e;
-  --brand: #1d4ed8;
-  --brand-hover: #1e40af;
-  --brand-soft: #eef2ff;
-  --brand-fg: #1e40af;
-  --ok: #15803d;
-  --ok-soft: #eefaf1;
-  --warn: #a16207;
-  --warn-soft: #fdf8ec;
-  --danger: #b91c1c;
-  --danger-soft: #fdf2f2;
-  --shadow-color: 220 30% 20%;
-  --radius-card: 0.5rem;
-  --radius-control: 0.375rem;
+  --surface-2: #f8fafb;
+  --surface-3: #eef1f4;
+  --surface-inverse: #1c252e;
+
+  /* Hairlines */
+  --line: #e3e8ee;
+  --line-strong: #c4cdd5;
+
+  /* Type */
+  --fg: #161c24;
+  --fg-muted: #5a6875;
+  --fg-subtle: #8a96a3;
+
+  /* Primary — single accent */
+  --brand: #1c64f2;
+  --brand-hover: #175cd3;
+  --brand-soft: #eef4ff;
+  --brand-fg: #1652c9;
+
+  /* Semantic, used only for status */
+  --ok: #118d57;
+  --ok-soft: #eafaf1;
+  --warn: #b76e00;
+  --warn-soft: #fff8e6;
+  --danger: #c11106;
+  --danger-soft: #fff1ef;
+
+  /* Elevation — 1px hairline + soft ambient, Material-like */
+  --elev-0: none;
+  --elev-1: 0 0 0 1px rgb(16 24 40 / 0.05), 0 1px 2px 0 rgb(16 24 40 / 0.06);
+  --elev-2: 0 0 0 1px rgb(16 24 40 / 0.05), 0 4px 10px -2px rgb(16 24 40 / 0.08);
+  --elev-3: 0 0 0 1px rgb(16 24 40 / 0.05), 0 12px 28px -6px rgb(16 24 40 / 0.14);
+  --elev-4: 0 0 0 1px rgb(16 24 40 / 0.06), 0 24px 56px -12px rgb(16 24 40 / 0.2);
+
+  /* Shape — Material 8px base */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-card: 12px;
+  --r-control: 8px;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.3, 0, 0, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 300ms;
 }
 
 .dark {
-  --bg: #0b0d11;
-  --bg-elevated: #101318;
-  --surface: #12151b;
-  --surface-2: #171b22;
-  --surface-3: #1e232b;
-  --line: #242a33;
-  --line-strong: #333b47;
-  --fg: #e9ecf1;
-  --fg-muted: #9aa3b2;
-  --fg-subtle: #69717f;
-  --brand: #3b82f6;
-  --brand-hover: #60a5fa;
-  --brand-soft: #16233d;
-  --brand-fg: #93b4f8;
-  --ok: #4ade80;
+  color-scheme: dark;
+
+  --bg: #0e1216;
+  --bg-elevated: #141a20;
+  --surface: #161d24;
+  --surface-2: #1a222a;
+  --surface-3: #222b34;
+  --surface-inverse: #eef1f4;
+  --line: #26303a;
+  --line-strong: #38434f;
+
+  --fg: #eef2f6;
+  --fg-muted: #a2aebb;
+  --fg-subtle: #71808f;
+
+  --brand: #4d8dff;
+  --brand-hover: #6ba1ff;
+  --brand-soft: #14233d;
+  --brand-fg: #9dc0ff;
+
+  --ok: #3ccb7f;
   --ok-soft: #10231a;
-  --warn: #d9a441;
+  --warn: #e0a828;
   --warn-soft: #241d10;
-  --danger: #e5797a;
-  --danger-soft: #2a1416;
-  --shadow-color: 220 40% 2%;
-  --radius-card: 0.5rem;
-  --radius-control: 0.375rem;
+  --danger: #f56b62;
+  --danger-soft: #2a1513;
+
+  --elev-1: 0 0 0 1px rgb(255 255 255 / 0.05), 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --elev-2: 0 0 0 1px rgb(255 255 255 / 0.06), 0 4px 12px -2px rgb(0 0 0 / 0.5);
+  --elev-3: 0 0 0 1px rgb(255 255 255 / 0.07), 0 14px 32px -8px rgb(0 0 0 / 0.6);
+  --elev-4: 0 0 0 1px rgb(255 255 255 / 0.08), 0 28px 60px -14px rgb(0 0 0 / 0.7);
 }
 
 @theme inline {
@@ -81,32 +138,31 @@
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
 
-  --font-sans:
-    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
-  --font-mono: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, Consolas,
-    monospace;
+  --font-sans: 'InterVar', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'ManropeVar', 'InterVar', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, Consolas, monospace;
 
-  --radius-card: var(--radius-card);
-  --radius-control: var(--radius-control);
+  --radius-card: var(--r-card);
+  --radius-control: var(--r-control);
 
-  --shadow-card: 0 1px 2px hsl(var(--shadow-color) / 0.04);
-  --shadow-pop: 0 10px 30px -12px hsl(var(--shadow-color) / 0.28);
+  --shadow-card: var(--elev-1);
+  --shadow-pop: var(--elev-3);
 }
 
-/* ------------------------------------------------------------------ */
-/* Base                                                                */
-/* ------------------------------------------------------------------ */
+/* ==================================================================== */
+/*  Base                                                                */
+/* ==================================================================== */
 @layer base {
   * {
     border-color: var(--line);
   }
 
   html {
-    /* Root font size drives the whole layout => fluid type + user UI-scale. */
-    font-size: clamp(14px, 0.55vw + 12.4px, 17px);
+    /* Root size drives both fluid type and the user UI-scale. */
+    font-size: clamp(14px, 0.4vw + 12.9px, 16px);
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    scrollbar-gutter: stable;
   }
 
   body {
@@ -114,7 +170,8 @@
     background-color: var(--bg);
     color: var(--fg);
     font-family: var(--font-sans);
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'ss01';
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'ss01', 'tnum' 0;
+    font-optical-sizing: auto;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overscroll-behavior: none;
@@ -129,25 +186,28 @@
   h2,
   h3,
   h4 {
+    font-family: var(--font-display);
     text-wrap: balance;
-    letter-spacing: -0.015em;
+    letter-spacing: -0.02em;
+    font-weight: 700;
   }
 
   p {
     text-wrap: pretty;
   }
 
+  /* Material-style focus ring: 2px, offset, only for keyboard users. */
   :focus-visible {
     outline: 2px solid var(--brand);
     outline-offset: 2px;
-    border-radius: var(--radius-control);
+    border-radius: var(--r-sm);
   }
 
   ::selection {
-    background: color-mix(in oklab, var(--brand) 30%, transparent);
+    background: color-mix(in oklab, var(--brand) 22%, transparent);
   }
 
-  /* Scrollbars */
+  /* Scrollbars: thin, neutral, appear on hover of the pane. */
   ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
@@ -156,47 +216,79 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: color-mix(in oklab, var(--fg-subtle) 40%, transparent);
+    background: color-mix(in oklab, var(--fg-subtle) 38%, transparent);
     border-radius: 999px;
     border: 3px solid transparent;
     background-clip: content-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in oklab, var(--fg-subtle) 75%, transparent);
+    background: color-mix(in oklab, var(--fg-subtle) 65%, transparent);
     background-clip: content-box;
   }
 
-  /* Bigger, touch-friendly controls on touch devices / small screens. */
+  input[type='range'] {
+    accent-color: var(--brand);
+  }
+
+  /* Touch targets stay comfortable on coarse pointers. */
   @media (pointer: coarse) {
     button,
-    a,
     [role='button'],
-    input,
-    select,
-    textarea {
-      min-height: 2.75rem;
+    a[role='button'] {
+      min-height: 2.5rem;
     }
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* Utilities                                                           */
-/* ------------------------------------------------------------------ */
+/* ==================================================================== */
+/*  Utilities                                                           */
+/* ==================================================================== */
 @layer utilities {
+  /* Elevated surface (Material "card"): hairline + elevation-1. */
   .card {
     background-color: var(--surface);
     border: 1px solid var(--line);
-    border-radius: var(--radius-card);
+    border-radius: var(--r-card);
+    box-shadow: var(--elev-1);
   }
 
-  /* Tabular figures for every number we surface (KPIs, counts, money). */
+  /* Flat surface: hairline only, no shadow. */
+  .panel {
+    background-color: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-card);
+  }
+
+  /* Control shape: buttons, inputs, nav rows. */
+  .r-control {
+    border-radius: var(--r-control);
+  }
+
+  /* Chip / pill shape. */
+  .r-chip {
+    border-radius: var(--r-xs);
+  }
+
+  .elev-1 {
+    box-shadow: var(--elev-1);
+  }
+  .elev-2 {
+    box-shadow: var(--elev-2);
+  }
+  .elev-3 {
+    box-shadow: var(--elev-3);
+  }
+  .elev-4 {
+    box-shadow: var(--elev-4);
+  }
+
   .nums {
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.01em;
   }
 
-  .surface-2 {
-    background-color: var(--surface-2);
+  .display {
+    font-family: var(--font-display);
   }
 
   .no-scrollbar::-webkit-scrollbar {
@@ -213,7 +305,7 @@
 
   .grid-auto-fill {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
   }
 
   .safe-bottom {
@@ -229,20 +321,16 @@
     app-region: no-drag;
   }
 
+  /* Material emphasized-decelerate entrance */
   .animate-in-fast {
-    animation: fade-slide-in 140ms ease-out both;
-  }
-
-  /* Buttons/badges stay square-ish: 6px, never pill-shaped noise. */
-  .r-control {
-    border-radius: var(--radius-control);
+    animation: fade-slide-in var(--dur-base) var(--ease-emphasized) both;
   }
 }
 
 @keyframes fade-slide-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -253,7 +341,7 @@
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.98);
+    transform: translateY(12px) scale(0.98);
   }
   to {
     opacity: 1;
@@ -261,9 +349,15 @@
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* Print (invoices / receipts / reports)                               */
-/* ------------------------------------------------------------------ */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* ==================================================================== */
+/*  Print                                                               */
+/* ==================================================================== */
 @media print {
   .no-print {
     display: none !important;

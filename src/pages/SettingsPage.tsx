@@ -1,22 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Bot,
+  BrainCircuit,
   DatabaseBackup,
   Download,
   Eraser,
   FolderUp,
   HardDrive,
   Monitor,
+  Moon,
   RotateCcw,
   Sun,
-  Moon,
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Field, Input, SegmentedControl, Select, Switch } from '@/components/ui/Field';
+import { Field, SegmentedControl, Select, Switch } from '@/components/ui/Field';
 import { Modal } from '@/components/ui/Modal';
+import { AiPanel } from '@/components/settings/AiPanel';
 import { useApp } from '@/state/AppState';
 import { useLibrary } from '@/state/library';
 import { useToast } from '@/state/ToastState';
@@ -35,9 +36,7 @@ const SHORTCUTS: [string, string][] = [
 
 export function SettingsPage() {
   const { settings, updateSettings, resetSettings, zoom, setZoom, cloud, runtime } = useApp();
-  const { aiConfig, setAiConfig } = useLibrary();
-  const [aiDraft, setAiDraft] = useState(aiConfig);
-  const patchAi = (patch: Partial<typeof aiDraft>) => setAiDraft((prev) => ({ ...prev, ...patch }));
+  const { aiConfig, aiReady, setAiConfig } = useLibrary();
   const toast = useToast();
   const [keys, setKeys] = useState<string[]>([]);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -133,173 +132,149 @@ export function SettingsPage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
-        <Card title="Appearance">
-          <div className="flex flex-col gap-3">
-            <Field label="Theme">
-              <SegmentedControl
-                value={settings.theme}
-                onChange={(theme) => updateSettings({ theme })}
-                options={[
-                  { value: 'light', label: 'Light', icon: <Sun className="size-3" /> },
-                  { value: 'dark', label: 'Dark', icon: <Moon className="size-3" /> },
-                  { value: 'system', label: 'Auto', icon: <Monitor className="size-3" /> },
-                ]}
-              />
-            </Field>
+      <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-12">
+        <div className="flex flex-col gap-3 xl:col-span-7">
+          <Card title="AI metadata" icon={<BrainCircuit className="size-4" />}>
+            <AiPanel settings={aiConfig} onSave={setAiConfig} />
+          </Card>
 
-            <Switch
-              id="density"
-              checked={settings.density === 'compact'}
-              onChange={(value) => updateSettings({ density: value ? 'compact' : 'comfortable' })}
-              label="Compact rows"
+          <Card title="Storage" icon={<HardDrive className="size-4" />}>
+            <div className="flex items-center gap-2">
+              <p className="min-w-0 flex-1 truncate text-[0.75rem] text-fg-muted">
+                {isDesktop ? (runtime.userDataPath ?? 'User data') : 'Local storage'}
+              </p>
+              <Badge tone={cloud.url ? 'ok' : 'neutral'} dot>
+                {cloud.url ? 'Cloud' : 'Local'}
+              </Badge>
+            </div>
+
+            <input
+              ref={restoreRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void onRestoreFile(file);
+                event.target.value = '';
+              }}
             />
-            <Switch
-              id="reduce-motion"
-              checked={settings.reduceMotion}
-              onChange={(value) => updateSettings({ reduceMotion: value })}
-              label="Reduce motion"
-            />
 
-            <Field label="Currency">
-              <Select
-                value={settings.currency}
-                onChange={(event) => updateSettings({ currency: event.target.value as CurrencyCode })}
-                options={[
-                  { value: 'USD', label: 'USD $' },
-                  { value: 'EUR', label: 'EUR €' },
-                  { value: 'GBP', label: 'GBP £' },
-                  { value: 'INR', label: 'INR ₹' },
-                  { value: 'BDT', label: 'BDT ৳' },
-                ]}
-              />
-            </Field>
-          </div>
-        </Card>
-
-        <Card title="Scale">
-          <div className="flex items-center gap-2">
-            <span className="nums text-xl font-semibold text-fg">{Math.round(zoom * 100)}%</span>
-            <Badge tone={isDesktop ? 'brand' : 'neutral'}>
-              {isDesktop ? 'Native' : 'Preview'}
-            </Badge>
-            <Button size="xs" variant="ghost" className="ml-auto" onClick={() => setZoom(1)}>
-              Reset
-            </Button>
-          </div>
-          <input
-            type="range"
-            min={0.6}
-            max={2}
-            step={0.05}
-            value={zoom}
-            onChange={(event) => setZoom(Number(event.target.value))}
-            className="mt-2 w-full accent-[var(--brand)]"
-            aria-label="UI scale"
-          />
-          <div className="mt-2 flex flex-wrap gap-1">
-            {[0.8, 0.9, 1, 1.1, 1.25, 1.5].map((value) => (
-              <Button
-                key={value}
-                size="xs"
-                variant={Math.abs(zoom - value) < 0.01 ? 'primary' : 'outline'}
-                onClick={() => setZoom(value)}
-              >
-                {Math.round(value * 100)}
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              <Button size="sm" icon={<DatabaseBackup className="size-3.5" />} loading={busy} onClick={onBackup}>
+                Backup
               </Button>
-            ))}
-          </div>
-
-          <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-line pt-2.5">
-            {SHORTCUTS.map(([combo, action]) => (
-              <div key={combo} className="flex items-center justify-between gap-2 text-[0.6875rem]">
-                <span className="text-fg-subtle">{action}</span>
-                <kbd className="rounded-[0.2rem] border border-line px-1 font-mono text-[0.625rem] text-fg-muted">
-                  {combo}
-                </kbd>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card title="AI endpoint" action={<Bot className="size-4 text-fg-subtle" />}>
-          <div className="flex flex-col gap-2">
-            <Field label="Base URL">
-              <Input value={aiDraft.baseUrl} onChange={(e) => patchAi({ baseUrl: e.target.value })} placeholder="https://api.openai.com/v1" spellCheck={false} />
-            </Field>
-            <Field label="Key">
-              <Input type="password" value={aiDraft.apiKey} onChange={(e) => patchAi({ apiKey: e.target.value })} placeholder="sk-…" spellCheck={false} />
-            </Field>
-            <Field label="Model">
-              <Input value={aiDraft.model} onChange={(e) => patchAi({ model: e.target.value })} placeholder="gpt-4o-mini" spellCheck={false} />
-            </Field>
-            <div className="flex gap-1.5">
-              <Button
-                size="sm"
-                onClick={async () => {
-                  await setAiConfig(aiDraft);
-                  toast.success('Saved');
-                }}
-              >
-                Save
+              <Button size="sm" variant="outline" icon={<FolderUp className="size-3.5" />} disabled={busy} onClick={() => restoreRef.current?.click()}>
+                Restore
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={async () => {
-                  setAiDraft({ baseUrl: '', apiKey: '', model: '' });
-                  await setAiConfig({ baseUrl: '', apiKey: '', model: '' });
-                  toast.info('Cleared');
-                }}
-              >
+              <Button size="sm" variant="danger" icon={<Eraser className="size-3.5" />} onClick={() => setConfirmClear(true)}>
                 Clear
               </Button>
               <span className="ml-auto self-center text-[0.6875rem] text-fg-subtle">
-                {aiDraft.apiKey ? 'Custom' : 'Offline'}
+                {keys.length} keys
               </span>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </div>
 
-        <Card title="Storage" action={<HardDrive className="size-4 text-fg-subtle" />}>
-          <div className="flex items-center gap-2">
-            <p className="min-w-0 flex-1 truncate text-[0.75rem] text-fg-muted">
-              {isDesktop ? (runtime.userDataPath ?? 'User data') : 'Local storage'}
-            </p>
-            <Badge tone={cloud.url ? 'ok' : 'neutral'}>{cloud.url ? 'Cloud' : 'Local'}</Badge>
-          </div>
+        <div className="flex flex-col gap-3 xl:col-span-5">
+          <Card title="Appearance">
+            <div className="flex flex-col gap-3.5">
+              <Field label="Theme">
+                <SegmentedControl
+                  value={settings.theme}
+                  onChange={(theme) => updateSettings({ theme })}
+                  options={[
+                    { value: 'light', label: 'Light', icon: <Sun className="size-3" /> },
+                    { value: 'dark', label: 'Dark', icon: <Moon className="size-3" /> },
+                    { value: 'system', label: 'Auto', icon: <Monitor className="size-3" /> },
+                  ]}
+                />
+              </Field>
 
-          <input
-            ref={restoreRef}
-            type="file"
-            accept=".json,application/json"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void onRestoreFile(file);
-              event.target.value = '';
-            }}
-          />
+              <Switch
+                id="density"
+                checked={settings.density === 'compact'}
+                onChange={(value) => updateSettings({ density: value ? 'compact' : 'comfortable' })}
+                label="Compact rows"
+              />
+              <Switch
+                id="reduce-motion"
+                checked={settings.reduceMotion}
+                onChange={(value) => updateSettings({ reduceMotion: value })}
+                label="Reduce motion"
+              />
 
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <Button size="sm" icon={<DatabaseBackup className="size-3.5" />} loading={busy} onClick={onBackup}>
-              Backup
-            </Button>
-            <Button size="sm" variant="outline" icon={<FolderUp className="size-3.5" />} disabled={busy} onClick={() => restoreRef.current?.click()}>
-              Restore
-            </Button>
-            <Button size="sm" variant="danger" icon={<Eraser className="size-3.5" />} onClick={() => setConfirmClear(true)}>
-              Clear
-            </Button>
-          </div>
+              <Field label="Currency">
+                <Select
+                  value={settings.currency}
+                  onChange={(event) => updateSettings({ currency: event.target.value as CurrencyCode })}
+                  options={[
+                    { value: 'USD', label: 'USD $' },
+                    { value: 'EUR', label: 'EUR €' },
+                    { value: 'GBP', label: 'GBP £' },
+                    { value: 'INR', label: 'INR ₹' },
+                    { value: 'BDT', label: 'BDT ৳' },
+                  ]}
+                />
+              </Field>
+            </div>
+          </Card>
 
-          <div className="mt-2 flex items-center justify-between border-t border-line pt-2 text-[0.6875rem] text-fg-subtle">
-            <span>{keys.length} keys</span>
-            <button type="button" onClick={refreshKeys} className="font-medium text-brand">
-              Refresh
-            </button>
-          </div>
-        </Card>
+          <Card title="Scale">
+            <div className="flex items-center gap-2">
+              <span className="nums display text-xl font-semibold text-fg">{Math.round(zoom * 100)}%</span>
+              <Badge tone={isDesktop ? 'brand' : 'neutral'}>{isDesktop ? 'Native' : 'Preview'}</Badge>
+              <Button size="xs" variant="ghost" className="ml-auto" onClick={() => setZoom(1)}>
+                Reset
+              </Button>
+            </div>
+            <input
+              type="range"
+              min={0.6}
+              max={2}
+              step={0.05}
+              value={zoom}
+              onChange={(event) => setZoom(Number(event.target.value))}
+              className="mt-3 w-full accent-[var(--brand)]"
+              aria-label="UI scale"
+            />
+            <div className="mt-3 flex flex-wrap gap-1">
+              {[0.8, 0.9, 1, 1.1, 1.25, 1.5].map((value) => (
+                <Button
+                  key={value}
+                  size="xs"
+                  variant={Math.abs(zoom - value) < 0.01 ? 'primary' : 'outline'}
+                  onClick={() => setZoom(value)}
+                >
+                  {Math.round(value * 100)}
+                </Button>
+              ))}
+            </div>
+
+            <dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-1 border-t border-line pt-2.5 sm:grid-cols-2">
+              {SHORTCUTS.map(([combo, action]) => (
+                <div key={combo} className="flex items-center justify-between gap-2 text-[0.6875rem]">
+                  <dt className="text-fg-subtle">{action}</dt>
+                  <dd>
+                    <kbd className="r-chip border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[0.625rem] text-fg-muted">
+                      {combo}
+                    </kbd>
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </Card>
+
+          <Card title="AI status">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[0.75rem] text-fg-muted">Generator</span>
+              <Badge tone={aiReady ? 'brand' : 'neutral'} dot>
+                {aiReady ? 'AI connected' : 'Built-in'}
+              </Badge>
+            </div>
+          </Card>
+        </div>
       </div>
 
       <Modal

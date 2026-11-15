@@ -178,53 +178,5 @@ export function adaptForPlatform(metadata: StockMetadata, platform: PlatformSpec
   };
 }
 
-/* -------------------------------------------------------------------------- */
-/* Optional BYO LLM (user's own key; never stored on any server of ours)       */
-/* -------------------------------------------------------------------------- */
-
-export interface AiAssistantConfig {
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-}
-
-export async function generateWithAi(
-  item: StockItem,
-  config: AiAssistantConfig,
-  signal?: AbortSignal,
-): Promise<StockMetadata> {
-  const prompt = [
-    'You are a microstock metadata expert. Return STRICT JSON only:',
-    '{"title": string, "description": string, "keywords": string[]}',
-    `File: ${item.name} (${item.format}).`,
-    'Rules: title = one descriptive English sentence 8-20 words, no commas if possible;',
-    'description = one factual sentence; keywords = 25-40 relevant English search terms,',
-    'strongest first, no duplicates, no brand names.',
-  ].join('\n');
-
-  const response = await fetch(`${config.baseUrl.replace(/\/$/, '')}/chat/completions`, {
-    method: 'POST',
-    signal,
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: config.model || 'gpt-4o-mini',
-      temperature: 0.6,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-  if (!response.ok) throw new Error(`AI endpoint replied ${response.status}`);
-  const data = (await response.json()) as { choices?: { message?: { content?: string } }[] };
-  const raw = data.choices?.[0]?.message?.content ?? '';
-  const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error('AI endpoint returned no JSON');
-  const parsed = JSON.parse(jsonMatch[0]) as Partial<StockMetadata>;
-  return {
-    title: String(parsed.title ?? '').slice(0, 200),
-    description: String(parsed.description ?? '').slice(0, 500),
-    keywords: Array.isArray(parsed.keywords) ? parsed.keywords.map(String).slice(0, 50) : [],
-    categories: Array.isArray(parsed.categories) ? parsed.categories.map(String).slice(0, 2) : [],
-  };
-}
+/* AI generation lives in ./ai.ts — one provider registry for local models and
+   free-tier cloud keys, so this module stays fully offline and deterministic. */

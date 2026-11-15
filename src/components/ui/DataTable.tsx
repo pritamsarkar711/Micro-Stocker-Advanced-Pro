@@ -99,7 +99,7 @@ export function DataTable<T>({
 
   const primary = columns.find((c) => c.primary) ?? columns[0];
   const secondary = columns.filter((c) => c !== primary);
-  const cellPad = dense ? 'px-2.5 py-1.5' : 'px-3 py-2';
+  const cellPad = dense ? 'px-2.5 py-1.5' : 'px-4 py-2.5';
 
   return (
     <div className="w-full">
@@ -189,7 +189,7 @@ export function DataTable<T>({
             <div
               onClick={onRowClick ? () => onRowClick(row) : undefined}
               className={clsx(
-                'rounded-md border border-line bg-surface p-2.5',
+                'r-control border border-line bg-surface p-3',
                 onRowClick && 'cursor-pointer active:bg-surface-2',
               )}
             >

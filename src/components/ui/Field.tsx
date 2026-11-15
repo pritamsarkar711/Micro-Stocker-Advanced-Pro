@@ -7,14 +7,14 @@ import type {
 } from 'react';
 
 const CONTROL =
-  'w-full rounded-[0.375rem] border bg-surface text-fg placeholder:text-fg-subtle transition-colors ' +
-  'border-line hover:border-line-strong focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 ' +
-  'disabled:cursor-not-allowed disabled:opacity-55';
+  'w-full r-control border bg-surface text-fg placeholder:text-fg-subtle transition-colors duration-150 ' +
+  'border-line hover:border-line-strong focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15 ' +
+  'disabled:cursor-not-allowed disabled:opacity-55 disabled:bg-surface-2';
 
 const SIZES = {
-  sm: 'h-8 px-2 text-[0.8125rem]',
-  md: 'h-9 px-2.5 text-[0.8125rem]',
-  lg: 'h-10 px-3 text-sm',
+  sm: 'h-8 px-2.5 text-[0.8125rem]',
+  md: 'h-9 px-3 text-[0.8125rem]',
+  lg: 'h-11 px-3.5 text-sm',
 };
 
 export function Field({
@@ -35,21 +35,21 @@ export function Field({
   htmlFor?: string;
 }) {
   return (
-    <div className={clsx('flex flex-col gap-1', className)}>
+    <div className={clsx('flex flex-col gap-1.5', className)}>
       {label && (
         <label
           htmlFor={htmlFor}
-          className="text-[0.6875rem] font-medium tracking-[0.04em] text-fg-muted uppercase"
+          className="text-[0.75rem] leading-none font-medium text-fg-muted"
         >
           {label}
-          {required && <span className="ml-1 text-danger">*</span>}
+          {required && <span className="ml-0.5 text-danger">*</span>}
         </label>
       )}
       {children}
       {error ? (
         <p className="text-[0.6875rem] font-medium text-danger">{error}</p>
       ) : hint ? (
-        <p className="text-[0.6875rem] text-fg-subtle">{hint}</p>
+        <p className="text-[0.6875rem] leading-relaxed text-fg-subtle">{hint}</p>
       ) : null}
     </div>
   );
@@ -73,7 +73,7 @@ export function Input({ size = 'md', invalid, prefix, suffix, className, ...rest
           className={clsx(
             CONTROL,
             SIZES[size],
-            invalid && 'border-danger focus:border-danger focus:ring-danger/25',
+            invalid && 'border-danger focus:border-danger focus:ring-danger/20',
             prefix && 'pl-9',
             suffix && 'pr-9',
             className,
@@ -89,7 +89,7 @@ export function Input({ size = 'md', invalid, prefix, suffix, className, ...rest
       className={clsx(
         CONTROL,
         SIZES[size],
-        invalid && 'border-danger focus:border-danger focus:ring-danger/25',
+        invalid && 'border-danger focus:border-danger focus:ring-danger/20',
         className,
       )}
       {...rest}
@@ -106,8 +106,8 @@ export function Textarea({ invalid, className, ...rest }: TextareaProps) {
     <textarea
       className={clsx(
         CONTROL,
-        'min-h-20 resize-y px-2.5 py-1.5 text-[0.8125rem] leading-relaxed',
-        invalid && 'border-danger focus:border-danger focus:ring-danger/25',
+        'min-h-20 resize-y px-3 py-2 text-[0.8125rem] leading-relaxed',
+        invalid && 'border-danger focus:border-danger focus:ring-danger/20',
         className,
       )}
       {...rest}
@@ -126,7 +126,7 @@ export function Select({ size = 'md', options, className, children, ...rest }: S
       className={clsx(CONTROL, SIZES[size], 'cursor-pointer appearance-none pr-8', className)}
       style={{
         backgroundImage:
-          "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")",
+          "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238a96a3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")",
         backgroundRepeat: 'no-repeat',
         backgroundPosition: 'right 0.6rem center',
       }}
@@ -159,17 +159,15 @@ export function Switch({
   id?: string;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4">
+    <div className="flex items-center justify-between gap-4">
       {(label || description) && (
         <div className="min-w-0">
           {label && (
-            <label htmlFor={id} className="block text-[0.8125rem] font-medium text-fg">
+            <label htmlFor={id} className="block cursor-pointer text-[0.8125rem] font-medium text-fg">
               {label}
             </label>
           )}
-          {description && (
-            <p className="mt-0.5 text-[0.6875rem] text-fg-muted">{description}</p>
-          )}
+          {description && <p className="mt-0.5 text-[0.6875rem] text-fg-muted">{description}</p>}
         </div>
       )}
       <button
@@ -180,14 +178,15 @@ export function Switch({
         disabled={disabled}
         onClick={() => onChange(!checked)}
         className={clsx(
-          'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-150',
+          'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200',
+          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand',
           'disabled:cursor-not-allowed disabled:opacity-50',
           checked ? 'bg-brand' : 'bg-line-strong',
         )}
       >
         <span
           className={clsx(
-            'inline-block size-4 transform rounded-full bg-white transition-transform duration-150',
+            'inline-block size-4 transform rounded-full bg-white shadow-sm transition-transform duration-200',
             checked ? 'translate-x-[1.15rem]' : 'translate-x-0.5',
           )}
         />
@@ -212,7 +211,7 @@ export function SegmentedControl<T extends string>({
   return (
     <div
       className={clsx(
-        'inline-flex max-w-full flex-wrap items-center gap-0.5 rounded-[0.375rem] border border-line bg-surface-2 p-0.5',
+        'inline-flex max-w-full flex-wrap items-center gap-0.5 r-control border border-line bg-surface-2 p-0.5',
         className,
       )}
       role="tablist"
@@ -227,11 +226,11 @@ export function SegmentedControl<T extends string>({
             aria-selected={active}
             onClick={() => onChange(option.value)}
             className={clsx(
-              'inline-flex items-center gap-1.5 rounded-[0.25rem] font-medium transition-colors',
-              size === 'sm' ? 'px-2 py-0.5 text-[0.75rem]' : 'px-2.5 py-1 text-[0.8125rem]',
+              'r-chip inline-flex items-center gap-1.5 font-medium whitespace-nowrap transition-colors duration-150',
+              size === 'sm' ? 'px-2 py-1 text-[0.75rem]' : 'px-3 py-1.5 text-[0.8125rem]',
               active
-                ? 'bg-brand text-white'
-                : 'text-fg-muted hover:bg-surface-3 hover:text-fg',
+                ? 'bg-surface text-fg shadow-[0_1px_2px_rgb(16_24_40/0.10)]'
+                : 'text-fg-muted hover:text-fg',
             )}
           >
             {option.icon}

@@ -2,7 +2,7 @@
   "name": "micro-stocker-advanced-pro",
   "productName": "Micro Stocker Advanced Pro",
   "private": false,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Source-available desktop workspace for microstock contributors: metadata, keywording, per-platform CSV for 14 marketplaces, IPTC/XMP embedding, local AI upscaling, validation, submission tracking and earnings analytics. Electron + React + TypeScript.",
   "author": {
     "name": "pritamsarkar711",
@@ -18,7 +18,7 @@
     "dev:web": "vite --host 0.0.0.0",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "test": "node scripts/run-tests.mjs",
+    "test": "node scripts/run-tests.mjs && node scripts/ssr-smoke.mjs",
     "verify": "npm run typecheck && npm test && npm run build",
     "preview": "vite preview --host 0.0.0.0",
     "pack": "npm run build && electron-builder --dir",

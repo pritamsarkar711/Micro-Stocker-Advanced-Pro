@@ -23,7 +23,7 @@ export function MobileTabBar() {
                 <>
                   <span
                     className={clsx(
-                      'flex size-7 items-center justify-center rounded-[0.3rem]',
+                      'flex h-6 w-10 items-center justify-center rounded-full transition-colors',
                       isActive && 'bg-brand-soft',
                     )}
                   >

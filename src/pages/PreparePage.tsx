@@ -167,7 +167,7 @@ export function PreparePage() {
       primary: true,
       render: (row) => (
         <span className="flex items-center gap-2">
-          {row.item.thumbUrl ? <img src={row.item.thumbUrl} alt="" className="size-8 rounded-md border border-line object-cover" /> : <span className="size-8 rounded-md border border-line bg-surface-2" />}
+          {row.item.thumbUrl ? <img src={row.item.thumbUrl} alt="" className="size-8 r-chip border border-line object-cover" /> : <span className="size-8 r-chip border border-line bg-surface-2" />}
           <span className="min-w-0">
             <span className="block truncate font-medium text-fg">{row.item.name}</span>
             <span className="block text-[0.6875rem] text-fg-subtle tabular-nums">
@@ -225,7 +225,6 @@ export function PreparePage() {
     <>
       <PageHeader
         title="Prepare"
-        description="EXIF/GPS, sRGB, size caps, vector safety"
         actions={
           <>
             <Button size="sm" variant="outline" onClick={refreshReports}>Scan</Button>
@@ -234,7 +233,7 @@ export function PreparePage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
         <Card className="xl:col-span-2" title="Files" flush>
           <DataTable
             rows={rows}
@@ -268,20 +267,25 @@ export function PreparePage() {
                 </Field>
                 {sizeTarget === 'custom' && (
                   <Field label="Custom cap (MB)">
-                    <input type="number" min={1} max={500} value={customMB} onChange={(e) => setCustomMB(Number(e.target.value))} className="h-10 w-28 rounded-[0.375rem] border border-line bg-surface-2 px-3 text-sm text-fg" />
+                    <input
+                      type="number"
+                      min={1}
+                      max={500}
+                      value={customMB}
+                      onChange={(e) => setCustomMB(Number(e.target.value))}
+                      className="h-9 w-28 r-control border border-line bg-surface px-3 text-[0.8125rem] text-fg transition-colors hover:border-line-strong focus:border-brand focus:ring-[3px] focus:ring-brand/15 focus:outline-none"
+                    />
                   </Field>
                 )}
               </>
             )}
 
-            <p className="text-[0.6875rem] text-fg-subtle">
-              Backups are written next to each original.
-            </p>
+            <p className="text-[0.6875rem] text-fg-subtle">Originals backed up beside each file.</p>
           </div>
         </Card>
       </div>
       <Card
-        className="mt-4"
+        className="mt-3"
         title="Vectors"
         action={<Button size="xs" variant="outline" onClick={scanVectors}>Scan</Button>}
         flush

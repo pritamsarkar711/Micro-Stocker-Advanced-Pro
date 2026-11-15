@@ -4,7 +4,9 @@
  * Works in the browser preview and in the desktop renderer alike.
  */
 export interface ClassicOptions {
-  scale: 2 | 3 | 4;
+  scale?: 2 | 3 | 4;
+  /** Fractional resize used for the final fit-to-target step. */
+  exactScale?: number;
   outFormat: 'png' | 'jpg' | 'webp';
   quality?: number;
   onProgress?: (ratio: number, label: string) => void;
@@ -13,13 +15,19 @@ export interface ClassicOptions {
 const MIME = { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp' } as const;
 
 export async function upscaleClassic(blob: Blob, options: ClassicOptions): Promise<Blob> {
-  const { scale, outFormat, quality = 0.92, onProgress } = options;
+  const { scale, exactScale, outFormat, quality = 0.92, onProgress } = options;
   const bitmap = await createImageBitmap(blob);
   let source: ImageBitmap | OffscreenCanvas | HTMLCanvasElement = bitmap;
   let width = bitmap.width;
   let height = bitmap.height;
 
-  const steps = scale === 2 ? [2] : scale === 3 ? [2, 1.5] : [2, 2];
+  const steps = exactScale
+    ? [exactScale]
+    : scale === 2
+      ? [2]
+      : scale === 3
+        ? [2, 1.5]
+        : [2, 2];
   for (let i = 0; i < steps.length; i++) {
     const factor = steps[i];
     const nextW = Math.round(width * factor);
