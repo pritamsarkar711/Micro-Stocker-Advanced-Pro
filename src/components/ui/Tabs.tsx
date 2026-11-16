@@ -1,61 +1,57 @@
-import clsx from 'clsx';
 import type { ReactNode } from 'react';
+import clsx from 'clsx';
 
-export interface TabItem<T extends string = string> {
-  value: T;
-  label: ReactNode;
+export interface TabItem<T extends string> {
+  id: T;
+  label: string;
   icon?: ReactNode;
-  badge?: ReactNode;
-  disabled?: boolean;
+  count?: number;
 }
 
-/**
- * Horizontally scrollable tab strip - never wraps awkwardly on narrow windows.
- */
-export function Tabs<T extends string>({
-  items,
-  value,
-  onChange,
-  className,
-}: {
+export interface TabsProps<T extends string> {
   items: TabItem<T>[];
   value: T;
   onChange: (value: T) => void;
   className?: string;
-}) {
+}
+
+export function Tabs<T extends string>({ items, value, onChange, className }: TabsProps<T>) {
   return (
     <div
       role="tablist"
       className={clsx(
-        'no-scrollbar flex gap-3 overflow-x-auto border-b border-line',
+        'inline-flex max-w-full flex-wrap items-center gap-1 rounded-[var(--r-control)] border border-line bg-surface-2 p-1',
         className,
       )}
     >
       {items.map((item) => {
-        const active = item.value === value;
+        const active = item.id === value;
         return (
           <button
-            key={item.value}
-            type="button"
+            key={item.id}
             role="tab"
+            type="button"
             aria-selected={active}
-            disabled={item.disabled}
-            onClick={() => onChange(item.value)}
+            onClick={() => onChange(item.id)}
             className={clsx(
-              'relative inline-flex shrink-0 items-center gap-1.5 py-2 text-[0.8125rem] font-medium transition-colors',
-              'disabled:cursor-not-allowed disabled:opacity-50',
-              active ? 'text-brand-fg' : 'text-fg-muted hover:text-fg',
+              'inline-flex h-7 items-center gap-1.5 rounded-[5px] px-2.5 text-xs font-medium whitespace-nowrap transition-colors',
+              active
+                ? 'bg-accent text-accent-fg shadow-2xs'
+                : 'text-ink-muted hover:bg-surface hover:text-ink',
             )}
           >
             {item.icon}
-            {item.label}
-            {item.badge}
-            <span
-              className={clsx(
-                '-bottom-px absolute inset-x-0 h-[2px] rounded-full',
-                active ? 'bg-brand opacity-100' : 'opacity-0',
-              )}
-            />
+            <span>{item.label}</span>
+            {item.count !== undefined && (
+              <span
+                className={clsx(
+                  'rounded-[3px] px-1 text-2xs tabular-nums',
+                  active ? 'bg-white/20 text-accent-fg' : 'bg-surface text-ink-faint',
+                )}
+              >
+                {item.count}
+              </span>
+            )}
           </button>
         );
       })}

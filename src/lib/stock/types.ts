@@ -1,6 +1,17 @@
 /** Core domain types for the microstock toolkit. */
 
-export type StockFormat = 'jpg' | 'png' | 'eps' | 'ai' | 'svg' | 'webp';
+export type StockFormat =
+  | 'jpg'
+  | 'png'
+  | 'eps'
+  | 'ai'
+  | 'svg'
+  | 'webp'
+  | 'tiff'
+  | 'avif'
+  | 'bmp'
+  | 'gif'
+  | 'ico';
 
 export type PlatformId =
   | 'shutterstock'
@@ -28,6 +39,7 @@ export interface StockMetadata {
 export interface ItemFlags {
   aiGenerated: boolean;
   aiTool: string;
+  aiPrompt?: string;
   editorial: boolean;
   mature: boolean;
   illustration: boolean;
@@ -42,15 +54,11 @@ export interface StockItem {
   sizeBytes: number;
   width?: number;
   height?: number;
-  /** Desktop: absolute path on disk. Browser: undefined. */
   path?: string;
-  /** Session-only object URL for thumbnails/previews. */
   thumbUrl?: string;
-  /** True when raw bytes are held in the session (browser import). */
   inMemory?: boolean;
   metadata: StockMetadata;
   flags: ItemFlags;
-  /** Release registry ids covering recognisable people/property in this file. */
   releaseIds?: string[];
   embeddedAt: string | null;
   importedAt: string;
@@ -88,6 +96,7 @@ export const EMPTY_METADATA: StockMetadata = {
 export const DEFAULT_FLAGS: ItemFlags = {
   aiGenerated: false,
   aiTool: '',
+  aiPrompt: '',
   editorial: false,
   mature: false,
   illustration: false,

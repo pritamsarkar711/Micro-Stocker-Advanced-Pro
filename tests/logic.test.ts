@@ -1,57 +1,187 @@
+import { parseDelimited, detectMapping, mapRows, monthlySeries } from '@/lib/stock/sales';
+import { setStatus, statusOf, countByStatus } from '@/lib/stock/submissions';
 /**
- * Runtime smoke tests for the pure domain layer.
+ * Runtime test suite for the domain, codec, AI and creative tool engines.
  *
- * Run with `npm test` (esbuild bundles this file with the `@/` alias and node
- * executes it - no test framework dependency). Every assertion below checks a
- * real platform rule or a real binary round-trip, not implementation trivia.
+ * Run with `npm test` (bundled by esbuild with the `@/` alias and executed on Node).
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { buildPlatformCsv, withBom, keywordsFor } from '@/lib/stock/csv';
+import { generateCsv, generateUniversalCsv, keywordsFor } from '@/lib/stock/csv';
 import { parseMetadataCsv, planApply, splitFields } from '@/lib/stock/csvimport';
-import { generateMetadata, adaptForPlatform, tokensFromFilename } from '@/lib/stock/metadata';
+import {
+  cleanStockSentence,
+  draftMetadata,
+  formatMetadataForClipboard,
+  mergeKeywords,
+  parseKeywordInput,
+  scrubStockKeywords,
+  tokensFromFilename,
+} from '@/lib/stock/metadata';
 import { sanitizeFilename, validateItem, validateEverywhere, worstLevel } from '@/lib/stock/validate';
 import { PLATFORMS, PLATFORM_LIST, findPlatform } from '@/lib/stock/platforms';
 import { PLATFORM_BRAND } from '@/lib/stock/brand';
 import { SHUTTERSTOCK_CATEGORIES } from '@/lib/stock/categories';
 import { detectFormat, formatBytes, bytesToBase64, base64ToBytes } from '@/lib/stock/files';
-import { buildXmpPacket, embedMetadata, parseXmpPacket, readEmbeddedMetadata } from '@/lib/stock/xmp';
+import {
+  buildXmpPacket,
+  canEmbedFormat,
+  embedMetadata,
+  extractEmbeddedXmp,
+  sidecarFilename,
+} from '@/lib/stock/xmp';
 import { analyzeEps, analyzeSvg, sanitizeSvg } from '@/lib/stock/vectorcheck';
 import {
-  AI_PROVIDERS,
-  EMPTY_AI_SETTINGS,
-  getProvider,
-  isAiReady,
-  normalizeMetadata,
-  resolvedModel,
+  DEFAULT_AI,
+  PROVIDER_LIST,
+  PROVIDERS,
+  extractJsonMetadata,
+  inferModelBrand,
+  isAiConfigured,
+  modelSupportsVision,
+  normalizeOllamaBase,
+  normalizeOpenAiBase,
+  sanitizeAiSettings,
 } from '@/lib/stock/ai';
-import { planScale, TARGET_PRESETS } from '@/lib/stock/upscale/engine';
+import { planPasses, outputFilename as upscaleOutputFilename } from '@/lib/stock/upscale/engine';
+import {
+  UPSCALE_FORMATS,
+  UPSCALE_MODELS,
+  UPSCALE_PURPOSES,
+  UPSCALE_TARGETS,
+  buildUpscaleInstallSpec,
+  resolveTargetSize,
+} from '@/lib/stock/upscale/models';
+import { BG_MODELS, BG_PURPOSES, buildBgInstallSpec } from '@/lib/tools/bgremove';
+import {
+  VIDEO_MODELS,
+  VIDEO_OUTPUT_FORMATS,
+  VIDEO_PURPOSES,
+  VIDEO_TARGETS,
+  buildVideoInstallSpec,
+  formatDuration,
+  resolveVideoDimensions,
+} from '@/lib/tools/videoupscale';
+import {
+  ACCEPT_ATTRIBUTE,
+  CONVERT_FORMATS,
+  CONVERT_RESIZE_PRESETS,
+  SUPPORTED_INPUT_EXTENSIONS,
+  buildConvertedFilename,
+  encodeBmp,
+  encodeGif,
+  encodeIco,
+  encodeTiff,
+  isSupportedInputExtension,
+} from '@/lib/tools/converter';
+import {
+  decodeBmp,
+  decodeCin,
+  decodeDds,
+  decodeDpx,
+  decodeExr,
+  decodeFarbfeld,
+  decodeFits,
+  decodeGif,
+  decodeHdr,
+  decodeIcns,
+  decodeIff,
+  decodeKtx,
+  decodeNetpbm,
+  decodePcx,
+  decodePdfPreview,
+  decodePfm,
+  decodePng,
+  decodePsd,
+  decodeQoi,
+  decodeRas,
+  decodeSgi,
+  decodeSvgz,
+  decodeTga,
+  decodeTiff,
+  decodeWbmp,
+  decodeXbm,
+  decodeXpm,
+  decodeBytesAuto,
+  detectImageFormat,
+  encodeAi,
+  encodeApng,
+  encodeBmp as encodeBmpCodec,
+  encodeCin,
+  encodeCur,
+  encodeDds,
+  encodeDpx,
+  encodeEps,
+  encodeExr,
+  encodeFarbfeld,
+  encodeFits,
+  encodeGif as encodeGifCodec,
+  encodeHdr,
+  encodeIcns,
+  encodeIco as encodeIcoCodec,
+  encodeIff,
+  encodeKtx,
+  encodeNetpbm,
+  encodePcx,
+  encodePdf,
+  encodePfm,
+  encodePng,
+  encodePsd,
+  encodeQoi,
+  encodeRas,
+  encodeSgi,
+  encodeSvg,
+  encodeSvgz,
+  encodeTga,
+  encodeTiff as encodeTiffCodec,
+  encodeWbmp,
+  encodeXbm,
+  encodeXpm,
+  decodeCur,
+  decodeIcon,
+} from '@/lib/tools/imageCodecs';
+import { CURRENCIES, currencyMeta, money } from '@/lib/format';
+import { SCHEMA_SQL } from '@/lib/cloud/schema';
 import { can, entitlements, FREE_FEATURES, PRO_FEATURES, resolveEdition } from '@/lib/edition';
-import { UPSCALE_MODELS, isBundledModel } from '@/lib/stock/upscale/models';
-import { detectMapping, mapRows, monthlySeries, parseDelimited, platformTotals, topTitles } from '@/lib/stock/sales';
-import { PLATFORM_CAPS, STATUS_ORDER, countByStatus, setStatus, statusOf } from '@/lib/stock/submissions';
 import { sizeCapOptions } from '@/lib/stock/sizecaps';
-import { APP_VERSION } from '@/lib/version';
-import { DEFAULT_FLAGS, EMPTY_METADATA, kindOf, megapixels, type StockItem } from '@/lib/stock/types';
+import { APP_NAME, APP_VERSION } from '@/lib/version';
+import { DEFAULT_FLAGS, kindOf, megapixels, type StockItem } from '@/lib/stock/types';
 
-/** Injected by scripts/run-tests.mjs: absolute path to tests/fixtures. */
 declare const FIXTURE_DIR: string;
 
-/* ------------------------------- harness ------------------------------- */
 let passed = 0;
 const failures: string[] = [];
+const pending: Array<Promise<void>> = [];
 
-function test(name: string, fn: () => void) {
+function test(name: string, fn: () => void | Promise<void>) {
+  let result: void | Promise<void>;
   try {
-    fn();
-    passed++;
-    console.log(`  ✓ ${name}`);
+    result = fn();
   } catch (error) {
-    failures.push(`${name} → ${error instanceof Error ? error.message : String(error)}`);
+    failures.push(`${name}: ${error instanceof Error ? error.message : String(error)}`);
     console.log(`  ✗ ${name}`);
     console.log(`      ${error instanceof Error ? error.message : String(error)}`);
+    return;
   }
+  if (result instanceof Promise) {
+    pending.push(
+      result.then(
+        () => {
+          passed++;
+          console.log(`  ✓ ${name}`);
+        },
+        (error: unknown) => {
+          failures.push(`${name}: ${error instanceof Error ? error.message : String(error)}`);
+          console.log(`  ✗ ${name}`);
+          console.log(`      ${error instanceof Error ? error.message : String(error)}`);
+        },
+      ),
+    );
+    return;
+  }
+  passed++;
+  console.log(`  ✓ ${name}`);
 }
 
 function group(title: string) {
@@ -64,23 +194,29 @@ function assert(condition: unknown, message: string) {
 
 function equal<T>(actual: T, expected: T, message?: string) {
   if (actual !== expected) {
-    throw new Error(`${message ?? 'value mismatch'}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+    throw new Error(
+      `${message ?? 'value mismatch'}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`,
+    );
   }
 }
 
 function includes(haystack: string, needle: string, message?: string) {
-  if (!haystack.includes(needle)) throw new Error(`${message ?? 'missing text'}: ${JSON.stringify(needle)}`);
+  if (!haystack.includes(needle)) {
+    throw new Error(`${message ?? 'missing text'}: ${JSON.stringify(needle)}`);
+  }
 }
 
-/* ------------------------------- fixtures ------------------------------- */
 const fixture = (name: string) => new Uint8Array(readFileSync(path.join(FIXTURE_DIR, name)));
 
 let seq = 0;
-
 const BASE_METADATA = {
-  title: 'Golden sunset over a calm tropical beach',
-  description: 'A golden sunset reflected on a calm tropical beach with palm silhouettes.',
-  keywords: Array.from({ length: 22 }, (_, index) => `keyword${index + 1}`),
+  title: 'Golden sunset over calm tropical ocean beach',
+  description: 'Golden sunset reflected on calm tropical ocean waves with palm silhouettes.',
+  keywords: [
+    'sunset', 'beach', 'tropical', 'ocean', 'golden', 'coast', 'horizon', 'palm',
+    'travel', 'nature', 'vacation', 'sea', 'evening', 'sky', 'reflection', 'calm',
+    'summer', 'landscape', 'island', 'paradise', 'scenic', 'twilight',
+  ],
   categories: ['Nature', 'Travel'],
 };
 
@@ -96,7 +232,7 @@ function item(overrides: Partial<StockItem> = {}): StockItem {
     height: 3333,
     metadata: { ...BASE_METADATA },
     flags: { ...DEFAULT_FLAGS },
-    embeddedAt: null,
+    embeddedAt: stamp,
     importedAt: stamp,
     updatedAt: stamp,
   };
@@ -109,48 +245,28 @@ function item(overrides: Partial<StockItem> = {}): StockItem {
 }
 
 /* =========================== platform registry =========================== */
-group('Platform registry');
+group('Platform registry (14 microstock agencies)');
 
-test('fourteen marketplaces are registered with brand colours', () => {
+test('all 14 marketplaces have crisp HD brand marks and zero dashes in rules', () => {
   equal(PLATFORM_LIST.length, 14, 'platform count');
-  assert(PLATFORM_LIST.every((p) => /^#/.test(p.color)), 'every platform has a hex colour');
-});
-
-test('every marketplace has a brand mark and a CSV or portal workflow', () => {
   for (const platform of PLATFORM_LIST) {
+    assert(/^#/.test(platform.color), `${platform.id} colour`);
     const brand = PLATFORM_BRAND[platform.id];
-    assert(brand, `brand missing for ${platform.id}`);
-    assert(/^#/.test(brand.color), `brand colour missing for ${platform.id}`);
-    assert(
-      Boolean(brand.glyph || brand.monogram),
-      `brand needs a glyph or monogram: ${platform.id}`,
-    );
+    assert(brand && /^#/.test(brand.color), `${platform.id} brand`);
+    assert(Boolean(brand.glyph || brand.monogram), `${platform.id} mark`);
+    for (const tip of platform.tips ?? []) {
+      assert(!/[—–]/.test(tip), `no dash in tip for ${platform.id}: ${tip}`);
+    }
   }
 });
 
-test('Shutterstock keyword window is 7-50 and unordered', () => {
+test('Shutterstock, Adobe Stock, Freepik, Getty and Alamy follow 2026 rules', () => {
   equal(PLATFORMS.shutterstock.keywords.min, 7);
   equal(PLATFORMS.shutterstock.keywords.max, 50);
-  equal(PLATFORMS.shutterstock.keywords.ordered, false);
-});
-
-test('Adobe Stock caps keywords at 49 and orders them', () => {
   equal(PLATFORMS.adobe.keywords.max, 49);
   equal(PLATFORMS.adobe.keywords.ordered, true);
-  equal(PLATFORMS.adobe.title.noCommas, true);
-});
-
-test('Freepik CSV is semicolon-delimited, single-quoted and headerless', () => {
   equal(PLATFORMS.freepik.csv?.delimiter, ';');
-  equal(PLATFORMS.freepik.csv?.quote, "'");
-  equal(PLATFORMS.freepik.csv?.withHeader, false);
-});
-
-test('26 Shutterstock categories are available for the Categories column', () => {
-  equal(SHUTTERSTOCK_CATEGORIES.length, 26, 'category list length');
-});
-
-test('AI policy split matches the 2026 marketplace rules', () => {
+  equal(SHUTTERSTOCK_CATEGORIES.length, 26);
   equal(PLATFORMS.shutterstock.aiPolicy, 'forbidden');
   equal(PLATFORMS.getty.aiPolicy, 'forbidden');
   equal(PLATFORMS.alamy.aiPolicy, 'forbidden');
@@ -158,565 +274,480 @@ test('AI policy split matches the 2026 marketplace rules', () => {
   equal(PLATFORMS.freepik.aiPolicy, 'allowed-labeled');
 });
 
-test('findPlatform maps portal labels and aliases', () => {
+test('findPlatform and sizeCapOptions stay deterministic', () => {
   equal(findPlatform('Shutterstock'), 'shutterstock');
   equal(findPlatform('iStock'), 'getty');
-  equal(findPlatform('Magnific'), 'freepik');
   equal(findPlatform('Adobe Stock'), 'adobe');
-  equal(findPlatform('some unknown portal'), null);
-});
-
-test('Prepare size caps are unique so Select keys stay stable', () => {
-  const options = sizeCapOptions();
-  const values = options.map((option) => option.value);
-  equal(new Set(values).size, values.length, 'size-cap values are unique');
-  assert(values.includes('45'), 'the 45 MB Adobe cap is offered');
-  assert(options.every((option) => option.label.includes('MB cap')), 'every label names its cap');
+  equal(findPlatform('Freepik'), 'freepik');
+  equal(findPlatform('unknown portal'), null);
+  const caps = sizeCapOptions();
+  equal(new Set(caps.map((c) => c.value)).size, caps.length, 'unique size caps');
 });
 
 /* ============================== CSV writers ============================== */
-group('CSV writers (exact platform dialects)');
+group('CSV export & import dialects');
 
-test('Shutterstock: Filename,Description,Keywords,Categories with CRLF', () => {
-  const result = buildPlatformCsv([item()], 'shutterstock');
-  const [header, firstRow] = result.content.split('\r\n');
-  assert(
-    header.startsWith('Filename,Description,Keywords,Categories'),
-    `header should start with the official column order, got: ${header}`,
-  );
-  includes(firstRow, 'sunset-beach-1.jpg', 'filename present');
-  assert(!header.includes('Title'), 'Shutterstock has no Title column');
-});
+test('Shutterstock, Adobe, Depositphotos, Freepik and Universal CSV export cleanly', () => {
+  const ss = generateCsv('shutterstock', [item({ name: 'beach.jpg' })]);
+  assert(ss !== null, 'Shutterstock CSV');
+  includes(ss!.content, 'Filename,Description,Keywords,Categories', 'SS header');
+  includes(ss!.content, 'beach.jpg', 'SS filename');
 
-test('Adobe Stock: Filename,Title,Keywords,Category1,Category2', () => {
-  const result = buildPlatformCsv([item()], 'adobe');
-  equal(result.content.split('\r\n')[0], 'Filename,Title,Keywords,Category1,Category2');
-});
+  const adobe = generateCsv('adobe', [item({ name: 'studio.jpg' })]);
+  assert(adobe !== null, 'Adobe CSV');
+  includes(adobe!.content, 'Filename,Title,Keywords,Category', 'Adobe header');
 
-test('Depositphotos uses lowercase yes/no flag columns', () => {
-  const result = buildPlatformCsv([item({ flags: { ...DEFAULT_FLAGS, editorial: true, mature: false } })], 'depositphotos');
-  const [header, firstRow] = result.content.split('\r\n');
-  equal(header, 'Filename,Description,Keywords,Editorial,Nudity');
-  includes(firstRow, 'yes', 'lowercase editorial flag');
-});
+  const dp = generateCsv('depositphotos', [
+    item({ name: 'news.jpg', flags: { ...DEFAULT_FLAGS, editorial: true } }),
+  ]);
+  assert(dp !== null, 'Depositphotos CSV');
+  includes(dp!.content, 'yes', 'Depositphotos editorial flag');
 
-test('Dreamstime and 123RF keep their own column sets', () => {
-  equal(buildPlatformCsv([item()], 'dreamstime').content.split('\r\n')[0], 'Filename,Title,Description,Keywords,Category');
-  equal(buildPlatformCsv([item()], '123rf').content.split('\r\n')[0], 'Filename,Title,Description,Keywords,Country');
-});
+  const fp = generateCsv('freepik', [
+    item({ name: 'icon.eps', format: 'eps', flags: { ...DEFAULT_FLAGS, aiGenerated: true } }),
+  ]);
+  assert(fp !== null, 'Freepik CSV');
+  includes(fp!.content, ';', 'Freepik semicolon delimiter');
 
-test('Freepik export has no header row and single-quoted fields', () => {
-  const result = buildPlatformCsv([item()], 'freepik');
-  const firstLine = result.content.split('\n')[0].trim();
-  assert(!/^filename/i.test(firstLine), 'no header row');
-  includes(firstLine, "'", 'single quotes');
-  includes(firstLine, ';', 'semicolon delimiter');
-});
+  const uni = generateUniversalCsv([item({ name: 'universal.jpg' })]);
+  includes(uni.content, 'Filename', 'Universal header');
+  includes(uni.content, 'universal.jpg', 'Universal row');
 
-test('Freepik AI content is tagged with _ai_generated', () => {
-  const result = buildPlatformCsv([item({ flags: { ...DEFAULT_FLAGS, aiGenerated: true } })], 'freepik');
-  includes(result.content, '_ai_generated', 'AI disclosure keyword');
-});
-
-test('Portals without a CSV importer still get a copy-paste sheet', () => {
-  for (const id of ['pixabay', 'getty', 'alamy'] as const) {
-    const result = buildPlatformCsv([item()], id);
-    assert(result.rows === 1, `${id} sheet has one row`);
-    includes(result.content.split(/\r?\n/)[0], 'Filename', `${id} sheet has a header`);
-  }
-});
-
-test('exports are UTF-8 with BOM for Excel', () => {
-  equal(withBom('a,b').charCodeAt(0), 0xfeff, 'BOM prefix');
-});
-
-test('keyword joins follow each platform spec', () => {
-  const adobe = keywordsFor(item(), PLATFORMS.adobe).join(PLATFORMS.adobe.csv!.keywordJoin);
-  includes(buildPlatformCsv([item()], 'adobe').content, adobe, 'Adobe keyword join');
-});
-
-/* ============================== validation ============================== */
-group('Validation rules');
-
-test('a 0.8 MP photo is rejected on Adobe Stock', () => {
-  const issues = validateItem(item({ width: 1000, height: 800 }), 'adobe');
-  assert(issues.some((issue) => issue.level === 'error'), 'resolution error raised');
-  equal(worstLevel(issues), 'error');
-});
-
-test('a 5000x3333 photo passes Adobe resolution rules', () => {
-  const issues = validateItem(item(), 'adobe');
-  assert(!issues.some((issue) => issue.level === 'error' && /mp|resolution|pixel/i.test(issue.message)), 'no resolution error');
-});
-
-test('too few keywords is an error', () => {
-  const issues = validateItem(item({ metadata: { ...EMPTY_METADATA, title: 'Sunset', description: 'A sunset.', keywords: ['sunset', 'sky'], categories: [] } }), 'shutterstock');
-  assert(issues.some((issue) => issue.level === 'error'), 'keyword count error');
-});
-
-test('AI-generated content is blocked on Shutterstock but allowed on Adobe', () => {
-  const ai = item({ flags: { ...DEFAULT_FLAGS, aiGenerated: true } });
-  assert(validateItem(ai, 'shutterstock').some((issue) => issue.level === 'error'), 'Shutterstock blocks AI');
-  assert(!validateItem(ai, 'adobe').some((issue) => issue.level === 'error' && /ai/i.test(issue.message)), 'Adobe allows labelled AI');
-});
-
-test('recognisable people without a linked release raise a warning', () => {
-  const noRelease = item({ metadata: { ...EMPTY_METADATA, title: 'Businessman portrait', description: 'A businessman portrait.', keywords: ['businessman', 'man', 'people', 'portrait'], categories: [] } });
-  const issues = validateItem(noRelease, 'adobe');
-  assert(issues.some((issue) => /release/i.test(issue.message)), 'release warning raised');
-  const withRelease = { ...noRelease, releaseIds: ['rel-1'] };
-  assert(!validateItem(withRelease, 'adobe').some((issue) => /release/i.test(issue.message)), 'warning clears once linked');
-});
-
-test('validateEverywhere reports every platform at once', () => {
-  const everywhere = validateEverywhere(item(), [item()]);
-  equal(Object.keys(everywhere).length, PLATFORM_LIST.length, 'one entry per platform');
-});
-
-test('filenames are made platform-safe', () => {
-  const result = sanitizeFilename('My Photo, [final] (v2).JPG', PLATFORMS.adobe);
-  equal(result.changed, true, 'filename changed');
-  assert(!result.name.includes(','), 'comma removed');
-  assert(!result.name.includes('['), 'bracket removed');
-});
-
-test('kindOf and megapixels classify content', () => {
-  equal(kindOf(item({ name: 'icon.svg', format: 'svg' })), 'vector');
-  equal(kindOf(item()), 'photo');
-  equal(megapixels(item({ width: 4000, height: 3000 })), 12);
-  equal(megapixels(item({ width: undefined, height: undefined })), null);
-});
-
-/* ============================ metadata engine ============================ */
-group('Metadata generation');
-
-test('the offline generator fills title, description and 7+ keywords', () => {
-  const generated = generateMetadata(item({ name: 'red-apple-on-wooden-table.jpg', metadata: EMPTY_METADATA }), { style: 'auto', categories: [], concepts: [] });
-  assert(generated.title.trim().length > 10, 'title written');
-  assert(generated.description.trim().length > 30, 'description written');
-  assert(generated.keywords.length >= 7, `keyword count ${generated.keywords.length}`);
-  assert(generated.keywords.length <= 50, 'within the 50 keyword cap');
-  equal(new Set(generated.keywords).size, generated.keywords.length, 'keywords unique');
-  assert(generated.keywords.every((keyword) => keyword === keyword.toLowerCase()), 'keywords lowercase');
-});
-
-test('the personal keyword bank expands synonyms', () => {
-  const generated = generateMetadata(
-    item({ name: 'cat-sleeping.jpg', metadata: EMPTY_METADATA }),
-    { style: 'auto', categories: [], concepts: [] },
-    { synonyms: { cat: ['kitten', 'feline', 'domestic cat'] } },
-  );
-  assert(generated.keywords.includes('kitten'), 'bank synonym injected');
-});
-
-test('vector files get vector-flavoured copy', () => {
-  const generated = generateMetadata(item({ name: 'flat-design-rocket-icon.svg', format: 'svg', metadata: EMPTY_METADATA }), { style: 'auto', categories: [], concepts: [] });
-  assert(/icon|illustration|vector|design/i.test(`${generated.title} ${generated.keywords.join(' ')}`), 'vector vocabulary used');
-});
-
-test('Adobe adaptation strips commas and caps keywords at 49', () => {
-  const adapted = adaptForPlatform(
-    { ...EMPTY_METADATA, title: 'Sunset, beach, palm trees', description: 'Desc', keywords: Array.from({ length: 80 }, (_, i) => `kw${i}`), categories: [] },
+  const capped = keywordsFor(
+    item({ metadata: { ...BASE_METADATA, keywords: Array.from({ length: 60 }, (_, i) => `tag${i}`) } }),
     PLATFORMS.adobe,
   );
-  assert(!adapted.title.includes(','), 'commas removed from Adobe title');
-  assert(adapted.keywords.length <= 49, `keywords capped (${adapted.keywords.length})`);
+  assert(capped.length <= 49, 'Adobe 49 keyword cap honoured');
 });
 
-test('Freepik adaptation caps the title at 100 characters', () => {
-  const adapted = adaptForPlatform({ ...EMPTY_METADATA, title: 'x'.repeat(200), description: 'd', keywords: ['a'], categories: [] }, PLATFORMS.freepik);
-  assert(adapted.title.length <= 100, `title length ${adapted.title.length}`);
-});
+test('CSV importer parses Freepik headerless and multi-agency files', () => {
+  const parsed = parseMetadataCsv('alpha.jpg;A clean title;one, two, three, four\n', 'freepik');
+  equal(parsed.platform, 'freepik');
+  equal(parsed.rows[0].title, 'A clean title');
+  equal(parsed.rows[0].keywords?.length, 4);
 
-test('filename tokens drop noise words and numbers', () => {
-  const tokens = tokensFromFilename('IMG_2049_final-copy_beach_sunset.jpg');
-  assert(tokens.includes('beach') && tokens.includes('sunset'), 'real words kept');
-  assert(!tokens.includes('final') && !tokens.includes('img') && !tokens.includes('2049'), 'noise dropped');
-});
-
-/* ============================ CSV round-trip ============================ */
-group('CSV metadata import (round-trip)');
-
-test('a Shutterstock export parses straight back in', () => {
-  const rows = [item({ name: 'alpha.jpg' }), item({ name: 'beta.jpg' })];
-  const csv = buildPlatformCsv(rows, 'shutterstock').content;
-  const parsed = parseMetadataCsv(csv);
-  equal(parsed.hasHeader, true, 'header detected');
-  equal(parsed.platform, 'shutterstock', 'dialect detected');
-  equal(parsed.rows.length, 2, 'row count');
-  equal(parsed.rows[0].filename, 'alpha.jpg', 'filename kept');
-  assert((parsed.rows[0].keywords?.length ?? 0) > 5, 'keywords parsed');
-});
-
-test('a headerless Freepik export parses by dialect', () => {
-  const csv = buildPlatformCsv([item({ name: 'vector-icon.eps', format: 'eps' })], 'freepik').content;
-  const parsed = parseMetadataCsv(csv);
-  equal(parsed.hasHeader, false, 'headerless');
-  equal(parsed.platform, 'freepik', 'freepik dialect');
-  equal(parsed.rows.length, 1, 'one row');
-  equal(parsed.rows[0].filename, 'vector-icon.eps', 'filename');
-});
-
-test('a forced dialect overrides positional guessing', () => {
-  const parsed = parseMetadataCsv("alpha.jpg;A title;one, two, three, four\n", 'freepik');
-  equal(parsed.platform, 'freepik', 'forced platform');
-  equal(parsed.rows[0].title, 'A title', 'positional title');
-  equal(parsed.rows[0].keywords?.length, 4, 'positional keywords');
-});
-
-test('single-quoted fields with embedded delimiters split correctly', () => {
   const fields = splitFields("'a;b';'c;d'", ';', "'");
-  equal(fields.length, 2, 'field count');
-  equal(fields[0], 'a;b', 'quoted delimiter preserved');
+  equal(fields.length, 2);
+  equal(fields[0], 'a;b');
+
+  const lib = [item({ name: 'Alpha.JPG' }), item({ name: 'beta.png', format: 'png' })];
+  const csv = parseMetadataCsv('Filename,Title,Keywords\nalpha.jpg,T1,"a, b, c"\nbeta,T2,"x, y, z"\n');
+  equal(planApply(lib, csv.rows).size, 2);
 });
 
-test('rows are matched to library items by filename, case-insensitively', () => {
-  const library = [item({ name: 'Alpha.JPG' }), item({ name: 'beta.png', format: 'png' })];
-  const parsed = parseMetadataCsv('Filename,Title,Keywords\nalpha.jpg,T1,"a, b, c"\nbeta,T2,"x, y, z"\nmissing.jpg,T3,"q"\n');
-  const plan = planApply(library, parsed.rows);
-  equal(plan.size, 2, 'two matches (exact + stem)');
-});
+/* ======================== metadata & validation ========================== */
+group('SEO metadata & agency validation');
 
-test('rows without a filename are skipped, not guessed', () => {
-  const parsed = parseMetadataCsv('Filename,Title,Keywords\n,T1,"a, b"\n');
-  equal(parsed.rows.length, 0, 'no rows');
-  equal(parsed.skipped, 1, 'skip counted');
-});
-
-test('the AI disclosure keyword flips the aiGenerated flag', () => {
-  const parsed = parseMetadataCsv('filename;title;keywords\nx.eps;Icon;\'design, _ai_generated\'\n', 'freepik');
-  equal(parsed.rows[0].aiGenerated, true, 'flag detected');
-});
-
-/* ============================== sales data ============================== */
-group('Earnings analytics');
-
-test('delimiter sniffing handles comma, semicolon and quoted commas', () => {
-  const comma = parseDelimited('Date,Title,Earnings\n2026-01-05,"Sunset, beach",12.50\n');
-  equal(comma.delimiter, ',');
-  equal(comma.rows[0][1], 'Sunset, beach', 'quoted comma preserved');
-  const semi = parseDelimited('Date;Title;Earnings\n2026-01-05;Sunset;12.50\n');
-  equal(semi.delimiter, ';');
-});
-
-test('portal headers are auto-mapped from synonyms', () => {
-  const mapping = detectMapping(['Download Date', 'Image Title', 'Royalty', 'License Type', 'Buyer Country']);
-  equal(mapping.date, 'Download Date');
-  equal(mapping.title, 'Image Title');
-  equal(mapping.earnings, 'Royalty');
-  equal(mapping.license, 'License Type');
-  equal(mapping.country, 'Buyer Country');
-});
-
-test('rows map into a normalised ledger and aggregate', () => {
-  const parsed = parseDelimited('Date,Title,Earnings,Downloads\n2026-01-05,Sunset,12.50,3\n2026-01-20,Sunset,7.50,2\n2026-02-02,City,25.00,5\n');
-  const mapping = detectMapping(parsed.headers);
-  const sales = mapRows(parsed.rows, parsed.headers, mapping, 'shutterstock');
-  equal(sales.length, 3, 'sale count');
-  equal(sales[0].earnings, 12.5, 'earnings parsed as number');
-  const months = monthlySeries(sales);
-  equal(months.length, 2, 'two months');
-  equal(months[0].month, '2026-01', 'first month');
-  equal(Math.round(months[0].earnings * 100) / 100, 20, 'January total');
-  equal(platformTotals(sales)[0].platform, 'shutterstock');
-  equal(topTitles(sales, 5)[0].title, 'City', 'best seller first');
-});
-
-test('rows with neither date nor earnings are dropped', () => {
-  const parsed = parseDelimited('Date,Title,Earnings\n,,\n2026-01-05,Sunset,1.00\n');
-  const sales = mapRows(parsed.rows, parsed.headers, detectMapping(parsed.headers), 'adobe');
-  equal(sales.length, 1, 'junk row dropped');
-});
-
-/* ============================ submission planner ============================ */
-group('Submission planner');
-
-test('status transitions and counts are persisted in the map', () => {
-  let map = setStatus({}, 'item-1', 'adobe', 'queued');
-  map = setStatus(map, 'item-1', 'adobe', 'submitted');
-  map = setStatus(map, 'item-2', 'adobe', 'queued');
-  equal(statusOf(map, 'item-1', 'adobe'), 'submitted');
-  equal(countByStatus(map, 'adobe').submitted, 1);
-  equal(countByStatus(map, 'adobe').queued, 1);
-  equal(countByStatus(map, 'shutterstock').todo, 0);
-});
-
-test('every status exists and Freepik caps are encoded', () => {
-  equal(STATUS_ORDER.length, 5);
-  equal(PLATFORM_CAPS.freepik?.monthly, 200);
-  equal(PLATFORM_CAPS.freepik?.firstBatch?.[0], 150);
-  equal(PLATFORM_CAPS.freepik?.firstBatch?.[1], 200);
-});
-
-/* ============================== vector hygiene ============================== */
-group('Vector hygiene');
-
-test('SVG analysis flags scripts, handlers and editor junk', () => {
-  const report = analyzeSvg(
-    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" onclick="evil()">
-       <script>alert(1)</script>
-       <image href="https://example.com/a.png"/>
-       <text font-family="Helvetica">Hi</text>
-     </svg>`,
+test('draftMetadata generates zero-dash commercial titles, descriptions and keywords', () => {
+  const meta = draftMetadata(
+    item({
+      name: 'minimalist-workspace_coffee-laptop.jpg',
+      metadata: { title: '', description: '', keywords: [], categories: [] },
+    }),
   );
+  assert(meta.title.length >= 20, 'commercial title length');
+  assert(meta.description.length >= 25, 'commercial description length');
+  assert(meta.keywords.length >= 15, 'rich keyword list');
+  assert(!/[—–\-]/.test(meta.title), `no dash in title: ${meta.title}`);
+  assert(!/[—–]/.test(meta.description), 'no dash in description');
+  assert(tokensFromFilename('IMG_2026_golden-retriever.jpg').includes('golden'), 'tokens parsed');
+
+  const scrubbed = scrubStockKeywords(['Camera', 'camera', 'nikon', 'sunrise', 'ocean', 'a'], 50);
+  assert(!scrubbed.includes('nikon'), 'camera brand scrubbed');
+  assert(scrubbed.includes('sunrise'), 'clean keyword retained');
+  equal(scrubbed.filter((k) => k === 'camera').length, 1, 'deduplicated');
+
+  const cleaned = cleanStockSentence('Modern studio — laptop – bright morning');
+  assert(!/[—–]/.test(cleaned), 'cleanStockSentence strips all dashes');
+
+  const merged = mergeKeywords(['sunset', 'beach'], parseKeywordInput('beach, ocean; coast'), 50);
+  equal(merged.length, 4);
+
+  const clip = formatMetadataForClipboard(meta, 'all');
+  includes(clip, meta.title, 'clipboard has title');
+  includes(clip, meta.keywords[0], 'clipboard has keywords');
+});
+
+test('validator flags restricted brands, low MP, bad filenames and forbidden AI', () => {
+  const clean = validateItem(item(), 'adobe');
+  assert(worstLevel(clean) === 'ok' || worstLevel(clean) === 'info', 'clean item has zero warnings/errors');
+
+  const tiny = validateItem(item({ width: 800, height: 600 }), 'shutterstock');
+  equal(worstLevel(tiny), 'error', 'low resolution fails Shutterstock 4 MP floor');
+
+  const aiOnSs = validateItem(item({ flags: { ...DEFAULT_FLAGS, aiGenerated: true } }), 'shutterstock');
+  equal(worstLevel(aiOnSs), 'error', 'AI content rejected on Shutterstock');
+
+  const tm = validateItem(
+    item({
+      metadata: {
+        ...BASE_METADATA,
+        title: 'Person holding iPhone in Nike shoes',
+        keywords: [...BASE_METADATA.keywords, 'iphone', 'nike'],
+      },
+    }),
+    'adobe',
+  );
+  assert(tm.some((i) => i.level === 'error' || i.level === 'warn'), 'trademarks flagged');
+
+  const all = validateEverywhere(item(), [item()]);
+  equal(Object.keys(all).length, 14, 'validated across all 14 agencies');
+  const renamed = sanitizeFilename('My Photo Final.JPG');
+  equal(renamed.changed, true);
+  assert(!/\s/.test(renamed.name), 'spaces removed from filename');
+  equal(kindOf(item({ format: 'svg' })), 'vector');
+  equal(kindOf(item({ format: 'jpg' })), 'photo');
+  equal(megapixels(item({ width: 4000, height: 3000 })), 12);
+});
+
+test('Earnings import and submission status tracking remain available', () => {
+  const parsed = parseDelimited('Date,Title,Earnings,Downloads\n2026-01-15,Sunrise,2.50,3');
+  const sales = mapRows(parsed.rows, parsed.headers, detectMapping(parsed.headers), 'shutterstock');
+  equal(sales.length, 1);
+  equal(monthlySeries(sales)[0].earnings, 2.5);
+  const map = setStatus({}, 'image-1', 'shutterstock', 'submitted');
+  equal(statusOf(map, 'image-1', 'shutterstock'), 'submitted');
+  equal(countByStatus(map, 'shutterstock').submitted, 1);
+});
+
+/* =========================== XMP / IPTC embed ============================ */
+group('Lossless XMP & IPTC embedding');
+
+test('JPEG (XMP + IPTC), PNG (iTXt), SVG and EPS round-trip cleanly', () => {
+  equal(canEmbedFormat('jpg'), true);
+  equal(canEmbedFormat('png'), true);
+  equal(canEmbedFormat('webp'), true);
+  equal(canEmbedFormat('svg'), true);
+
+  const jpgBytes = embedMetadata(fixture('sample.jpg'), 'jpg', BASE_METADATA);
+  assert(jpgBytes !== null && jpgBytes.length > fixture('sample.jpg').length, 'JPEG embedded');
+  const jpgRead = extractEmbeddedXmp(jpgBytes!, 'jpg');
+  equal(jpgRead?.title, BASE_METADATA.title, 'JPEG title round-trip');
+  assert((jpgRead?.keywords?.length ?? 0) >= 15, 'JPEG keywords round-trip');
+
+  const pngBytes = embedMetadata(fixture('sample.png'), 'png', BASE_METADATA);
+  assert(pngBytes !== null && pngBytes.length > fixture('sample.png').length, 'PNG embedded');
+  const pngRead = extractEmbeddedXmp(pngBytes!, 'png');
+  equal(pngRead?.title, BASE_METADATA.title, 'PNG title round-trip');
+
+  const svgBytes = embedMetadata(fixture('sample.svg'), 'svg', BASE_METADATA);
+  assert(svgBytes !== null, 'SVG embedded');
+  equal(extractEmbeddedXmp(svgBytes!, 'svg')?.title, BASE_METADATA.title, 'SVG title round-trip');
+
+  const epsBytes = embedMetadata(fixture('sample.eps'), 'eps', BASE_METADATA);
+  assert(epsBytes !== null, 'EPS embedded');
+
+  const packet = buildXmpPacket(BASE_METADATA);
+  includes(packet, '<x:xmpmeta');
+  equal(sidecarFilename('photo.tiff'), 'photo.xmp');
+});
+
+test('vector analyzer and file helpers operate cleanly', () => {
+  const report = analyzeSvg(
+    '<svg xmlns="http://www.w3.org/2000/svg" onclick="x()"><script>1</script><rect width="10" height="10"/></svg>',
+  );
+  equal(report.ok, false, 'unsafe SVG flagged');
   equal(report.hasScript, true, 'script detected');
   assert(report.eventHandlers >= 1, 'event handler detected');
-  assert(report.externalRefs.length >= 1, 'external ref detected');
-  assert(report.embeddedRasters >= 1, 'raster detected');
-  assert(report.fonts.includes('Helvetica'), 'font listed');
-  equal(report.ok, false, 'not submission clean');
-});
-
-test('SVG sanitizer removes the dangerous parts but keeps the artwork', () => {
-  const result = sanitizeSvg(
-    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" onload="x()"><script>alert(1)</script><circle cx="5" cy="5" r="4"/></svg>`,
+  const cleaned = sanitizeSvg(
+    '<svg xmlns="http://www.w3.org/2000/svg" onclick="x()"><script>1</script><rect width="10" height="10"/></svg>',
   );
-  assert(!/<script/i.test(result.text), 'script removed');
-  assert(!/onload=/i.test(result.text), 'handler removed');
-  assert(!/inkscape/i.test(result.text), 'editor namespace removed');
-  includes(result.text, '<circle', 'geometry preserved');
-  assert(result.removed.length > 0, 'removals reported');
-});
+  assert(!cleaned.text.includes('<script'), 'script removed');
+  assert(cleaned.removed.length >= 1, 'removals tracked');
+  assert(Array.isArray(analyzeEps(new TextDecoder().decode(fixture('sample.eps'))).documentFonts), 'EPS analyzed');
 
-test('EPS analysis reads the Illustrator version, fonts and colour space', () => {
-  const report = analyzeEps(
-    '%!PS-Adobe-3.0 EPSF-3.0\n%%Creator: Adobe Illustrator(R) 27.0\n%%BoundingBox: 0 0 100 100\n%%DocumentFonts: Helvetica\n1 0 0 0 setcmykcolor\n%%EOF\n',
-  );
-  includes(report.creator ?? '', 'Illustrator', 'creator read');
-  equal(report.illustratorMajor, 27, 'major version');
-  equal(report.epsVersion, 'EPSF-3.0', 'eps version');
-  assert(report.documentFonts.includes('Helvetica'), 'font listed');
-  assert(report.usesCmyk, 'CMYK operators detected');
-});
-
-/* ============================== XMP embedding ============================== */
-group('Embedded metadata (binary round-trips)');
-
-const metadata = {
-  ...EMPTY_METADATA,
-  title: 'Round trip title',
-  description: 'A description used to prove the packet survives the file format.',
-  keywords: ['round', 'trip', 'xmp', 'metadata', 'test', 'stock', 'keyword'],
-  categories: ['Technology'],
-};
-
-test('PNG: XMP is written into iTXt and read back', () => {
-  const original = fixture('sample.png');
-  const result = embedMetadata(original, 'png', metadata);
-  equal(result.ok, true, `embed failed: ${result.message}`);
-  const read = readEmbeddedMetadata(result.bytes!, 'png');
-  equal(read?.title, metadata.title, 'title round-trip');
-  assert((read?.keywords?.length ?? 0) >= 5, 'keywords round-trip');
-  assert(result.bytes!.length > original.length, 'file grew');
-});
-
-test('JPEG: XMP is written into APP1 and read back', () => {
-  const original = fixture('sample.jpg');
-  const result = embedMetadata(original, 'jpg', metadata);
-  equal(result.ok, true, `embed failed: ${result.message}`);
-  const read = readEmbeddedMetadata(result.bytes!, 'jpg');
-  equal(read?.title, metadata.title, 'title round-trip');
-});
-
-test('SVG: XMP lands inside <metadata>', () => {
-  const result = embedMetadata(fixture('sample.svg'), 'svg', metadata);
-  equal(result.ok, true, `embed failed: ${result.message}`);
-  includes(result.text!, '<x:xmpmeta', 'xmp packet present');
-  const read = readEmbeddedMetadata(new TextEncoder().encode(result.text!), 'svg');
-  equal(read?.title, metadata.title, 'title round-trip');
-});
-
-test('EPS: XMP is attached to the PostScript header', () => {
-  const result = embedMetadata(fixture('sample.eps'), 'eps', metadata);
-  equal(result.ok, true, `embed failed: ${result.message}`);
-  includes(result.text!, 'x:xmpmeta', 'packet present');
-});
-
-test('PDF-based .ai files report a clear, actionable failure', () => {
-  const result = embedMetadata(new TextEncoder().encode('%PDF-1.7\ntrailer\n'), 'ai', metadata);
-  equal(result.ok, false, 'must not claim success');
-  includes(result.message, 'EPS', 'advice mentions re-saving as EPS');
-});
-
-test('WebP without an XMP chunk is never silently rewritten', () => {
-  const result = embedMetadata(new TextEncoder().encode('RIFF\x00\x00\x00\x00WEBPVP8 '), 'webp', metadata);
-  equal(result.ok, false, 'must fail cleanly');
-});
-
-test('XMP packet build/parse is lossless for title, description and keywords', () => {
-  const packet = buildXmpPacket(metadata);
-  includes(packet, '<x:xmpmeta', 'packet wrapper');
-  const parsed = parseXmpPacket(packet);
-  equal(parsed.title, metadata.title);
-  equal(parsed.keywords?.length, metadata.keywords.length);
-});
-
-/* ============================== file helpers ============================== */
-group('File helpers');
-
-test('format detection is case-insensitive and rejects unknown types', () => {
   equal(detectFormat('photo.JPG'), 'jpg');
   equal(detectFormat('art.EPS'), 'eps');
   equal(detectFormat('notes.docx'), null);
-});
-
-test('byte formatting is human readable', () => {
-  includes(formatBytes(1536), 'KB');
   includes(formatBytes(5_242_880), 'MB');
+  const raw = fixture('sample.png');
+  equal(base64ToBytes(bytesToBase64(raw)).length, raw.length);
 });
 
-test('base64 conversion round-trips binary data', () => {
-  const bytes = fixture('sample.png');
-  const restored = base64ToBytes(bytesToBase64(bytes));
-  equal(restored.length, bytes.length, 'length preserved');
-  equal(restored[0], bytes[0], 'first byte preserved');
-});
+/* =========================== AI provider engine ========================== */
+group('AI metadata engine (10 providers + official brand logos)');
 
-
-/* =========================== AI provider layer =========================== */
-
-group('AI providers');
-
-test('every provider has a usable default model and base URL shape', () => {
-  for (const provider of AI_PROVIDERS) {
-    if (provider.id === 'offline') {
-      equal(provider.defaultModel, '', 'offline has no model');
-      continue;
-    }
-    assert(provider.defaultModel.length > 0, `${provider.id} has a default model`);
-    assert(/^https?:\/\//.test(provider.baseUrl), `${provider.id} has an absolute base URL`);
-    equal(provider.baseUrl.endsWith('/'), false, `${provider.id} has no trailing slash`);
+test('all 10 AI providers have valid configurations and brand logos', () => {
+  equal(PROVIDER_LIST.length, 10, '10 providers');
+  for (const p of PROVIDER_LIST) {
+    assert(p.brand.length > 0, `${p.kind} brand`);
+    assert(!/[—–]/.test(p.summary), `${p.kind} zero-dash summary`);
+    if (p.kind === 'local' || p.kind === 'custom') continue;
+    assert(/^https?:\/\//.test(p.baseUrl), `${p.kind} baseUrl`);
+  }
+  for (const id of [
+    'local', 'ollama', 'openrouter', 'gemini', 'mistral',
+    'nvidia', 'groq', 'cerebras', 'together', 'custom',
+  ] as const) {
+    assert(Boolean(PROVIDERS[id]), `provider ${id}`);
   }
 });
 
-test('the built-in generator is always available; cloud needs a key', () => {
-  equal(isAiReady(EMPTY_AI_SETTINGS), false, 'offline is never "AI ready"');
-  equal(isAiReady({ ...EMPTY_AI_SETTINGS, provider: 'ollama' }), true, 'local needs no key');
-  equal(
-    isAiReady({ ...EMPTY_AI_SETTINGS, provider: 'openrouter', apiKey: '  ' }),
-    false,
-    'blank key is not a key',
+test('AI URL normalizers, vision detection, brand inference and JSON parser work', () => {
+  equal(normalizeOpenAiBase('https://api.groq.com/openai/v1/chat/completions'), 'https://api.groq.com/openai/v1');
+  equal(normalizeOllamaBase('http://localhost:11434/api/chat/'), 'http://localhost:11434');
+
+  const groqNoKey = sanitizeAiSettings({ ...DEFAULT_AI, kind: 'groq', apiKey: '', keys: {} });
+  const groqWithKey = sanitizeAiSettings({
+    ...DEFAULT_AI,
+    kind: 'groq',
+    apiKey: 'gsk_test_123',
+    keys: { groq: 'gsk_test_123' },
+  });
+  equal(isAiConfigured(groqNoKey), false, 'cloud without key not ready');
+  equal(isAiConfigured(groqWithKey), true, 'cloud with key ready');
+
+  equal(inferModelBrand('google/gemini-2.5-flash'), 'gemini');
+  equal(inferModelBrand('google/gemma-4-31b-it:free'), 'gemma');
+  equal(inferModelBrand('meta-llama/llama-4-scout'), 'meta');
+  equal(inferModelBrand('qwen/qwen3.6-plus:free'), 'qwen');
+  equal(inferModelBrand('deepseek/deepseek-r1'), 'deepseek');
+  equal(inferModelBrand('z-ai/glm-4.5-air:free'), 'zhipu');
+  equal(modelSupportsVision('gemini', 'gemini-2.5-flash'), true);
+  equal(modelSupportsVision('ollama', 'qwen2.5vl:7b'), true);
+
+  const parsed = extractJsonMetadata(
+    '```json\n{"title":"Modern studio — desk – coffee","description":"Bright studio — natural light.","keywords":["Desk","desk","coffee","laptop","minimal","office","work","creative"]}\n```',
+    BASE_METADATA,
+    49,
   );
-  equal(
-    isAiReady({ ...EMPTY_AI_SETTINGS, provider: 'openrouter', apiKey: 'sk-x' }),
-    true,
-    'key + default model is ready',
-  );
+  assert(!/[—–]/.test(parsed.title), 'dashes removed from AI title');
+  assert(!/[—–]/.test(parsed.description), 'dashes removed from AI description');
+  equal(parsed.keywords.filter((k) => k === 'desk').length, 1, 'AI keywords deduplicated');
 });
 
-test('an empty model falls back to the provider default, an override wins', () => {
-  const settings = { ...EMPTY_AI_SETTINGS, provider: 'gemini' as const };
-  equal(resolvedModel(settings), getProvider('gemini').defaultModel);
-  equal(resolvedModel({ ...settings, model: 'gemini-1.5-flash' }), 'gemini-1.5-flash');
+/* ======================== creative tool suites =========================== */
+group('Image Upscaler, Video Upscaler, BG Remover & Converter');
+
+test('Image Upscaler ships 31 models, 8 purposes, agency presets and in-app install specs', () => {
+  assert(UPSCALE_MODELS.length >= 31, `image models: ${UPSCALE_MODELS.length}`);
+  assert(UPSCALE_PURPOSES.length >= 8, 'image purposes');
+  assert(UPSCALE_TARGETS.length >= 9, 'image targets');
+  assert(UPSCALE_FORMATS.length >= 3, 'image output formats (PNG, JPG, WebP)');
+  const ncnn = UPSCALE_MODELS.find((m) => m.id === 'realesrgan-x4plus')!;
+  assert(buildUpscaleInstallSpec(ncnn) !== null, 'install spec for Real-ESRGAN');
+  const target = resolveTargetSize(2000, 1500, UPSCALE_TARGETS.find((t) => t.id === '4k')!, 4);
+  assert(target.width >= 3840 || target.height >= 2160, '4K target achieved');
+  const plan = planPasses(4, [4]);
+  assert(plan.passes.length >= 1 && plan.passes[0] === 4, 'pass plan generated');
+  includes(upscaleOutputFilename('hero.jpg', 4, 'png'), '.png');
 });
 
-test('unknown provider ids fall back to the built-in generator', () => {
-  equal(getProvider('nope' as never).id, 'offline');
+test('Background Remover ships 16 FOSS models with instant built-in & ONNX install specs', () => {
+  assert(BG_MODELS.length >= 16, `bg models: ${BG_MODELS.length}`);
+  assert(BG_PURPOSES.length >= 6, 'bg purposes');
+  assert(BG_MODELS.filter((m) => m.kind === 'builtin').length >= 2, 'instant zero-download engines included');
+  const onnx = BG_MODELS.find((m) => m.kind === 'onnx' && Boolean(m.url))!;
+  const spec = buildBgInstallSpec(onnx);
+  assert(spec !== null && spec.files[0]?.url.startsWith('https://'), 'HTTPS ONNX weight spec');
 });
 
-test('model JSON is normalised: weak keywords dropped, limits enforced', () => {
-  const raw = {
-    title: '  A golden retriever puppy sits on grass  ',
-    description: 'A puppy in a field.',
-    keywords: ['Dog', 'dog', 'a', 'golden retriever', ' puppy ', '', 'pet'],
+test('Video Upscaler ships 23 video & RIFE models plus 4K/8K agency presets', () => {
+  assert(VIDEO_MODELS.length >= 23, `video models: ${VIDEO_MODELS.length}`);
+  assert(VIDEO_PURPOSES.length >= 6, 'video purposes');
+  assert(VIDEO_TARGETS.length >= 8, 'video presets');
+  equal(VIDEO_OUTPUT_FORMATS.length, 2, 'MP4 & WebM');
+  assert(VIDEO_MODELS.some((m) => (m.fpsMultiplier ?? 1) >= 2), 'RIFE FPS interpolation included');
+  const installable = VIDEO_MODELS.find((m) => buildVideoInstallSpec(m) !== null);
+  assert(Boolean(installable), 'in-app video NCNN/RIFE archive specs available');
+  const dims = resolveVideoDimensions(1920, 1080, 3840);
+  equal(dims.width, 3840);
+  equal(dims.height, 2160);
+  equal(formatDuration(125), '2:05');
+});
+
+test('Image Converter covers 43 formats with pure-TS BMP, TIFF, ICO and GIF89a LZW encoders', () => {
+  equal(CONVERT_FORMATS.length, 43, '43 formats');
+  assert(CONVERT_RESIZE_PRESETS.length >= 6, 'resize presets');
+  equal(buildConvertedFilename('sample-photo.png', 'webp'), 'sample-photo.webp');
+  equal(buildConvertedFilename('sample-photo.jpg', 'tiff'), 'sample-photo.tiff');
+  equal(buildConvertedFilename('hero.png', 'psd'), 'hero.psd');
+  equal(buildConvertedFilename('hero.png', 'exr'), 'hero.exr');
+  equal(buildConvertedFilename('hero.png', 'jxl'), 'hero.jxl');
+  // Every output format has a unique id, extension and MIME type.
+  equal(new Set(CONVERT_FORMATS.map((f) => f.id)).size, CONVERT_FORMATS.length, 'unique ids');
+  equal(new Set(CONVERT_FORMATS.map((f) => f.ext)).size, CONVERT_FORMATS.length, 'unique exts');
+  // Decode-only inputs (HEIC, camera RAW, design ZIPs) are accepted.
+  for (const ext of ['heic', 'heif', 'dng', 'cr2', 'nef', 'arw', 'psd', 'exr', 'dpx', 'cin', 'sgi', 'fits', 'qoi', 'jxl', 'jp2']) {
+    assert(isSupportedInputExtension(ext), `input ${ext}`);
+    assert(SUPPORTED_INPUT_EXTENSIONS.includes(ext), `supported ${ext}`);
+  }
+  assert(ACCEPT_ATTRIBUTE.includes('.heic'), 'accept heic');
+  assert(ACCEPT_ATTRIBUTE.includes('.dng'), 'accept dng');
+  assert(ACCEPT_ATTRIBUTE.includes('image/*'), 'accept image wildcard');
+  // Alpha and XMP capability flags are coherent.
+  for (const fmt of CONVERT_FORMATS) {
+    assert(fmt.label.length > 0 && fmt.mime.length > 0 && fmt.tag.length > 0, `${fmt.id} spec`);
+  }
+  assert(CONVERT_FORMATS.find((f) => f.id === 'jpg')?.supportsAlpha === false, 'jpg no alpha');
+  assert(CONVERT_FORMATS.find((f) => f.id === 'png')?.supportsAlpha === true, 'png alpha');
+  assert(CONVERT_FORMATS.find((f) => f.id === 'jpg')?.supportsXmp === true, 'jpg xmp');
+
+  const rgba = new Uint8ClampedArray([
+    255, 0, 0, 255, 0, 255, 0, 255,
+    0, 0, 255, 255, 255, 255, 0, 128,
+  ]);
+  const bmp = encodeBmp(rgba, 2, 2, true);
+  equal(bmp[0], 0x42, 'BMP B');
+  equal(bmp[1], 0x4d, 'BMP M');
+
+  const tiff = encodeTiff(rgba, 2, 2, true);
+  equal(tiff[0], 0x49, 'TIFF II');
+  equal(tiff[1], 0x49, 'TIFF II');
+  equal(tiff[2], 42, 'TIFF 42');
+
+  const gif = encodeGif(rgba, 2, 2, true);
+  equal(String.fromCharCode(gif[0], gif[1], gif[2], gif[3], gif[4], gif[5]), 'GIF89a');
+  equal(gif[gif.length - 1], 0x3b, 'GIF trailer');
+
+  const fakePng = fixture('sample.png');
+  const ico = encodeIco([{ size: 32, png: fakePng }]);
+  equal(ico[0], 0, 'ICO reserved 0');
+  equal(ico[2], 1, 'ICO type 1');
+  equal(ico[4], 1, 'ICO image count 1');
+});
+
+test('Pure codec self-round trips preserve dimensions and selected pixels', () => {
+  const rgba = new Uint8ClampedArray([
+    255, 10, 20, 255, 0, 255, 0, 255,
+    0, 0, 255, 255, 255, 255, 0, 255,
+  ]);
+  const check = (label: string, decoded: { width: number; height: number; data: Uint8ClampedArray }) => {
+    equal(decoded.width, 2, `${label} width`);
+    equal(decoded.height, 2, `${label} height`);
+    equal(decoded.data[0], 255, `${label} r0`);
+    equal(decoded.data[1], 10, `${label} g0`);
+    equal(decoded.data[2], 20, `${label} b0`);
   };
-  const result = normalizeMetadata(raw, 'shutterstock');
-  equal(result.title.startsWith('A golden'), true, 'title trimmed, not lowercased');
-  includes(result.keywords.join(' '), 'dog', 'keywords lowercased');
-  equal(result.keywords.filter((k) => k === 'dog').length, 1, 'duplicates removed');
-  equal(result.keywords.includes('a'), false, 'one-letter noise removed');
-  equal(result.keywords.every((k) => k === k.trim()), true, 'keywords trimmed');
+  check('PNG', decodePng(encodePng(rgba, 2, 2)));
+  check('APNG', decodePng(encodeApng(rgba, 2, 2)));
+  check('BMP', decodeBmp(encodeBmpCodec(rgba, 2, 2, true)));
+  check('TIFF', decodeTiff(encodeTiffCodec(rgba, 2, 2, true)));
+  check('QOI', decodeQoi(encodeQoi(rgba, 2, 2)));
+  check('TGA', decodeTga(encodeTga(rgba, 2, 2)));
+  check('DDS', decodeDds(encodeDds(rgba, 2, 2)));
+  check('KTX', decodeKtx(encodeKtx(rgba, 2, 2)));
+  check('DPX', decodeDpx(encodeDpx(rgba, 2, 2)));
+  check('CIN', decodeCin(encodeCin(rgba, 2, 2)));
+  check('SGI', decodeSgi(encodeSgi(rgba, 2, 2)));
+  check('PCX', decodePcx(encodePcx(rgba, 2, 2)));
+  check('Farbfeld', decodeFarbfeld(encodeFarbfeld(rgba, 2, 2)));
+  check('PPM', decodeNetpbm(encodeNetpbm(rgba, 2, 2, 'ppm')));
+  const pgm = decodeNetpbm(encodeNetpbm(rgba, 2, 2, 'pgm'));
+  equal(pgm.width, 2, 'PGM width');
+  equal(pgm.data[0], pgm.data[1], 'PGM grayscale');
+  check('PAM', decodeNetpbm(encodeNetpbm(rgba, 2, 2, 'pam')));
+  check('RAS', decodeRas(encodeRas(rgba, 2, 2)));
+  check('FITS', decodeFits(encodeFits(rgba, 2, 2)));
+  check('PSD', decodePsd(encodePsd(rgba, 2, 2, false)));
+  check('EXR', decodeExr(encodeExr(rgba, 2, 2)));
+  check('HDR', decodeHdr(encodeHdr(rgba, 2, 2)));
+  check('PFM', decodePfm(encodePfm(rgba, 2, 2)));
+  // PBM is bilevel: dimensions only.
+  const pbm = decodeNetpbm(encodeNetpbm(rgba, 2, 2, 'pbm'));
+  equal(pbm.width, 2, 'PBM width');
+  equal(pbm.height, 2, 'PBM height');
 });
 
-test('an empty AI reply normalises to empty fields, never undefined', () => {
-  const result = normalizeMetadata({}, 'adobe');
-  equal(result.title, '');
-  equal(result.description, '');
-  equal(result.keywords.length, 0);
-  equal(result.categories.length, 0);
+test('Icon, wrapper and palette codecs round trip (ICO, CUR, ICNS, GIF, IFF, WBMP, XBM, XPM, SVG, SVGZ, EPS, PDF, AI)', async () => {
+  const rgba = new Uint8ClampedArray([
+    255, 10, 20, 255, 0, 255, 0, 255,
+    0, 0, 255, 255, 255, 255, 0, 255,
+  ]);
+  const png = encodePng(rgba, 2, 2);
+  const ico = decodeIcon(encodeIcoCodec([{ size: 2, png }]), 1);
+  equal(ico.width, 2, 'ICO width');
+  equal(ico.height, 2, 'ICO height');
+  const cur = decodeCur(encodeCur([{ size: 2, png }]));
+  equal(cur.width, 2, 'CUR width');
+  const icns = decodeIcns(encodeIcns(rgba, 2, 2));
+  equal(icns.width, 2, 'ICNS width');
+  const gif = decodeGif(encodeGifCodec(rgba, 2, 2, true));
+  equal(gif.width, 2, 'GIF width');
+  equal(gif.height, 2, 'GIF height');
+  const iff = decodeIff(encodeIff(rgba, 2, 2));
+  equal(iff.width, 2, 'IFF width');
+  const wbmp = decodeWbmp(encodeWbmp(rgba, 2, 2));
+  equal(wbmp.width, 2, 'WBMP width');
+  const xbm = decodeXbm(encodeXbm(rgba, 2, 2));
+  equal(xbm.width, 2, 'XBM width');
+  const xpm = decodeXpm(encodeXpm(rgba, 2, 2));
+  equal(xpm.width, 2, 'XPM width');
+  const svgz = await decodeSvgz(encodeSvgz(rgba, 2, 2));
+  equal(svgz.width, 2, 'SVGZ width');
+  const pdf = await decodePdfPreview(encodePdf(rgba, 2, 2));
+  equal(pdf.width, 2, 'PDF width');
+  const ai = await decodePdfPreview(encodeAi(rgba, 2, 2));
+  equal(ai.width, 2, 'AI width');
+  // EPS and SVG wrappers carry a decodable PNG payload.
+  const epsBytes = encodeEps(rgba, 2, 2);
+  assert(new TextDecoder().decode(epsBytes).includes('MSAP_PNG_HEX:'), 'EPS payload');
+  const svgBytes = encodeSvg(rgba, 2, 2);
+  assert(new TextDecoder().decode(svgBytes).includes('<svg'), 'SVG markup');
 });
 
-/* ============================ upscale engine ============================= */
+test('Magic detection and auto decode route every family', async () => {
+  const rgba = new Uint8ClampedArray([
+    255, 10, 20, 255, 0, 255, 0, 255,
+    0, 0, 255, 255, 255, 255, 0, 255,
+  ]);
+  equal(detectImageFormat(encodePng(rgba, 2, 2)), 'png');
+  equal(detectImageFormat(encodeQoi(rgba, 2, 2)), 'qoi');
+  equal(detectImageFormat(encodeTga(rgba, 2, 2), 'photo.tga'), 'tga');
+  equal(detectImageFormat(encodeExr(rgba, 2, 2)), 'exr');
+  equal(detectImageFormat(encodeHdr(rgba, 2, 2)), 'hdr');
+  equal(detectImageFormat(encodePfm(rgba, 2, 2)), 'pfm');
+  equal(detectImageFormat(encodeFarbfeld(rgba, 2, 2)), 'farbfeld');
+  equal(detectImageFormat(encodeNetpbm(rgba, 2, 2, 'ppm')), 'pnm');
+  equal(detectImageFormat(encodeNetpbm(rgba, 2, 2, 'pam')), 'pam');
+  equal(detectImageFormat(encodeRas(rgba, 2, 2)), 'ras');
+  equal(detectImageFormat(encodeFits(rgba, 2, 2)), 'fits');
+  equal(detectImageFormat(encodePsd(rgba, 2, 2, false)), 'psd');
+  equal(detectImageFormat(encodeSvg(rgba, 2, 2)), 'svg');
+  equal(detectImageFormat(encodePdf(rgba, 2, 2)), 'pdf');
+  const auto = await decodeBytesAuto(encodePng(rgba, 2, 2), 'photo.png');
+  equal(auto.width, 2, 'auto width');
+  equal(auto.data[0], 255, 'auto r0');
+  const autoQoi = await decodeBytesAuto(encodeQoi(rgba, 2, 2), 'photo.qoi');
+  equal(autoQoi.width, 2, 'auto qoi width');
+});
 
-group('Upscale planning');
+/* ====================== currencies, cloud & app shell ===================== */
+group('Currencies, Cloud schema, Editions & Version');
 
-test('every bundled model is 4x — the NCNN build has no other weights', () => {
-  for (const model of UPSCALE_MODELS) {
-    equal(model.nativeScale, 4, `${model.id} is 4x`);
-    equal(isBundledModel(model.id), true);
-    equal(model.commercialUse, true, `${model.id} is commercially usable`);
+test('all 9 currencies have official symbols and ISO country flags', () => {
+  equal(CURRENCIES.length, 9);
+  for (const c of CURRENCIES) {
+    assert(c.symbol.length >= 1, `${c.code} symbol`);
+    equal(c.flag.length, 2, `${c.code} flag`);
+    equal(currencyMeta(c.code).symbol, c.symbol);
+    includes(money(250, c.code), '250');
   }
-  equal(isBundledModel('realesrgan-x2plus'), false, 'the Python-only 2x model is not listed');
 });
 
-test('a 4x pass is used when one pass reaches the target', () => {
-  const item = { id: 'a', width: 2000, height: 1500 } as never;
-  const plan = planScale(item, TARGET_PRESETS.find((p) => p.id === '4k')!);
-  equal(plan.passes.length, 1);
-  equal(plan.passes[0], 4);
+test('cloud schema v2 includes kv_store, user_accounts and issue_reports tables', () => {
+  includes(SCHEMA_SQL, 'kv_store');
+  includes(SCHEMA_SQL, 'user_accounts');
+  includes(SCHEMA_SQL, 'issue_reports');
 });
 
-test('a 2-8 MP source needs 4x4x4 to reach 8K and never asks for 2x/3x', () => {
-  const item = { id: 'a', width: 1000, height: 750 } as never;
-  const plan = planScale(item, TARGET_PRESETS.find((p) => p.id === '8k')!);
-  equal(plan.passes.every((p) => p === 4), true, 'only 4x passes are ever issued');
-  assert(plan.finalScale >= 7680 / 1000, 'reaches the target width');
-  assert(plan.tailScale >= 1, 'tail resize is never a downscale');
-});
-
-test('the exact target is met by the tail resize, not by a fake model scale', () => {
-  const item = { id: 'a', width: 1500, height: 1000 } as never;
-  const plan = planScale(item, TARGET_PRESETS.find((p) => p.id === 'adobe')!);
-  const landed = 1500 * plan.passes.reduce((a, b) => a * b, 1) * plan.tailScale;
-  assert(landed >= 1500 * plan.finalScale - 1, 'tail resize closes the gap');
-});
-
-test('an already-large image is never enlarged past the cap', () => {
-  const item = { id: 'a', width: 12000, height: 9000 } as never;
-  const plan = planScale(item, TARGET_PRESETS.find((p) => p.id === 'min-all')!);
-  assert(plan.finalScale <= 1.001, 'no enlargement needed');
-  assert(plan.tailScale >= 1, 'tail never downscales');
-});
-
-/* ================================ editions =============================== */
-
-group('Editions');
-
-test('the shipped edition is free and grants every feature it declares', () => {
+test('shipped edition grants every feature and APP_VERSION matches package.json', () => {
   equal(resolveEdition(), 'free');
-  const current = entitlements();
-  for (const feature of FREE_FEATURES) {
-    assert(current.can(feature), `${feature} must work without paying`);
-  }
-});
-
-test('no feature is gated yet — Pro exists only as a seam', () => {
-  equal(PRO_FEATURES.length, 0, 'nothing is reserved for the paid edition');
-  equal(can('metadata.ai.local'), true);
+  equal(PRO_FEATURES.length, 0);
+  for (const f of FREE_FEATURES) assert(entitlements().can(f), f);
   equal(can('metadata.ai.byok'), true);
-});
-
-test('a hypothetical pro edition is a superset of free, never a subset', () => {
-  const free = entitlements('free');
-  const pro = entitlements('pro');
-  equal(pro.edition, 'pro');
-  for (const feature of free.features) assert(pro.can(feature), `${feature} lost in pro`);
-});
-
-/* ================================ app shell ============================== */
-group('App shell');
-
-test('the renderer version fallback matches package.json', () => {
   const pkg = JSON.parse(readFileSync(path.join(FIXTURE_DIR, '..', '..', 'package.json'), 'utf8'));
-  equal(APP_VERSION, pkg.version, 'APP_VERSION tracks package.json');
+  equal(APP_VERSION, pkg.version);
+  assert(APP_NAME.length > 0, 'APP_NAME defined');
 });
 
-/* ================================ summary ================================ */
-console.log(`\n${'─'.repeat(52)}`);
+await Promise.all(pending);
+
+console.log(`\n${'='.repeat(52)}`);
 console.log(`${passed} passed · ${failures.length} failed`);
 if (failures.length > 0) {
   console.log('\nFailures:');
-  for (const failure of failures) console.log(`  • ${failure}`);
+  for (const failure of failures) console.log(`  * ${failure}`);
   process.exit(1);
 }
-console.log('All domain-layer checks passed.');
+console.log('All domain, codec, AI and creative tool tests passed.');

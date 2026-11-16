@@ -1,69 +1,78 @@
 import { NavLink } from 'react-router-dom';
 import clsx from 'clsx';
-import { PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 import { NAV_GROUPS, NAV_ITEMS } from '@/lib/nav';
 import { Logo } from './Logo';
-import { StatusDot } from '@/components/ui/Badge';
+import { GIcon } from '@/components/ui/GoogleIcon';
 import { useApp } from '@/state/AppState';
+import { useLibrary } from '@/state/library';
 
-/**
- * Navigation rail. Material-style: the active row is a soft brand pill with a
- * leading 3px bar, and every group carries a small uppercase caption.
- */
-export function Sidebar({
-  collapsed,
-  onToggleCollapsed,
-  mobileOpen,
-  onCloseMobile,
-}: {
-  collapsed: boolean;
-  onToggleCollapsed: () => void;
-  mobileOpen: boolean;
-  onCloseMobile: () => void;
-}) {
-  const { connection } = useApp();
+export interface SidebarProps {
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
+}
+
+export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
+  const { settings, updateSettings } = useApp();
+  const { items } = useLibrary();
+  const collapsed = settings.sidebarCollapsed && !mobileOpen;
 
   const content = (
-    <div
+    <aside
       className={clsx(
-        'flex h-full flex-col border-r border-line bg-bg-elevated',
-        collapsed ? 'w-[4.25rem]' : 'w-[15.5rem]',
+        'flex h-full flex-col border-r border-line bg-surface select-none',
+        collapsed ? 'w-[62px]' : 'w-[228px]',
       )}
     >
       <div
         className={clsx(
-          'flex h-14 shrink-0 items-center border-b border-line',
-          collapsed ? 'justify-center px-2' : 'gap-2 px-3.5',
+          'flex h-[52px] shrink-0 items-center border-b border-line px-3',
+          collapsed ? 'justify-center' : 'justify-between',
         )}
       >
-        {collapsed ? (
-          <Logo size={28} />
-        ) : (
-          <Logo size={28} withWordmark />
-        )}
-        <button
-          type="button"
+        <NavLink
+          to="/"
           onClick={onCloseMobile}
-          className="r-control ml-auto p-1.5 text-fg-subtle hover:bg-surface-2 hover:text-fg lg:hidden"
-          aria-label="Close menu"
+          className="min-w-0"
+          aria-label="Micro Stocker Advanced Pro home"
         >
-          <X className="size-4" />
-        </button>
+          <Logo size={28} showWordmark={!collapsed} />
+        </NavLink>
+        {mobileOpen ? (
+          <button
+            type="button"
+            onClick={onCloseMobile}
+            className="inline-flex size-7 items-center justify-center rounded-[var(--r-xs)] text-ink-muted hover:bg-surface-2 hover:text-ink"
+            aria-label="Close navigation"
+          >
+            <GIcon name="close" size={18} />
+          </button>
+        ) : (
+          !collapsed && (
+            <button
+              type="button"
+              onClick={() => updateSettings({ sidebarCollapsed: true })}
+              className="hidden size-7 items-center justify-center rounded-[var(--r-xs)] text-ink-faint hover:bg-surface-2 hover:text-ink lg:inline-flex"
+              aria-label="Collapse sidebar"
+              title="Collapse sidebar"
+            >
+              <GIcon name="left_panel_close" size={17} />
+            </button>
+          )
+        )}
       </div>
 
-      <nav className="no-scrollbar flex-1 overflow-x-hidden overflow-y-auto px-2.5 py-3">
+      <nav className="flex-1 space-y-4 overflow-y-auto px-2 py-3" aria-label="Main navigation">
         {NAV_GROUPS.map((group) => {
-          const items = NAV_ITEMS.filter((item) => item.group === group.id);
-          if (!items.length) return null;
+          const entries = NAV_ITEMS.filter((it) => it.group === group.id);
           return (
-            <div key={group.id} className="mb-4 last:mb-0">
+            <div key={group.id}>
               {!collapsed && (
-                <p className="px-2.5 pb-1.5 text-[0.625rem] font-semibold tracking-[0.09em] text-fg-subtle uppercase">
-                  {group.title}
-                </p>
+                <div className="mb-1 px-2.5 text-[10px] font-semibold tracking-wider text-ink-faint uppercase">
+                  {group.label}
+                </div>
               )}
-              <ul className="flex flex-col gap-0.5">
-                {items.map((item) => (
+              <ul className="space-y-0.5">
+                {entries.map((item) => (
                   <li key={item.to}>
                     <NavLink
                       to={item.to}
@@ -72,31 +81,23 @@ export function Sidebar({
                       title={collapsed ? item.label : undefined}
                       className={({ isActive }) =>
                         clsx(
-                          'r-control group relative flex h-9 items-center text-[0.8125rem] font-medium transition-colors duration-150',
-                          collapsed ? 'justify-center' : 'gap-2.5 px-2.5',
+                          'flex items-center gap-2.5 rounded-[var(--r-control)] px-2.5 py-1.5 text-[13px] font-medium transition-colors',
+                          collapsed && 'justify-center px-0',
                           isActive
-                            ? 'bg-brand-soft text-brand-fg'
-                            : 'text-fg-muted hover:bg-surface-2 hover:text-fg',
+                            ? 'bg-accent-soft font-semibold text-accent'
+                            : 'text-ink-muted hover:bg-surface-2 hover:text-ink',
                         )
                       }
                     >
-                      {({ isActive }) => (
+                      <GIcon name={item.icon} size={18} />
+                      {!collapsed && (
                         <>
-                          <span
-                            className={clsx(
-                              'absolute top-1/2 left-0 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-brand transition-opacity',
-                              isActive ? 'opacity-100' : 'opacity-0',
-                            )}
-                          />
-                          <span
-                            className={clsx(
-                              'shrink-0 transition-colors',
-                              isActive ? 'text-brand' : 'text-fg-subtle group-hover:text-fg-muted',
-                            )}
-                          >
-                            {item.icon}
-                          </span>
-                          {!collapsed && <span className="truncate">{item.label}</span>}
+                          <span className="flex-1 truncate">{item.label}</span>
+                          {item.to === '/library' && items.length > 0 && (
+                            <span className="rounded-[3px] bg-surface-2 px-1.5 py-0.5 text-2xs font-semibold text-ink-muted tabular-nums">
+                              {items.length}
+                            </span>
+                          )}
                         </>
                       )}
                     </NavLink>
@@ -108,62 +109,34 @@ export function Sidebar({
         })}
       </nav>
 
-      <div className="shrink-0 border-t border-line p-2.5">
-        <div
-          className={clsx(
-            'flex items-center gap-2 py-1',
-            collapsed ? 'justify-center' : 'px-1.5',
-          )}
-          title={connection.message}
-        >
-          <StatusDot state={connection.state} />
-          {!collapsed && (
-            <span className="truncate text-[0.6875rem] font-medium text-fg-subtle">
-              {connection.state === 'online' ? 'Cloud linked' : 'Local only'}
-            </span>
-          )}
+      {collapsed && !mobileOpen && (
+        <div className="border-t border-line p-2">
+          <button
+            type="button"
+            onClick={() => updateSettings({ sidebarCollapsed: false })}
+            className="flex h-8 w-full items-center justify-center rounded-[var(--r-control)] text-ink-muted hover:bg-surface-2 hover:text-ink"
+            aria-label="Expand sidebar"
+            title="Expand sidebar"
+          >
+            <GIcon name="left_panel_open" size={18} />
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={onToggleCollapsed}
-          className={clsx(
-            'r-control hidden h-8 w-full items-center gap-2 text-[0.6875rem] font-medium text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg lg:flex',
-            collapsed ? 'justify-center' : 'px-1.5',
-          )}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          title={collapsed ? 'Expand' : 'Collapse'}
-        >
-          {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
-          {!collapsed && <span>Collapse</span>}
-        </button>
-      </div>
-    </div>
+      )}
+    </aside>
   );
 
-  return (
-    <>
-      <aside className="sticky top-0 hidden h-dvh shrink-0 lg:block">{content}</aside>
-
-      <div
-        className={clsx('fixed inset-0 z-50 lg:hidden', mobileOpen ? '' : 'pointer-events-none')}
-        aria-hidden={!mobileOpen}
-      >
+  if (mobileOpen) {
+    return (
+      <div className="fixed inset-0 z-40 flex lg:hidden">
         <div
-          className={clsx(
-            'absolute inset-0 bg-black/50 transition-opacity duration-150',
-            mobileOpen ? 'opacity-100' : 'opacity-0',
-          )}
+          className="fixed inset-0 bg-black/45"
           onClick={onCloseMobile}
+          aria-hidden="true"
         />
-        <div
-          className={clsx(
-            'absolute inset-y-0 left-0 h-full max-w-[85vw] transition-transform duration-200 ease-[var(--ease-emphasized)]',
-            mobileOpen ? 'translate-x-0' : '-translate-x-full',
-          )}
-        >
-          {content}
-        </div>
+        <div className="relative z-10 h-full">{content}</div>
       </div>
-    </>
-  );
+    );
+  }
+
+  return <div className="hidden h-full shrink-0 lg:block">{content}</div>;
 }

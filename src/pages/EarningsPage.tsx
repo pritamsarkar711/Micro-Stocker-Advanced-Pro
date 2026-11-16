@@ -12,7 +12,7 @@ import { DataTable, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/Misc';
 import { useToast } from '@/state/ToastState';
 import { kv } from '@/lib/kv';
-import { desktop, isDesktop } from '@/lib/desktop';
+import { desktop } from '@/lib/desktop';
 import { money } from '@/lib/format';
 import { useApp } from '@/state/AppState';
 import { PlatformLogo } from '@/components/stock/PlatformLogo';
@@ -86,7 +86,7 @@ export function EarningsPage() {
     const header = 'Date,Platform,Title,License,Country,Downloads,Earnings';
     const lines = sales.map((s) => [s.date, s.platform, `"${s.title.replace(/"/g, '""')}"`, s.license, s.country, s.downloads, s.earnings.toFixed(2)].join(','));
     const csv = `${header}\n${lines.join('\n')}\n`;
-    if (isDesktop) await desktop.fs.exportText({ defaultName: 'microstocker-ledger.csv', text: csv, filters: [{ name: 'CSV', extensions: ['csv'] }] });
+    if (desktop.isDesktop) await desktop.fs.exportText({ defaultName: 'microstocker-ledger.csv', text: csv, filters: [{ name: 'CSV', extensions: ['csv'] }] });
     else {
       const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
       const a = document.createElement('a');

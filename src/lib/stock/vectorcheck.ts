@@ -136,11 +136,11 @@ export function analyzeEps(text: string): EpsReport {
   const notes: string[] = [];
   const hasEmbeddedRaster = /%%BeginBinary|\/ImageType\s|BeginData:\s*\d+\s+bytes/i.test(text);
   const usesCmyk = /setcmykcolor/i.test(text);
-  if (usesCmyk) notes.push('CMYK colour operators found — Freepik/Adobe expect RGB for vectors.');
-  if (hasEmbeddedRaster) notes.push('Embedded raster data detected — portals want clean paths or a declared raster style.');
-  if (ccMatch) notes.push('Saved from Illustrator CC — re-save as CS6 (Freepik FTP) or Illustrator 8 (123RF) when required.');
-  if (fonts.length) notes.push(`Fonts referenced (${fonts.slice(0, 4).join(', ')}): outline them or confirm a commercial-free licence.`);
-  if (!text.includes('%%BoundingBox')) notes.push('No %%BoundingBox — some ingest pipelines reject the file.');
+  if (usesCmyk) notes.push('CMYK color operators found; Freepik and Adobe Stock expect RGB vectors.');
+  if (hasEmbeddedRaster) notes.push('Embedded raster image data found; agencies require clean vector paths.');
+  if (ccMatch) notes.push('Saved from Illustrator CC; resave as Illustrator 10 or CS6 when required.');
+  if (fonts.length) notes.push(`Fonts referenced (${fonts.slice(0, 4).join(', ')}); outline text or verify commercial licensing.`);
+  if (!text.includes('%%BoundingBox')) notes.push('Missing BoundingBox comment required by portal validators.');
 
   return {
     ok: true,

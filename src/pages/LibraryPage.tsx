@@ -1,627 +1,446 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import clsx from 'clsx';
-import {
-  Box,
-  Copy,
-  Download,
-  FileImage,
-  FileSpreadsheet,
-  FolderSearch,
-  HardDrive,
-  Layers,
-  PenLine,
-  Plus,
-  ScanSearch,
-  Search,
-  Stethoscope,
-  Trash2,
-  Upload,
-  Wand2,
-  X,
-} from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Card } from '@/components/ui/Card';
+import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Input, Select, Field, Textarea } from '@/components/ui/Field';
+import { Input, Select } from '@/components/ui/Field';
 import { Modal } from '@/components/ui/Modal';
-import { EmptyState, Spinner } from '@/components/ui/Misc';
+import { GIcon } from '@/components/ui/GoogleIcon';
+import { BrandLogo } from '@/components/ui/BrandLogo';
+import { FormatIcon } from '@/components/ui/FormatIcon';
+import { ItemEditor } from '@/components/stock/ItemEditor';
+import { AiPanel } from '@/components/settings/AiPanel';
 import { useLibrary } from '@/state/library';
 import { useToast } from '@/state/ToastState';
-import { isDesktop } from '@/lib/desktop';
-import { formatBytes } from '@/lib/stock/files';
-import { megapixels, type StockItem } from '@/lib/stock/types';
-import { validateEverywhere, worstLevel } from '@/lib/stock/validate';
-import { findDuplicateClusters, type DuplicateCluster } from '@/lib/stock/dupes';
-import { parseMetadataCsv, planApply } from '@/lib/stock/csvimport';
-import { PLATFORM_LIST } from '@/lib/stock/platforms';
-import type { PlatformId } from '@/lib/stock/types';
-import { PlatformLogo } from '@/components/stock/PlatformLogo';
-import { ItemEditor } from '@/components/stock/ItemEditor';
-
-const LEVEL_TONE = { error: 'danger', warn: 'warn', info: 'neutral', ok: 'ok' } as const;
+import { desktop } from '@/lib/desktop';
+import { DEFAULT_AI, loadAiSettings, PROVIDERS, type AiSettings } from '@/lib/stock/ai';
+import { formatMetadataForClipboard, parseKeywordInput } from '@/lib/stock/metadata';
+import { formatBytes } from '@/lib/modelStore';
 
 export function LibraryPage() {
-  const library = useLibrary();
+  const {
+    items,
+    selected,
+    watchingDir,
+    importFiles,
+    importFromDialog,
+    removeItems,
+    toggleSelect,
+    selectAll,
+    clearSelection,
+    applyToMany,
+    aiDraft,
+    embedInto,
+    exportMetadataCsv,
+    startWatching,
+    stopWatching,
+  } = useLibrary();
   const toast = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [query, setQuery] = useState('');
-  const [formatFilter, setFormatFilter] = useState('all');
-  const [editorId, setEditorId] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [searchParams] = useSearchParams();
 
-  /* duplicate scanner */
-  const [dupOpen, setDupOpen] = useState(false);
-  const [dupState, setDupState] = useState<{ running: boolean; done: number; total: number }>({ running: false, done: 0, total: 0 });
-  const [clusters, setClusters] = useState<DuplicateCluster[] | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<'all' | 'untagged' | 'ready' | 'embedded'>('all');
+  const [aiSettings, setAiSettings] = useState<AiSettings>(DEFAULT_AI);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [batchKwOpen, setBatchKwOpen] = useState(false);
+  const [batchKwText, setBatchKwText] = useState('');
+  const [draftProgress, setDraftProgress] = useState<{ done: number; total: number } | null>(null);
+  const [embedding, setEmbedding] = useState(false);
 
-  /* metadata CSV import */
-  const csvInputRef = useRef<HTMLInputElement>(null);
-  const [csvOpen, setCsvOpen] = useState(false);
-  const [csvRaw, setCsvRaw] = useState<string | null>(null);
-  const [csvName, setCsvName] = useState('');
-  const [csvDialect, setCsvDialect] = useState<PlatformId | ''>('');
+  useEffect(() => {
+    void loadAiSettings().then(setAiSettings);
+  }, []);
 
-  /* batch templates */
-  const [tplOpen, setTplOpen] = useState(false);
-  const [tplTitle, setTplTitle] = useState('{name} vector illustration, flat design element');
-  const [tplDesc, setTplDesc] = useState('A clean {format} asset of {name}, part of a {count} piece series, ready for commercial use.');
-  const [tplKeywords, setTplKeywords] = useState('set, collection, series');
-
-  const filtered = useMemo(
-    () =>
-      library.items.filter(
-        (item) =>
-          (formatFilter === 'all' || item.format === formatFilter) &&
-          (!query.trim() ||
-            item.name.toLowerCase().includes(query.toLowerCase()) ||
-            item.metadata.title.toLowerCase().includes(query.toLowerCase()) ||
-            item.metadata.keywords.some((k) => k.includes(query.toLowerCase()))),
-      ),
-    [library.items, query, formatFilter],
-  );
-
-  const csvParse = useMemo(
-    () => (csvRaw ? parseMetadataCsv(csvRaw, csvDialect || undefined) : null),
-    [csvRaw, csvDialect],
-  );
-  const csvMatch = useMemo(
-    () => (csvParse ? planApply(library.items, csvParse.rows) : null),
-    [csvParse, library.items],
-  );
-
-  const health = useMemo(() => {
-    const map = new Map<string, keyof typeof LEVEL_TONE>();
-    for (const item of library.items) {
-      map.set(item.id, worstLevel(Object.values(validateEverywhere(item, library.items)).flat()));
+  useEffect(() => {
+    const paramId = searchParams.get('item');
+    if (paramId && items.some((i) => i.id === paramId)) {
+      setActiveId(paramId);
+    } else if (!activeId && items[0]) {
+      setActiveId(items[0].id);
     }
-    return map;
-  }, [library.items]);
+  }, [activeId, items, searchParams]);
 
-  const selectedIds = Array.from(library.selection);
-  const editorItem = library.items.find((i) => i.id === editorId) ?? null;
-
-  const onImport = async (files?: FileList | null) => {
-    setBusy(true);
-    try {
-      if (isDesktop) await library.importDesktopFiles();
-      else if (files) await library.importBrowserFiles(Array.from(files));
-    } catch (error) {
-      toast.error('Import failed', error instanceof Error ? error.message : String(error));
-    }
-    setBusy(false);
-  };
-
-  const onBulkGenerate = async () => {
-    setBusy(true);
-    const result = await library.generateFor(selectedIds.length ? selectedIds : library.items.map((i) => i.id), {
-      style: 'auto',
-      categories: [],
-      concepts: [],
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return items.filter((it) => {
+      if (filter === 'untagged' && it.metadata.title.trim() && it.metadata.keywords.length >= 7) {
+        return false;
+      }
+      if (filter === 'ready' && (!it.metadata.title.trim() || it.metadata.keywords.length < 7)) {
+        return false;
+      }
+      if (filter === 'embedded' && !it.embeddedAt) return false;
+      if (!q) return true;
+      return (
+        it.name.toLowerCase().includes(q) ||
+        it.metadata.title.toLowerCase().includes(q) ||
+        it.metadata.keywords.some((k) => k.includes(q))
+      );
     });
-    setBusy(false);
-    const detail = result.aiUsed
-      ? `${result.aiUsed} of ${result.done} via ${result.providerLabel}`
-      : 'Built-in generator (offline)';
-    if (result.error) toast.error(`AI failed — used offline instead`, result.error);
-    else toast.success(`Metadata generated for ${result.done} file${result.done === 1 ? '' : 's'}`, detail);
-  };
+  }, [filter, items, search]);
 
-  const onBulkEmbed = async () => {
-    setBusy(true);
-    const result = await library.embedFor(selectedIds.length ? selectedIds : library.items.map((i) => i.id), { backup: true });
-    setBusy(false);
-    if (result.done) toast.success(`Embedded metadata into ${result.done} file${result.done === 1 ? '' : 's'}`, 'IPTC/XMP written — files are upload-ready.');
-    if (result.failed.length) toast.error(`${result.failed.length} file(s) could not be embedded`, result.failed.slice(0, 3).join(' · '));
-  };
+  const activeItem = items.find((i) => i.id === activeId) ?? filtered[0] ?? null;
+  const targetIds = selected.size > 0 ? Array.from(selected) : filtered.map((i) => i.id);
+  const provider = PROVIDERS[aiSettings.kind];
 
-  const onScanDupes = async () => {
-    setDupOpen(true);
-    setClusters(null);
-    setDupState({ running: true, done: 0, total: library.items.length });
-    const raster = library.items.filter((i) => ['jpg', 'png', 'webp'].includes(i.format));
-    setDupState({ running: true, done: 0, total: raster.length });
-    const found = await findDuplicateClusters(raster, library.getItemBlob, 8, (done, total) => setDupState({ running: true, done, total }));
-    setClusters(found);
-    setDupState({ running: false, done: raster.length, total: raster.length });
-    if (found.length === 0) toast.success('No near-duplicates found', 'Every raster file hashes uniquely at thumbnail scale.');
-  };
-
-  const onCsvFile = async (file: File) => {
+  async function handleBatchGenerate() {
+    if (!targetIds.length || draftProgress) return;
+    setDraftProgress({ done: 0, total: targetIds.length });
     try {
-      const text = await file.text();
-      setCsvRaw(text);
-      setCsvName(file.name);
-      setCsvDialect('');
-      setCsvOpen(true);
-    } catch (error) {
-      toast.error('Could not read the CSV', error instanceof Error ? error.message : String(error));
+      const res = await aiDraft(targetIds, (done, total) => setDraftProgress({ done, total }));
+      if (res.ok > 0) {
+        toast.success(
+          `Generated metadata for ${res.ok} file${res.ok === 1 ? '' : 's'}`,
+          res.embedded > 0 ? `IPTC & XMP embedded in ${res.embedded}` : provider.name,
+        );
+      }
+    } finally {
+      setDraftProgress(null);
     }
-  };
+  }
 
-  const onApplyCsv = () => {
-    if (!csvParse) return;
-    const result = library.applyMetadataRows(csvParse.rows);
-    toast.success(
-      `Metadata applied to ${result.matched} file${result.matched === 1 ? '' : 's'}`,
-      result.missing.length
-        ? `Not in library: ${result.missing.slice(0, 3).join(', ')}${result.missing.length > 3 ? '…' : ''}`
-        : 'Titles, descriptions, keywords and flags merged.',
-    );
-    setCsvOpen(false);
-    setCsvRaw(null);
-    setCsvName('');
-  };
+  async function handleBatchEmbed(download: boolean) {
+    if (!targetIds.length || embedding) return;
+    setEmbedding(true);
+    try {
+      const res = await embedInto(targetIds, { downloadInBrowser: download });
+      if (res.ok > 0) {
+        toast.success(
+          download
+            ? `Saved ${res.ok} upload ready file${res.ok === 1 ? '' : 's'}`
+            : `Embedded IPTC & XMP into ${res.ok} file${res.ok === 1 ? '' : 's'}`,
+        );
+      }
+    } finally {
+      setEmbedding(false);
+    }
+  }
 
-  const applyTemplate = () => {
-    const targets = selectedIds.length ? library.items.filter((i) => library.selection.has(i.id)) : library.items;
-    const render = (tpl: string, item: StockItem, index: number) =>
-      tpl
-        .replaceAll('{name}', item.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim())
-        .replaceAll('{format}', item.format.toUpperCase())
-        .replaceAll('{index}', String(index + 1))
-        .replaceAll('{count}', String(targets.length))
-        .replaceAll('{category}', item.metadata.categories[0] ?? 'creative');
-    targets.forEach((item, index) => {
-      const extra = tplKeywords.split(',').map((k) => k.trim().toLowerCase()).filter(Boolean);
-      library.setMetadata(item.id, {
-        title: render(tplTitle, item, index).slice(0, 180),
-        description: render(tplDesc, item, index).slice(0, 400),
-        keywords: Array.from(new Set([...item.metadata.keywords, ...extra])).slice(0, 50),
-      });
-    });
-    setTplOpen(false);
-    toast.success(`Template applied to ${targets.length} file${targets.length === 1 ? '' : 's'}`, 'Variables: {name} {format} {index} {count} {category}');
-  };
+  async function handleCopySelectedMetadata() {
+    const pool = items.filter((i) => targetIds.includes(i.id) && i.metadata.title.trim());
+    if (!pool.length) {
+      toast.info('Generate metadata first');
+      return;
+    }
+    const text = pool
+      .map((i) => `File: ${i.name}\n${formatMetadataForClipboard(i.metadata)}`)
+      .join('\n\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`Copied metadata for ${pool.length} file${pool.length === 1 ? '' : 's'}`);
+    } catch {
+      toast.error('Clipboard unavailable');
+    }
+  }
 
   return (
-    <>
+    <div className="space-y-5">
       <PageHeader
-        title="Library"
+        title="Library & Metadata"
         actions={
           <>
             <input
-              ref={fileInputRef}
+              ref={fileRef}
               type="file"
               multiple
-              accept=".jpg,.jpeg,.png,.eps,.ai,.svg,.webp"
+              accept="image/*,.eps,.ai,.svg,.tif,.tiff,.avif,.webp,.bmp,.gif,.ico"
               className="hidden"
-              onChange={(event) => onImport(event.target.files)}
+              onChange={(e) => {
+                if (e.target.files?.length) {
+                  void importFiles(e.target.files).then((added) => {
+                    if (added[0]) setActiveId(added[0].id);
+                  });
+                }
+                e.target.value = '';
+              }}
             />
-            <Button size="sm" loading={busy} icon={isDesktop ? <HardDrive className="size-4" /> : <Upload className="size-4" />} onClick={() => (isDesktop ? onImport() : fileInputRef.current?.click())}>
+
+            <button
+              type="button"
+              onClick={() => setAiModalOpen(true)}
+              className="inline-flex h-8 items-center gap-2 rounded-[var(--r-control)] border border-line bg-surface px-2.5 text-xs font-medium text-ink hover:border-accent"
+            >
+              <BrandLogo brand={provider.brand} size={15} />
+              <span className="hidden sm:inline">{provider.name}</span>
+              <GIcon name="tune" size={14} className="text-ink-muted" />
+            </button>
+
+            {desktop.isDesktop && (
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<GIcon name="folder_open" size={15} />}
+                onClick={() =>
+                  void (watchingDir ? stopWatching() : startWatching())
+                }
+              >
+                {watchingDir ? 'Watching' : 'Watch folder'}
+              </Button>
+            )}
+
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<GIcon name="upload_file" size={15} />}
+              onClick={() => {
+                if (desktop.isDesktop) void importFromDialog();
+                else fileRef.current?.click();
+              }}
+            >
               Import
             </Button>
-            <Button size="sm" variant="outline" loading={busy} icon={<Wand2 className="size-4" />} onClick={onBulkGenerate}>
-              Generate
-            </Button>
-            <Button size="sm" variant="outline" loading={busy} icon={<PenLine className="size-4" />} onClick={onBulkEmbed}>
-              Embed
+
+            <Button
+              size="sm"
+              variant="primary"
+              loading={Boolean(draftProgress)}
+              disabled={targetIds.length === 0}
+              icon={<GIcon name="auto_fix_high" size={15} />}
+              onClick={() => void handleBatchGenerate()}
+            >
+              {draftProgress
+                ? `Generating ${draftProgress.done}/${draftProgress.total}`
+                : `Generate (${targetIds.length})`}
             </Button>
           </>
         }
       />
 
-      {/* search + secondary tools */}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="relative min-w-0 flex-1 sm:max-w-xs">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-fg-subtle" />
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search…" className="pl-9" />
-        </div>
-        <Select
-          value={formatFilter}
-          onChange={(e) => setFormatFilter(e.target.value)}
-          className="sm:w-40"
-          options={[
-            { value: 'all', label: 'All formats' },
-            { value: 'jpg', label: 'JPG' },
-            { value: 'png', label: 'PNG' },
-            { value: 'webp', label: 'WebP' },
-            { value: 'eps', label: 'EPS' },
-            { value: 'ai', label: 'AI' },
-            { value: 'svg', label: 'SVG' },
-          ]}
-        />
-        <Button size="sm" variant="outline" icon={<ScanSearch className="size-4" />} onClick={onScanDupes} disabled={library.items.length < 2}>
-          Duplicates
-        </Button>
-        <Button size="sm" variant="outline" icon={<Copy className="size-4" />} onClick={() => setTplOpen(true)} disabled={library.items.length === 0}>
-          Template
-        </Button>
-        <input
-          ref={csvInputRef}
-          type="file"
-          accept=".csv,.txt,.tsv,text/csv"
-          className="hidden"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) void onCsvFile(file);
-            event.target.value = '';
-          }}
-        />
-        <Button
-          size="sm"
-          variant="outline"
-          icon={<FileSpreadsheet className="size-4" />}
-          onClick={() => (csvRaw ? setCsvOpen(true) : csvInputRef.current?.click())}
-          disabled={library.items.length === 0}
-          title="Import CSV"
-        >
-          CSV
-        </Button>
-        {isDesktop && (
-          <Button
-            size="sm"
-            variant={library.watching ? 'secondary' : 'ghost'}
-            icon={<FolderSearch className="size-4" />}
-            onClick={() => (library.watching ? library.stopWatch() : library.startWatch())}
-            title="Watch folder"
-          >
-            {library.watching ? 'Watching' : 'Watch'}
-          </Button>
-        )}
-        <Button size="sm" variant="ghost" onClick={() => library.setSelection(library.selection.size === library.items.length ? [] : library.items.map((i) => i.id))}>
-          {library.selection.size === library.items.length && library.items.length > 0 ? 'Clear selection' : 'Select all'}
-        </Button>
-      </div>
-
-      {library.watching && (
-        <p className="mb-3 flex items-center gap-2 r-chip border border-ok/25 bg-ok-soft px-2 py-1 text-[0.6875rem] text-ok">
-          <FolderSearch className="size-3.5 shrink-0" />
-          <span className="truncate font-mono">{library.watching}</span>
-        </p>
-      )}
-
-      {filtered.length === 0 ? (
-        <Card>
-          <EmptyState
-            icon={<Box className="size-7" />}
-            title={library.items.length === 0 ? 'No files' : 'No match'}
-            description={
-              library.items.length === 0
-                ? 'JPG, PNG, WebP, EPS, AI or SVG'
-                : 'Change the search or filter.'
-            }
-            action={
-              <Button icon={<Plus className="size-4" />} onClick={() => (isDesktop ? onImport() : fileInputRef.current?.click())}>
-                Import files
-              </Button>
-            }
-          />
-        </Card>
-      ) : (
-        <ul className="grid-auto-fill gap-3">
-          {filtered.map((item) => (
-            <LibraryCard
-              key={item.id}
-              item={item}
-              level={health.get(item.id) ?? 'ok'}
-              selected={library.selection.has(item.id)}
-              onSelect={() => library.toggleSelect(item.id)}
-              onOpen={() => setEditorId(item.id)}
+      {/* Batch post generation actions bar */}
+      {items.length > 0 && (
+        <Card padding="sm" className="flex flex-wrap items-center justify-between gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Filter files or tags"
+              leading={<GIcon name="search" size={15} />}
+              className="h-8 w-48 sm:w-56"
             />
-          ))}
-        </ul>
+            <Select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value as typeof filter)}
+              className="h-8 w-36"
+              options={[
+                { value: 'all', label: `All (${items.length})` },
+                { value: 'untagged', label: 'Needs tags' },
+                { value: 'ready', label: 'Ready' },
+                { value: 'embedded', label: 'XMP embedded' },
+              ]}
+            />
+            <Button
+              size="xs"
+              variant="ghost"
+              icon={<GIcon name="select_all" size={14} />}
+              onClick={() => (selected.size === items.length ? clearSelection() : selectAll())}
+            >
+              {selected.size > 0 ? `Clear (${selected.size})` : 'Select all'}
+            </Button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Button
+              size="xs"
+              variant="secondary"
+              icon={<GIcon name="content_copy" size={13} />}
+              onClick={() => void handleCopySelectedMetadata()}
+            >
+              Copy metadata
+            </Button>
+            <Button
+              size="xs"
+              variant="secondary"
+              loading={embedding}
+              icon={<GIcon name="file_download" size={13} />}
+              onClick={() => void handleBatchEmbed(!desktop.isDesktop)}
+            >
+              Embed & save files
+            </Button>
+            <Button
+              size="xs"
+              variant="secondary"
+              icon={<GIcon name="table_chart" size={13} />}
+              onClick={() => void exportMetadataCsv(targetIds, 'universal')}
+            >
+              Download CSV
+            </Button>
+            <Button
+              size="xs"
+              variant="ghost"
+              icon={<GIcon name="local_offer" size={13} />}
+              onClick={() => setBatchKwOpen(true)}
+            >
+              Add tags
+            </Button>
+            {selected.size > 0 && (
+              <Button
+                size="xs"
+                variant="ghost"
+                className="text-danger hover:text-danger"
+                icon={<GIcon name="delete" size={13} />}
+                onClick={() => removeItems(Array.from(selected))}
+              >
+                Remove
+              </Button>
+            )}
+          </div>
+        </Card>
       )}
 
-      {/* bulk bar */}
-      {selectedIds.length > 0 && (
-        <div className="fixed inset-x-0 bottom-14 z-40 flex justify-center px-3 safe-bottom lg:bottom-4">
-          <div className="card flex flex-wrap items-center gap-2 px-4 py-2.5 shadow-[var(--shadow-pop)]">
-            <Badge tone="brand" dot>{selectedIds.length} selected</Badge>
-            <Button size="xs" variant="outline" icon={<Wand2 className="size-3.5" />} onClick={onBulkGenerate}>Generate</Button>
-            <Button size="xs" variant="outline" icon={<PenLine className="size-3.5" />} onClick={onBulkEmbed}>Embed</Button>
-            <Button size="xs" variant="outline" icon={<Copy className="size-3.5" />} onClick={() => setTplOpen(true)}>Template</Button>
-            <Button
-              size="xs"
-              variant="outline"
-              icon={<Stethoscope className="size-3.5" />}
-              onClick={() => {
-                window.location.hash = '#/prepare';
-              }}
-            >
-              Prepare
-            </Button>
-            <Button
-              size="xs"
-              variant="outline"
-              icon={<Download className="size-3.5" />}
-              onClick={() => {
-                sessionStorage.setItem('msap:export-selection', JSON.stringify(selectedIds));
-                window.location.hash = '#/export';
-              }}
-            >
-              CSV
-            </Button>
-            <Button size="xs" variant="ghost" icon={<Trash2 className="size-3.5" />} onClick={() => library.removeItems(selectedIds)}>Remove</Button>
-            <Button size="xs" variant="ghost" icon={<X className="size-3.5" />} onClick={() => library.setSelection([])} aria-label="Clear selection" />
+      {items.length === 0 ? (
+        <div
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            if (e.dataTransfer.files?.length) void importFiles(e.dataTransfer.files);
+          }}
+          onClick={() => fileRef.current?.click()}
+          className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-[var(--r-card)] border border-dashed border-line-strong bg-surface px-6 py-16 text-center hover:border-accent hover:bg-accent-soft/25"
+        >
+          <span className="inline-flex size-12 items-center justify-center rounded-[var(--r-control)] bg-accent-soft text-accent">
+            <GIcon name="add_photo_alternate" size={26} />
+          </span>
+          <div className="text-sm font-semibold text-ink">Drop stock images or vectors here</div>
+          <div className="text-xs text-ink-muted">
+            Supports JPG, PNG, WebP, TIFF, AVIF, SVG, EPS and AI files
+          </div>
+          <Button size="sm" variant="primary" icon={<GIcon name="upload_file" size={15} />}>
+            Browse files
+          </Button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+          {/* Asset grid */}
+          <div
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (e.dataTransfer.files?.length) void importFiles(e.dataTransfer.files);
+            }}
+            className="xl:col-span-6"
+          >
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {filtered.map((item) => {
+                const isActive = activeItem?.id === item.id;
+                const isSelected = selected.has(item.id);
+                const tagged =
+                  Boolean(item.metadata.title.trim()) && item.metadata.keywords.length >= 7;
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => setActiveId(item.id)}
+                    className={clsx(
+                      'flex cursor-pointer items-center gap-3 rounded-[var(--r-card)] border p-2.5 transition-colors',
+                      isActive
+                        ? 'border-accent bg-accent-soft/55'
+                        : 'border-line bg-surface hover:border-line-strong hover:bg-surface-2/50',
+                    )}
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSelect(item.id);
+                      }}
+                      className="inline-flex size-5 shrink-0 items-center justify-center text-ink-muted hover:text-accent"
+                      aria-label={`Select ${item.name}`}
+                    >
+                      <GIcon
+                        name={isSelected ? 'check_box' : 'check_box_outline_blank'}
+                        size={18}
+                        className={isSelected ? 'text-accent' : undefined}
+                      />
+                    </button>
+
+                    <div className="checkerboard flex size-13 shrink-0 items-center justify-center overflow-hidden rounded-[var(--r-xs)] border border-line bg-surface-2">
+                      {item.thumbUrl ? (
+                        <img src={item.thumbUrl} alt={item.name} className="size-full object-cover" />
+                      ) : (
+                        <FormatIcon format={item.format} size={18} />
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-xs font-semibold text-ink">
+                        {item.metadata.title || item.name}
+                      </div>
+                      <div className="mt-0.5 truncate text-2xs text-ink-muted">
+                        {item.metadata.keywords.length} tags · {formatBytes(item.sizeBytes)}
+                      </div>
+                      <div className="mt-1 flex items-center gap-1">
+                        {tagged ? (
+                          <Badge tone="brand">Tagged</Badge>
+                        ) : (
+                          <Badge tone="neutral">Untagged</Badge>
+                        )}
+                        {item.embeddedAt && <Badge tone="brand">XMP</Badge>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right detail & metadata generator */}
+          <div className="xl:col-span-6">
+            {activeItem && (
+              <Card>
+                <CardHeader title="Metadata Editor" icon={<GIcon name="edit" size={17} />} />
+                <ItemEditor item={activeItem} />
+              </Card>
+            )}
           </div>
         </div>
       )}
 
-      {/* duplicates modal */}
-      <Modal open={dupOpen} onClose={() => setDupOpen(false)} title="Duplicates" size="lg">
-        {dupState.running ? (
-          <div className="flex flex-col items-center gap-3 py-10">
-            <Spinner size={5} />
-            <p className="text-sm text-fg-muted tabular-nums">Hashing {dupState.done}/{dupState.total}…</p>
-          </div>
-        ) : clusters === null ? (
-          <p className="py-8 text-center text-sm text-fg-muted">Starting scan…</p>
-        ) : clusters.length === 0 ? (
-          <EmptyState icon={<ScanSearch className="size-7" />} title="No duplicates" description="Every raster hashes uniquely." />
-        ) : (
-          <div className="flex flex-col gap-2">
-            {clusters.map((cluster, index) => (
-              <div key={index} className="card p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[0.8125rem] font-semibold text-fg">{cluster.items.length} files</p>
-                  <Badge tone="warn">Δ {cluster.maxDistance}</Badge>
-                </div>
-                <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {cluster.items.map((item, position) => (
-                    <li key={item.id} className="flex items-center gap-2 r-control border border-line bg-surface-2 p-2">
-                      {item.thumbUrl ? <img src={item.thumbUrl} alt="" className="size-10 r-chip border border-line object-cover" /> : <FileImage className="size-10 text-fg-subtle" />}
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-xs font-medium text-fg">{item.name}</span>
-                        <span className="block text-[0.625rem] text-fg-subtle">{position === 0 ? 'keep' : 'duplicate'}</span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                <Button
-                  size="xs"
-                  variant="outline"
-                  className="mt-2"
-                  onClick={() => {
-                    library.setSelection(cluster.items.slice(1).map((i) => i.id));
-                    setDupOpen(false);
-                    toast.info('Selected', 'Review, then remove.');
-                  }}
-                >
-                  Select others
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </Modal>
-
-      {/* template modal */}
       <Modal
-        open={tplOpen}
-        onClose={() => setTplOpen(false)}
-        title="Template"
-        description={`${selectedIds.length || library.items.length} files · {name} {format} {index} {count} {category}`}
-        size="md"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setTplOpen(false)}>Cancel</Button>
-            <Button onClick={applyTemplate} icon={<Copy className="size-4" />}>Apply</Button>
-          </>
-        }
-      >
-        <div className="flex flex-col gap-2">
-          <Field label="Title template">
-            <Input value={tplTitle} onChange={(e) => setTplTitle(e.target.value)} />
-          </Field>
-          <Field label="Description template">
-            <Textarea value={tplDesc} onChange={(e) => setTplDesc(e.target.value)} />
-          </Field>
-          <Field label="Keywords to append">
-            <Input value={tplKeywords} onChange={(e) => setTplKeywords(e.target.value)} />
-          </Field>
-        </div>
-      </Modal>
-
-      {/* metadata CSV import modal */}
-      <Modal
-        open={csvOpen}
-        onClose={() => setCsvOpen(false)}
-        title="Import CSV"
-        description="Matched by filename"
+        open={aiModalOpen}
+        onClose={() => setAiModalOpen(false)}
+        title="AI metadata provider"
         size="lg"
+      >
+        <AiPanel compact onChange={setAiSettings} />
+      </Modal>
+
+      <Modal
+        open={batchKwOpen}
+        onClose={() => setBatchKwOpen(false)}
+        title={`Add keywords to ${targetIds.length} files`}
+        size="sm"
         footer={
           <>
-            <Button variant="ghost" onClick={() => csvInputRef.current?.click()} icon={<Upload className="size-4" />}>
-              {csvParse ? 'Choose another' : 'Choose CSV'}
+            <Button size="sm" variant="ghost" onClick={() => setBatchKwOpen(false)}>
+              Cancel
             </Button>
             <Button
-              onClick={onApplyCsv}
-              disabled={!csvParse || !csvMatch || csvMatch.size === 0}
-              icon={<FileSpreadsheet className="size-4" />}
+              size="sm"
+              variant="primary"
+              onClick={() => {
+                const words = parseKeywordInput(batchKwText);
+                if (words.length) {
+                  applyToMany(targetIds, { addKeywords: words });
+                  toast.success(`Added ${words.length} keywords to ${targetIds.length} files`);
+                }
+                setBatchKwText('');
+                setBatchKwOpen(false);
+              }}
             >
               Apply
             </Button>
           </>
         }
       >
-        {csvParse ? (
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              {csvParse.platform ? (
-                <Badge tone="brand">
-                  <span className="flex items-center gap-1.5">
-                    <PlatformLogo id={csvParse.platform} size={16} />
-                    {PLATFORM_LIST.find((p) => p.id === csvParse.platform)?.name}
-                  </span>
-                </Badge>
-              ) : (
-                <Badge tone="neutral">generic CSV</Badge>
-              )}
-              <Badge tone="outline">{csvParse.delimiter === '\t' ? 'TAB' : `"${csvParse.delimiter}"`}</Badge>
-              <Badge tone="outline">{csvParse.hasHeader ? 'header' : 'no header'}</Badge>
-              <Badge tone={csvParse.rows.length ? 'ok' : 'danger'}>{csvParse.rows.length} rows</Badge>
-              {csvParse.skipped > 0 && <Badge tone="warn">{csvParse.skipped} skipped</Badge>}
-              <Badge tone={csvMatch && csvMatch.size > 0 ? 'ok' : 'warn'}>
-                {csvMatch?.size ?? 0} matched · {csvName}
-              </Badge>
-            </div>
-
-            <Field label="Column order">
-              <Select
-                value={csvDialect}
-                onChange={(event) => setCsvDialect(event.target.value as PlatformId | '')}
-                options={[
-                  { value: '', label: csvParse.platform ? `Auto (${csvParse.platform})` : 'Auto-detect' },
-                  ...PLATFORM_LIST.map((platform) => ({ value: platform.id, label: platform.name })),
-                ]}
-              />
-            </Field>
-
-            <div className="overflow-x-auto r-control border border-line">
-              <table className="w-full min-w-[26rem] text-left text-xs">
-                <thead className="bg-surface-2 text-[0.6875rem] tracking-wide text-fg-subtle uppercase">
-                  <tr>
-                    <th className="px-3 py-2">File</th>
-                    <th className="px-3 py-2">Title</th>
-                    <th className="px-4 py-2.5 text-right">Keywords</th>
-                    <th className="px-4 py-2.5 text-right">Match</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {csvParse.rows.slice(0, 8).map((row, index) => {
-                    const matched = Boolean(csvMatch?.get(row));
-                    return (
-                      <tr key={`${row.filename}-${index}`} className="bg-surface">
-                        <td className="max-w-40 truncate px-4 py-2.5 font-mono text-fg" title={row.filename}>{row.filename}</td>
-                        <td className="max-w-40 truncate px-4 py-2.5 text-fg-muted sm:max-w-56" title={row.title ?? ''}>{row.title || '—'}</td>
-                        <td className="px-4 py-2.5 text-right text-fg tabular-nums">{row.keywords?.length ?? 0}</td>
-                        <td className="px-4 py-2.5 text-right">
-                          {matched ? <Badge tone="ok">yes</Badge> : <Badge tone="warn">no</Badge>}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <p className="text-[0.6875rem] text-fg-subtle">Unmatched rows are ignored.</p>
-          </div>
-        ) : (
-          <EmptyState
-            icon={<FileSpreadsheet className="size-7" />}
-            title="Choose a CSV"
-            description="Dialect detected automatically"
-            action={<Button icon={<Upload className="size-4" />} onClick={() => csvInputRef.current?.click()}>Choose</Button>}
-          />
-        )}
+        <Input
+          value={batchKwText}
+          onChange={(e) => setBatchKwText(e.target.value)}
+          placeholder="Comma separated keywords"
+        />
       </Modal>
-
-      {editorItem && <ItemEditor item={editorItem} onClose={() => setEditorId(null)} />}
-    </>
-  );
-}
-
-function LibraryCard({
-  item,
-  level,
-  selected,
-  onSelect,
-  onOpen,
-}: {
-  item: StockItem;
-  level: keyof typeof LEVEL_TONE;
-  selected: boolean;
-  onSelect: () => void;
-  onOpen: () => void;
-}) {
-  const mp = megapixels(item);
-  return (
-    <li>
-      <div
-        className={clsx(
-          'card group relative overflow-hidden transition-[border-color,box-shadow] duration-150',
-          'hover:border-line-strong hover:shadow-[var(--elev-2)]',
-          selected && 'border-brand ring-2 ring-brand/25',
-        )}
-      >
-        <button type="button" onClick={onOpen} className="block w-full text-left">
-          <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-surface-2">
-            {item.thumbUrl ? (
-              <img
-                src={item.thumbUrl}
-                alt={item.name}
-                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                loading="lazy"
-              />
-            ) : (
-              <span className="flex flex-col items-center gap-2 text-fg-subtle">
-                {item.format === 'eps' || item.format === 'ai' || item.format === 'svg' ? (
-                  <Layers className="size-8" strokeWidth={1.5} />
-                ) : (
-                  <FileImage className="size-8" strokeWidth={1.5} />
-                )}
-                <span className="font-mono text-[0.6875rem] uppercase">{item.format}</span>
-              </span>
-            )}
-            <span className="absolute top-2 left-2 flex gap-1">
-              <Badge tone="neutral" className="bg-black/60 text-white backdrop-blur">
-                {item.format.toUpperCase()}
-              </Badge>
-              {mp !== null && (
-                <Badge tone="neutral" className="bg-black/60 text-white tabular-nums backdrop-blur">
-                  {mp.toFixed(1)} MP
-                </Badge>
-              )}
-            </span>
-            <span className="absolute top-2 right-2">
-              <Badge tone={LEVEL_TONE[level]} dot>
-                {level === 'ok' ? 'ready' : level}
-              </Badge>
-            </span>
-          </div>
-          <div className="px-3 py-2.5">
-            <p className="truncate text-[0.8125rem] font-medium text-fg" title={item.name}>
-              {item.name}
-            </p>
-            <p className="mt-0.5 truncate text-[0.6875rem] text-fg-muted">{item.metadata.title || '—'}</p>
-            <div className="mt-2 flex items-center justify-between gap-2 text-[0.625rem] text-fg-subtle">
-              <span className="nums">{formatBytes(item.sizeBytes)}</span>
-              <span className="flex items-center gap-1.5">
-                {item.metadata.keywords.length} kw
-                {item.embeddedAt && (
-                  <span className="size-1.5 rounded-full bg-ok" title="Metadata embedded" />
-                )}
-              </span>
-            </div>
-          </div>
-        </button>
-        <label
-          className={clsx(
-            'absolute bottom-2 left-2 flex cursor-pointer items-center r-chip p-1 transition-colors',
-            selected ? 'bg-brand' : 'bg-black/55 hover:bg-black/70',
-          )}
-          aria-label={`Select ${item.name}`}
-        >
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={onSelect}
-            className="size-3.5 accent-[var(--brand)]"
-          />
-        </label>
-      </div>
-    </li>
+    </div>
   );
 }

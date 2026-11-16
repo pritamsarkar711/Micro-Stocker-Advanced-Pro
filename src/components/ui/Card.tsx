@@ -1,69 +1,61 @@
-import clsx from 'clsx';
 import type { HTMLAttributes, ReactNode } from 'react';
+import clsx from 'clsx';
 
-export interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
-  title?: ReactNode;
-  /** Rarely needed: captions add noise. Kept for dense reference tables. */
+export interface CardProps extends HTMLAttributes<HTMLDivElement> {
+  padding?: 'none' | 'sm' | 'md' | 'lg';
+  interactive?: boolean;
   description?: ReactNode;
   action?: ReactNode;
-  icon?: ReactNode;
-  padded?: boolean;
   flush?: boolean;
 }
 
-/**
- * Elevated surface. Header is a 44px row with a hairline divider; body is
- * padded 16px so dense tables can opt out with `flush`.
- */
-export function Card({
-  title,
-  description,
-  action,
-  icon,
-  padded = true,
-  flush = false,
-  className,
-  children,
-  ...rest
-}: CardProps) {
+const PAD = {
+  none: '',
+  sm: 'p-3.5',
+  md: 'p-4 sm:p-5',
+  lg: 'p-5 sm:p-6',
+};
+
+export function Card({ padding = 'md', interactive, className, title, description, action, flush, children, ...rest }: CardProps) {
   return (
-    <section className={clsx('card flex flex-col', className)} {...rest}>
-      {(title || action) && (
-        <header className="flex min-h-11 flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-2">
-          <div className="flex min-w-0 items-center gap-2">
-            {icon && <span className="shrink-0 text-fg-subtle">{icon}</span>}
-            <div className="min-w-0">
-              {title && (
-                <h2 className="display truncate text-[0.875rem] font-semibold text-fg">{title}</h2>
-              )}
-              {description && (
-                <p className="mt-0.5 truncate text-[0.75rem] text-fg-muted">{description}</p>
-              )}
-            </div>
-          </div>
-          {action && <div className="flex shrink-0 items-center gap-1.5">{action}</div>}
-        </header>
+    <div
+      className={clsx(
+        'card',
+        PAD[flush ? 'none' : padding],
+        interactive && 'card-hover cursor-pointer',
+        className,
       )}
-      <div className={clsx(!flush && padded && 'p-4', 'min-w-0 flex-1')}>{children}</div>
-    </section>
+      {...rest}
+    >
+      {title && <CardHeader title={title} subtitle={description} action={action} className={flush ? 'px-4 pt-4' : undefined} />}
+      {children}
+    </div>
   );
 }
 
-export function SectionTitle({
-  children,
-  hint,
-  className,
-}: {
-  children: ReactNode;
-  hint?: ReactNode;
+export interface CardHeaderProps {
+  title: ReactNode;
+  subtitle?: ReactNode;
+  icon?: ReactNode;
+  action?: ReactNode;
   className?: string;
-}) {
+}
+
+export function CardHeader({ title, subtitle, icon, action, className }: CardHeaderProps) {
   return (
-    <div className={clsx('flex items-baseline justify-between gap-2', className)}>
-      <h2 className="text-[0.6875rem] font-semibold tracking-[0.08em] text-fg-subtle uppercase">
-        {children}
-      </h2>
-      {hint && <span className="text-[0.6875rem] text-fg-subtle">{hint}</span>}
+    <div className={clsx('mb-3.5 flex flex-wrap items-start justify-between gap-2.5', className)}>
+      <div className="flex min-w-0 items-center gap-2.5">
+        {icon && (
+          <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-[var(--r-control)] bg-accent-soft text-accent">
+            {icon}
+          </span>
+        )}
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold tracking-tight text-ink">{title}</h2>
+          {subtitle && <p className="mt-0.5 text-xs text-ink-muted">{subtitle}</p>}
+        </div>
+      </div>
+      {action && <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div>}
     </div>
   );
 }

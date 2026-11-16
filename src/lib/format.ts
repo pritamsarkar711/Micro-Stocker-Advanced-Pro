@@ -1,30 +1,40 @@
-/** Formatting helpers. Currency defaults to BDT but is configurable. */
+import type { FlagCode } from '@/components/ui/CircleFlag';
 
-export type CurrencyCode = 'BDT' | 'USD' | 'EUR' | 'GBP' | 'INR';
+export type CurrencyCode = 'USD' | 'EUR' | 'GBP' | 'BDT' | 'INR' | 'SGD' | 'CAD' | 'AUD' | 'JPY';
 
-const CURRENCY_LOCALE: Record<CurrencyCode, string> = {
-  BDT: 'en-BD',
-  USD: 'en-US',
-  EUR: 'de-DE',
-  GBP: 'en-GB',
-  INR: 'en-IN',
-};
+export interface CurrencyMeta {
+  code: CurrencyCode;
+  symbol: string;
+  name: string;
+  locale: string;
+  flag: FlagCode;
+}
 
-const CURRENCY_SYMBOL: Record<CurrencyCode, string> = {
-  BDT: '৳',
-  USD: '$',
-  EUR: '€',
-  GBP: '£',
-  INR: '₹',
-};
+export const CURRENCIES: CurrencyMeta[] = [
+  { code: 'USD', symbol: '$', name: 'US Dollar', locale: 'en-US', flag: 'us' },
+  { code: 'EUR', symbol: '€', name: 'Euro', locale: 'de-DE', flag: 'eu' },
+  { code: 'GBP', symbol: '£', name: 'British Pound', locale: 'en-GB', flag: 'gb' },
+  { code: 'BDT', symbol: '৳', name: 'Bangladeshi Taka', locale: 'en-BD', flag: 'bd' },
+  { code: 'INR', symbol: '₹', name: 'Indian Rupee', locale: 'en-IN', flag: 'in' },
+  { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar', locale: 'en-SG', flag: 'sg' },
+  { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar', locale: 'en-CA', flag: 'ca' },
+  { code: 'AUD', symbol: 'A$', name: 'Australian Dollar', locale: 'en-AU', flag: 'au' },
+  { code: 'JPY', symbol: '¥', name: 'Japanese Yen', locale: 'ja-JP', flag: 'jp' },
+];
 
-export function money(value: number, currency: CurrencyCode = 'BDT', decimals = 2): string {
-  if (!Number.isFinite(value)) return `${CURRENCY_SYMBOL[currency]}0.00`;
-  const formatted = new Intl.NumberFormat(CURRENCY_LOCALE[currency], {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
+export function currencyMeta(code: CurrencyCode): CurrencyMeta {
+  return CURRENCIES.find((c) => c.code === code) ?? CURRENCIES[0];
+}
+
+export function money(value: number, currency: CurrencyCode = 'USD', decimals = 2): string {
+  const meta = currencyMeta(currency);
+  const places = currency === 'JPY' ? 0 : decimals;
+  if (!Number.isFinite(value)) return `${meta.symbol}0`;
+  const formatted = new Intl.NumberFormat(meta.locale, {
+    minimumFractionDigits: places,
+    maximumFractionDigits: places,
   }).format(value);
-  return `${CURRENCY_SYMBOL[currency]}${formatted}`;
+  return `${meta.symbol}${formatted}`;
 }
 
 export function compactNumber(value: number): string {
@@ -42,7 +52,7 @@ export function number(value: number, decimals = 0): string {
 
 export function dateTime(iso: string | number | Date): string {
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
+  if (Number.isNaN(d.getTime())) return 'Unknown';
   return d.toLocaleString(undefined, {
     year: 'numeric',
     month: 'short',
@@ -50,32 +60,6 @@ export function dateTime(iso: string | number | Date): string {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-export function relativeTime(iso: string | number | Date): string {
-  const d = new Date(iso).getTime();
-  if (Number.isNaN(d)) return '—';
-  const diff = d - Date.now();
-  const units: [Intl.RelativeTimeFormatUnit, number][] = [
-    ['year', 1000 * 60 * 60 * 24 * 365],
-    ['month', 1000 * 60 * 60 * 24 * 30],
-    ['day', 1000 * 60 * 60 * 24],
-    ['hour', 1000 * 60 * 60],
-    ['minute', 1000 * 60],
-    ['second', 1000],
-  ];
-  const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
-  for (const [unit, ms] of units) {
-    if (Math.abs(diff) >= ms || unit === 'second') {
-      return rtf.format(Math.round(diff / ms), unit);
-    }
-  }
-  return rtf.format(0, 'second');
-}
-
-export function percent(value: number, decimals = 1): string {
-  if (!Number.isFinite(value)) return '0%';
-  return `${value >= 0 ? '' : '-'}${Math.abs(value).toFixed(decimals)}%`;
 }
 
 export function truncate(value: string, max = 40): string {

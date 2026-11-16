@@ -1,21 +1,23 @@
 import { Link } from 'react-router-dom';
-import { Compass } from 'lucide-react';
+import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/Misc';
+import { GIcon } from '@/components/ui/GoogleIcon';
 
 export function NotFoundPage() {
   return (
-    <div className="card mx-auto max-w-xl">
+    <Card className="mx-auto max-w-lg">
       <EmptyState
-        icon={<Compass className="size-7" />}
-        title="Not found"
-        
+        icon={<GIcon name="explore" size={28} />}
+        title="Page not found"
         action={
           <Link to="/">
-            <Button size="sm">Overview</Button>
+            <Button size="sm" variant="primary" icon={<GIcon name="home" size={15} />}>
+              Overview
+            </Button>
           </Link>
         }
       />
-    </div>
+    </Card>
   );
 }

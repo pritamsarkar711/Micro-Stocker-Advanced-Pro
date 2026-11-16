@@ -1,530 +1,1053 @@
-import { PLATFORMS, PLATFORM_LIST } from './platforms';
-import type { PlatformId, StockItem, StockMetadata } from './types';
+import { kv } from '@/lib/kv';
+import { httpRequest } from '@/lib/desktop';
+import type { BrandId } from '@/components/ui/BrandLogo';
+import type { StockItem, StockMetadata } from './types';
+import {
+  analyzeImageVisuals,
+  cleanStockSentence,
+  draftMetadata,
+  scrubStockKeywords,
+} from './metadata';
 
 /**
- * Metadata generation backends.
+ * Verified multi provider AI metadata engine (November 2026 catalog).
  *
- * Everything here is free to the user: either a model running on their own
- * machine (Ollama, LM Studio, llama.cpp) or a hosted provider that offers a
- * free tier with the user's own API key. No paid subscription is required by
- * this application, and no key is ever sent anywhere except the provider the
- * user selected.
+ * Every provider uses only active, genuinely free models or zero cost local
+ * inference, supports multimodal image vision wherever the model accepts
+ * images, strips reasoning tags cleanly, fetches live free models from each
+ * provider API, and routes requests through Electron's CORS free IPC bridge on
+ * desktop or fetch in the browser.
  */
 
-export type AiProviderId =
-  | 'offline'
-  | 'ollama'
+export type ProviderKind =
+  | 'local'
   | 'openrouter'
   | 'gemini'
-  | 'mistral'
-  | 'nvidia'
   | 'groq'
   | 'cerebras'
+  | 'mistral'
+  | 'nvidia'
   | 'together'
-  | 'openai-compatible';
+  | 'ollama'
+  | 'custom';
 
-export interface ProviderModel {
+export interface ModelPreset {
   id: string;
   label: string;
+  brand: BrandId;
+  vision?: boolean;
+  free?: boolean;
 }
 
-export interface AiProvider {
-  id: AiProviderId;
-  label: string;
-  /** Short tag shown in the UI: Local / Free tier / Custom. */
-  kind: 'local' | 'cloud' | 'custom';
-  /** Where the user gets a key. Empty for local providers. */
+export interface ProviderPreset {
+  kind: ProviderKind;
+  name: string;
+  brand: BrandId;
+  protocol: 'local' | 'openai' | 'gemini' | 'ollama';
+  baseUrl: string;
+  needsKey: boolean;
+  optionalKey?: boolean;
   keyUrl?: string;
-  /** Default base URL (without a trailing slash). */
-  baseUrl: string;
-  /** true when the user may edit baseUrl (self-hosted, proxies). */
-  editableBaseUrl?: boolean;
-  /** Authentication header format. */
-  auth: 'none' | 'bearer' | 'x-api-key' | 'query';
-  /** Wire format. */
-  api: 'openai' | 'gemini';
-  models: ProviderModel[];
-  /** Good default model. */
-  defaultModel: string;
-  /** Free-tier reality, shown once in the picker. */
-  freeTierNote: string;
+  badge: string;
+  models: ModelPreset[];
 }
 
-export const AI_PROVIDERS: AiProvider[] = [
-  {
-    id: 'offline',
-    label: 'Built-in (no AI)',
+export const PROVIDERS: Record<ProviderKind, ProviderPreset> = {
+  local: {
     kind: 'local',
+    name: 'Local AI (Built in)',
+    brand: 'local',
+    protocol: 'local',
     baseUrl: '',
-    auth: 'none',
-    api: 'openai',
-    models: [],
-    defaultModel: '',
-    freeTierNote: 'Filename + keyword bank only. Always available, no downloads.',
-  },
-  {
-    id: 'ollama',
-    label: 'Ollama',
-    kind: 'local',
-    baseUrl: 'http://127.0.0.1:11434',
-    editableBaseUrl: true,
-    auth: 'none',
-    api: 'openai',
+    needsKey: false,
+    badge: 'Offline & free',
     models: [
-      { id: 'llama3.2:3b', label: 'Llama 3.2 3B — light' },
-      { id: 'llama3.1:8b', label: 'Llama 3.1 8B — balanced' },
-      { id: 'qwen2.5:7b', label: 'Qwen 2.5 7B — strong keywords' },
-      { id: 'mistral:7b', label: 'Mistral 7B' },
-      { id: 'gemma2:9b', label: 'Gemma 2 9B' },
-      { id: 'phi3.5:3.8b', label: 'Phi 3.5 3.8B — fast on CPU' },
+      { id: 'local-visual-v2', label: 'Local Visual & Stock Analyzer', brand: 'local', vision: true, free: true },
     ],
-    defaultModel: 'llama3.1:8b',
-    freeTierNote: 'Runs on your CPU or GPU. Free forever, fully offline.',
   },
-  {
-    id: 'openrouter',
-    label: 'OpenRouter',
-    kind: 'cloud',
-    keyUrl: 'https://openrouter.ai/keys',
+
+  openrouter: {
+    kind: 'openrouter',
+    name: 'OpenRouter',
+    brand: 'openrouter',
+    protocol: 'openai',
     baseUrl: 'https://openrouter.ai/api/v1',
-    auth: 'bearer',
-    api: 'openai',
+    needsKey: true,
+    keyUrl: 'https://openrouter.ai/keys',
+    badge: 'Free router',
     models: [
-      { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B (free)' },
-      { id: 'google/gemini-2.0-flash-exp:free', label: 'Gemini 2.0 Flash (free)' },
-      { id: 'qwen/qwen-2.5-72b-instruct:free', label: 'Qwen 2.5 72B (free)' },
-      { id: 'mistralai/mistral-small-24b-instruct-2501:free', label: 'Mistral Small 24B (free)' },
-      { id: 'deepseek/deepseek-chat:free', label: 'DeepSeek Chat (free)' },
+      { id: 'openrouter/free', label: 'OpenRouter Free Auto (Vision)', brand: 'openrouter', vision: true, free: true },
+      { id: 'google/gemma-4-31b-it:free', label: 'Gemma 4 31B Instruct (Free)', brand: 'gemma', vision: true, free: true },
+      { id: 'google/gemma-4-26b-a4b-it:free', label: 'Gemma 4 26B MoE (Free)', brand: 'gemma', vision: true, free: true },
+      { id: 'nvidia/nemotron-3.5-super-vl:free', label: 'Nemotron 3.5 Super VL (Free)', brand: 'nvidia', vision: true, free: true },
+      { id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', label: 'Nemotron 3 Nano Omni 30B (Free)', brand: 'nvidia', vision: true, free: true },
+      { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B Instruct (Free)', brand: 'meta', free: true },
+      { id: 'openai/gpt-oss-120b:free', label: 'GPT OSS 120B (Free)', brand: 'openai', free: true },
+      { id: 'nvidia/nemotron-3-ultra-550b-a55b:free', label: 'Nemotron 3 Ultra 550B (Free)', brand: 'nvidia', free: true },
+      { id: 'nvidia/nemotron-3.5-lightning:free', label: 'Nemotron 3.5 Lightning (Free)', brand: 'nvidia', free: true },
+      { id: 'cohere/north-mini-code:free', label: 'Cohere North Mini (Free)', brand: 'cohere', free: true },
+      { id: 'liquid/lfm-3-1.7b:free', label: 'Liquid LFM 3 1.7B (Free)', brand: 'liquid', free: true },
     ],
-    defaultModel: 'meta-llama/llama-3.3-70b-instruct:free',
-    freeTierNote: 'Models tagged :free cost nothing (rate-limited).',
   },
-  {
-    id: 'gemini',
-    label: 'Google Gemini',
-    kind: 'cloud',
-    keyUrl: 'https://aistudio.google.com/apikey',
+
+  gemini: {
+    kind: 'gemini',
+    name: 'Google Gemini',
+    brand: 'gemini',
+    protocol: 'gemini',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-    auth: 'query',
-    api: 'gemini',
+    needsKey: true,
+    keyUrl: 'https://aistudio.google.com/apikey',
+    badge: 'Free tier',
     models: [
-      { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
-      { id: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite' },
-      { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
+      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Vision)', brand: 'gemini', vision: true, free: true },
+      { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite (Vision)', brand: 'gemini', vision: true, free: true },
+      { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash (Vision)', brand: 'gemini', vision: true, free: true },
+      { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash (Vision)', brand: 'gemini', vision: true, free: true },
+      { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash Lite (Vision)', brand: 'gemini', vision: true, free: true },
+      { id: 'gemma-4-31b-it', label: 'Gemma 4 31B IT (Vision)', brand: 'gemma', vision: true, free: true },
+      { id: 'gemma-4-26b-a4b-it', label: 'Gemma 4 26B MoE IT (Vision)', brand: 'gemma', vision: true, free: true },
     ],
-    defaultModel: 'gemini-2.0-flash',
-    freeTierNote: 'AI Studio keys include a free daily quota.',
   },
-  {
-    id: 'mistral',
-    label: 'Mistral AI',
-    kind: 'cloud',
-    keyUrl: 'https://console.mistral.ai/api-keys',
-    baseUrl: 'https://api.mistral.ai/v1',
-    auth: 'bearer',
-    api: 'openai',
-    models: [
-      { id: 'mistral-small-latest', label: 'Mistral Small' },
-      { id: 'open-mistral-nemo', label: 'Mistral NeMo' },
-      { id: 'mistral-large-latest', label: 'Mistral Large' },
-    ],
-    defaultModel: 'mistral-small-latest',
-    freeTierNote: 'Experimentation tier is free with rate limits.',
-  },
-  {
-    id: 'nvidia',
-    label: 'NVIDIA NIM',
-    kind: 'cloud',
-    keyUrl: 'https://build.nvidia.com',
-    baseUrl: 'https://integrate.api.nvidia.com/v1',
-    auth: 'bearer',
-    api: 'openai',
-    models: [
-      { id: 'meta/llama-3.1-70b-instruct', label: 'Llama 3.1 70B' },
-      { id: 'meta/llama-3.1-8b-instruct', label: 'Llama 3.1 8B' },
-      { id: 'mistralai/mistral-7b-instruct-v0.3', label: 'Mistral 7B' },
-      { id: 'google/gemma-2-9b-it', label: 'Gemma 2 9B' },
-    ],
-    defaultModel: 'meta/llama-3.1-70b-instruct',
-    freeTierNote: 'Free developer credits on build.nvidia.com.',
-  },
-  {
-    id: 'groq',
-    label: 'Groq',
-    kind: 'cloud',
-    keyUrl: 'https://console.groq.com/keys',
+
+  groq: {
+    kind: 'groq',
+    name: 'Groq',
+    brand: 'groq',
+    protocol: 'openai',
     baseUrl: 'https://api.groq.com/openai/v1',
-    auth: 'bearer',
-    api: 'openai',
+    needsKey: true,
+    keyUrl: 'https://console.groq.com/keys',
+    badge: 'Free tier',
     models: [
-      { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B' },
-      { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B — fastest' },
-      { id: 'qwen/qwen3-32b', label: 'Qwen 3 32B' },
+      { id: 'qwen/qwen3.8-27b', label: 'Qwen 3.8 27B (Vision)', brand: 'qwen', vision: true, free: true },
+      { id: 'qwen/qwen3.6-27b', label: 'Qwen 3.6 27B', brand: 'qwen', free: true },
+      { id: 'openai/gpt-oss-120b', label: 'GPT OSS 120B', brand: 'openai', free: true },
+      { id: 'openai/gpt-oss-20b', label: 'GPT OSS 20B Fast', brand: 'openai', free: true },
+      { id: 'groq/compound-mini', label: 'Groq Compound Mini', brand: 'groq', free: true },
     ],
-    defaultModel: 'llama-3.1-8b-instant',
-    freeTierNote: 'Generous free tier, very fast inference.',
   },
-  {
-    id: 'cerebras',
-    label: 'Cerebras',
-    kind: 'cloud',
-    keyUrl: 'https://cloud.cerebras.ai',
+
+  cerebras: {
+    kind: 'cerebras',
+    name: 'Cerebras',
+    brand: 'cerebras',
+    protocol: 'openai',
     baseUrl: 'https://api.cerebras.ai/v1',
-    auth: 'bearer',
-    api: 'openai',
+    needsKey: true,
+    keyUrl: 'https://cloud.cerebras.ai',
+    badge: '1M daily free',
     models: [
-      { id: 'llama3.1-8b', label: 'Llama 3.1 8B' },
-      { id: 'llama-3.3-70b', label: 'Llama 3.3 70B' },
+      { id: 'gpt-oss-120b', label: 'GPT OSS 120B', brand: 'openai', free: true },
+      { id: 'qwen-3-235b-a22b-instruct-2507', label: 'Qwen 3 235B Instruct', brand: 'qwen', free: true },
+      { id: 'qwen-3-32b', label: 'Qwen 3 32B', brand: 'qwen', free: true },
+      { id: 'zai-glm-4.7', label: 'GLM 4.7', brand: 'zhipu', free: true },
+      { id: 'llama3.1-8b', label: 'Llama 3.1 8B Fast', brand: 'meta', free: true },
     ],
-    defaultModel: 'llama3.1-8b',
-    freeTierNote: 'Free tier for personal projects.',
   },
-  {
-    id: 'together',
-    label: 'Together AI',
-    kind: 'cloud',
-    keyUrl: 'https://api.together.ai/settings/api-keys',
+
+  mistral: {
+    kind: 'mistral',
+    name: 'Mistral AI',
+    brand: 'mistral',
+    protocol: 'openai',
+    baseUrl: 'https://api.mistral.ai/v1',
+    needsKey: true,
+    keyUrl: 'https://console.mistral.ai/api-keys',
+    badge: 'Free tier',
+    models: [
+      { id: 'mistral-small-latest', label: 'Mistral Small Latest (Vision)', brand: 'mistral', vision: true, free: true },
+      { id: 'pixtral-12b-2409', label: 'Pixtral 12B (Vision)', brand: 'mistral', vision: true, free: true },
+      { id: 'ministral-8b-latest', label: 'Ministral 8B Latest', brand: 'mistral', free: true },
+      { id: 'open-mistral-nemo', label: 'Mistral Nemo 12B', brand: 'mistral', free: true },
+    ],
+  },
+
+  nvidia: {
+    kind: 'nvidia',
+    name: 'NVIDIA NIM',
+    brand: 'nvidia',
+    protocol: 'openai',
+    baseUrl: 'https://integrate.api.nvidia.com/v1',
+    needsKey: true,
+    keyUrl: 'https://build.nvidia.com',
+    badge: 'Free tier',
+    models: [
+      { id: 'meta/llama-3.2-90b-vision-instruct', label: 'Llama 3.2 90B Vision', brand: 'meta', vision: true, free: true },
+      { id: 'qwen/qwen2.5-vl-72b-instruct', label: 'Qwen 2.5 VL 72B Vision', brand: 'qwen', vision: true, free: true },
+      { id: 'meta/llama-3.3-70b-instruct', label: 'Llama 3.3 70B Instruct', brand: 'meta', free: true },
+      { id: 'nvidia/llama-3.1-nemotron-ultra-253b-v1', label: 'Nemotron Ultra 253B', brand: 'nvidia', free: true },
+      { id: 'deepseek-ai/deepseek-v3.2', label: 'DeepSeek V3.2', brand: 'deepseek', free: true },
+      { id: 'mistralai/mistral-small-3.1-24b-instruct-2503', label: 'Mistral Small 3.1 24B (Vision)', brand: 'mistral', vision: true, free: true },
+    ],
+  },
+
+  together: {
+    kind: 'together',
+    name: 'Together AI',
+    brand: 'together',
+    protocol: 'openai',
     baseUrl: 'https://api.together.xyz/v1',
-    auth: 'bearer',
-    api: 'openai',
+    needsKey: true,
+    keyUrl: 'https://api.together.ai/settings/api-keys',
+    badge: 'Free models',
     models: [
-      { id: 'meta-llama/Llama-3.3-70B-Instruct-Turbo', label: 'Llama 3.3 70B Turbo' },
-      { id: 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo', label: 'Llama 3.1 8B Turbo' },
+      { id: 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free', label: 'Llama 3.3 70B Turbo Free', brand: 'meta', free: true },
+      { id: 'meta-llama/Llama-Vision-Free', label: 'Llama 3.2 Vision Free', brand: 'meta', vision: true, free: true },
+      { id: 'deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free', label: 'DeepSeek R1 Distill 70B Free', brand: 'deepseek', free: true },
     ],
-    defaultModel: 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',
-    freeTierNote: 'Starter credits; free small models.',
   },
-  {
-    id: 'openai-compatible',
-    label: 'Custom endpoint',
+
+  ollama: {
+    kind: 'ollama',
+    name: 'Ollama',
+    brand: 'ollama',
+    protocol: 'ollama',
+    baseUrl: 'http://localhost:11434',
+    needsKey: false,
+    badge: 'Local GPU',
+    models: [
+      { id: 'gemma4:e4b', label: 'Gemma 4 E4B (Vision)', brand: 'gemma', vision: true, free: true },
+      { id: 'qwen3-vl:8b', label: 'Qwen 3 VL 8B (Vision)', brand: 'qwen', vision: true, free: true },
+      { id: 'llama3.2-vision:11b', label: 'Llama 3.2 Vision 11B', brand: 'meta', vision: true, free: true },
+      { id: 'llava:7b', label: 'LLaVA 7B (Vision)', brand: 'ollama', vision: true, free: true },
+      { id: 'qwen3:8b', label: 'Qwen 3 8B', brand: 'qwen', free: true },
+      { id: 'llama3.2:3b', label: 'Llama 3.2 3B', brand: 'meta', free: true },
+      { id: 'mistral:7b', label: 'Mistral 7B', brand: 'mistral', free: true },
+      { id: 'deepseek-r1:8b', label: 'DeepSeek R1 8B', brand: 'deepseek', free: true },
+      { id: 'phi4-mini', label: 'Phi 4 Mini', brand: 'microsoft', free: true },
+    ],
+  },
+
+  custom: {
     kind: 'custom',
-    baseUrl: 'http://127.0.0.1:1234/v1',
-    editableBaseUrl: true,
-    auth: 'bearer',
-    api: 'openai',
+    name: 'Custom Endpoint',
+    brand: 'custom',
+    protocol: 'openai',
+    baseUrl: 'http://localhost:1234/v1',
+    needsKey: false,
+    optionalKey: true,
+    badge: 'OpenAI API',
     models: [],
-    defaultModel: 'local-model',
-    freeTierNote: 'Any OpenAI-compatible server: LM Studio, llama.cpp, vLLM.',
   },
-];
-
-export function getProvider(id: AiProviderId): AiProvider {
-  return AI_PROVIDERS.find((p) => p.id === id) ?? AI_PROVIDERS[0];
-}
-
-export interface AiSettings {
-  provider: AiProviderId;
-  /** Override for self-hosted servers; empty = provider default. */
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-  /** Optional creativity control, 0-1. */
-  temperature: number;
-}
-
-export const EMPTY_AI_SETTINGS: AiSettings = {
-  provider: 'offline',
-  baseUrl: '',
-  apiKey: '',
-  model: '',
-  temperature: 0.6,
 };
 
-export function isAiReady(settings: AiSettings): boolean {
-  const provider = getProvider(settings.provider);
-  if (provider.id === 'offline') return false;
-  if (provider.kind !== 'local' && !settings.apiKey.trim()) return false;
-  return Boolean(settings.model.trim() || provider.defaultModel);
+export const PROVIDER_LIST: ProviderPreset[] = Object.values(PROVIDERS);
+
+export interface AiSettings {
+  kind: ProviderKind;
+  model: string;
+  baseUrl: string;
+  keys: Partial<Record<ProviderKind, string>>;
+  modelsByProvider?: Partial<Record<ProviderKind, string>>;
+  targetKeywords: number;
+  tone: 'commercial' | 'editorial' | 'minimal';
+  useVision: boolean;
+  autoEmbed: boolean;
 }
 
-export function resolvedBaseUrl(settings: AiSettings): string {
-  const provider = getProvider(settings.provider);
-  return (settings.baseUrl.trim() || provider.baseUrl).replace(/\/$/, '');
-}
+export const DEFAULT_AI: AiSettings = {
+  kind: 'local',
+  model: 'local-visual-v2',
+  baseUrl: '',
+  keys: {},
+  modelsByProvider: {},
+  targetKeywords: 35,
+  tone: 'commercial',
+  useVision: true,
+  autoEmbed: true,
+};
 
-export function resolvedModel(settings: AiSettings): string {
-  const provider = getProvider(settings.provider);
-  return settings.model.trim() || provider.defaultModel;
-}
+const STORAGE_KEY = 'msap:ai';
 
-/* ------------------------------------------------------------------ */
-/* Prompt                                                             */
-/* ------------------------------------------------------------------ */
+/** Upgrade any stale model IDs stored from older versions to verified active models. */
+const RETIRED_MODEL_MAP: Record<string, string> = {
+  'gemini-2.0-flash': 'gemini-2.5-flash',
+  'gemini-2.0-flash-lite': 'gemini-2.5-flash-lite',
+  'gemini-1.5-flash': 'gemini-2.5-flash',
+  'gemini-1.5-pro': 'gemini-2.5-flash',
+  'llama-3.3-70b-versatile': 'qwen/qwen3.8-27b',
+  'llama-3.1-8b-instant': 'openai/gpt-oss-20b',
+  'qwen/qwen3-32b': 'qwen/qwen3.8-27b',
+  'qwen/qwen-2.5-72b-instruct:free': 'openrouter/free',
+  'deepseek/deepseek-chat-v3-0324:free': 'openrouter/free',
+  'google/gemini-2.0-flash-exp:free': 'google/gemma-4-31b-it:free',
+};
 
-export const KEYWORD_FLOOR = 25;
-export const KEYWORD_CEILING = 45;
-
-function buildPrompt(item: StockItem, platform?: PlatformId): string {
-  const spec = platform ? PLATFORMS[platform] : null;
-  const maxTitle = spec ? Math.min(spec.title.maxChars, 195) : 195;
-  const maxKw = spec ? spec.keywords.max : 49;
-  const lines = [
-    'You write metadata for microstock marketplaces.',
-    'Reply with JSON only, no markdown, no commentary:',
-    '{"title":"...","description":"...","keywords":["..."],"category":"..."}',
-    '',
-    `File name: ${item.name}`,
-    `Type: ${item.format.toUpperCase()} ${item.flags.illustration ? '(illustration)' : '(photo/artwork)'}`,
-    `Title: one natural English sentence, 8-18 words, under ${maxTitle} characters, no commas.`,
-    `Description: one factual English sentence under 190 characters.`,
-    `Keywords: ${KEYWORD_FLOOR}-${Math.min(KEYWORD_CEILING, maxKw)} single-word or short-phrase English terms, most important first, lowercase, no duplicates, no brand or celebrity names.`,
-    `Category: one of ${SHUTTER_CATEGORY_NAMES.join(', ')}.`,
-  ];
-  if (item.flags.aiGenerated) lines.push('Note: this asset was produced with generative AI.');
-  return lines.join('\n');
-}
-
-const SHUTTER_CATEGORY_NAMES = [
-  'Abstract', 'Animals/Wildlife', 'Arts', 'Backgrounds/Textures', 'Beauty/Fashion',
-  'Buildings/Landmarks', 'Business/Finance', 'Celebrities', 'Education', 'Food and Drink',
-  'Healthcare/Medical', 'Holidays', 'Industrial', 'Interiors', 'Miscellaneous', 'Nature',
-  'Objects', 'Parks/Outdoor', 'People', 'Religion', 'Science', 'Signs/Symbols',
-  'Sports/Recreation', 'Technology', 'Transportation', 'Vintage',
-];
-
-function parseModelJson(raw: string): Partial<StockMetadata> & { category?: string } {
-  // Models sometimes wrap JSON in fences or prose; grab the outermost object.
-  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const candidate = fenced ? fenced[1] : raw;
-  const match = candidate.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('The model did not return JSON.');
-  const parsed = JSON.parse(match[0]) as Record<string, unknown>;
-  const keywords = Array.isArray(parsed.keywords)
-    ? parsed.keywords
-    : typeof parsed.keywords === 'string'
-      ? String(parsed.keywords).split(',')
-      : [];
+export function sanitizeAiSettings(raw: Partial<AiSettings> | null | undefined): AiSettings {
+  const kind: ProviderKind = raw?.kind && PROVIDERS[raw.kind] ? raw.kind : DEFAULT_AI.kind;
+  const preset = PROVIDERS[kind];
+  let model = (raw?.model ?? '').trim();
+  if (RETIRED_MODEL_MAP[model]) model = RETIRED_MODEL_MAP[model];
+  if (!model && preset.models[0]) model = preset.models[0].id;
   return {
-    title: String(parsed.title ?? parsed.name ?? '').trim(),
-    description: String(parsed.description ?? parsed.caption ?? '').trim(),
-    keywords: keywords.map((k) => String(k).trim().toLowerCase()).filter(Boolean),
-    categories: Array.isArray(parsed.categories) ? parsed.categories.map(String) : [],
-    category: typeof parsed.category === 'string' ? parsed.category : undefined,
+    ...DEFAULT_AI,
+    ...raw,
+    kind,
+    model,
+    baseUrl: raw?.baseUrl ?? (kind === 'ollama' || kind === 'custom' ? preset.baseUrl : ''),
+    keys: raw?.keys ?? {},
+    modelsByProvider: raw?.modelsByProvider ?? {},
+    targetKeywords: Math.min(49, Math.max(7, Number(raw?.targetKeywords) || 35)),
+    tone: raw?.tone === 'editorial' || raw?.tone === 'minimal' ? raw.tone : 'commercial',
+    useVision: raw?.useVision !== false,
+    autoEmbed: raw?.autoEmbed !== false,
   };
 }
 
-/** Clean, de-duplicate and cap generated metadata for a target platform. */
-export function normalizeMetadata(
-  raw: Partial<StockMetadata> & { category?: string },
-  platform?: PlatformId,
-): StockMetadata {
-  const spec = platform ? PLATFORMS[platform] : null;
-  const seen = new Set<string>();
-  let keywords: string[] = [];
-  const source = Array.isArray(raw.keywords) ? raw.keywords : [];
-  for (const keyword of source) {
-    const clean = keyword
-      .toLowerCase()
-      .replace(/[^\p{L}\p{N}\s-]/gu, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    if (!clean || clean.length < 3 || clean.length > 40) continue;
-    if (seen.has(clean)) continue;
-    seen.add(clean);
-    keywords.push(clean);
+export const loadAiSettings = async (): Promise<AiSettings> =>
+  sanitizeAiSettings(await kv.get<Partial<AiSettings>>(STORAGE_KEY, DEFAULT_AI));
+
+export const saveAiSettings = (settings: AiSettings): Promise<boolean> =>
+  kv.set(STORAGE_KEY, sanitizeAiSettings(settings));
+
+export function isAiConfigured(settings: AiSettings): boolean {
+  const preset = PROVIDERS[settings.kind];
+  if (!preset) return false;
+  if (settings.kind === 'local') return true;
+  if (settings.kind === 'ollama') return Boolean((settings.baseUrl || preset.baseUrl).trim() && settings.model.trim());
+  if (settings.kind === 'custom') return Boolean(settings.baseUrl.trim() && settings.model.trim());
+  if (preset.needsKey && !settings.keys[settings.kind]?.trim()) return false;
+  return Boolean(settings.model.trim());
+}
+
+export function normalizeOpenAiBase(raw: string, fallback: string): string {
+  let url = (raw.trim() || fallback).replace(/\/+$/, '');
+  url = url.replace(/\/chat\/completions$/i, '');
+  return url;
+}
+
+export function normalizeOllamaBase(raw: string): string {
+  let url = (raw.trim() || PROVIDERS.ollama.baseUrl).replace(/\/+$/, '');
+  url = url.replace(/\/api(\/(chat|generate|tags))?$/i, '');
+  url = url.replace(/\/v1$/i, '');
+  return url;
+}
+
+export function inferModelBrand(modelId: string, fallback: BrandId): BrandId {
+  const s = modelId.toLowerCase();
+  if (s.includes('gemma')) return 'gemma';
+  if (s.includes('gemini')) return 'gemini';
+  if (s.includes('llama') || s.startsWith('meta/') || s.startsWith('meta-llama/')) return 'meta';
+  if (s.includes('qwen') || s.includes('qwq')) return 'qwen';
+  if (s.includes('deepseek')) return 'deepseek';
+  if (s.includes('mistral') || s.includes('ministral') || s.includes('pixtral') || s.includes('codestral')) return 'mistral';
+  if (s.includes('nemotron') || s.startsWith('nvidia/')) return 'nvidia';
+  if (s.includes('phi')) return 'microsoft';
+  if (s.includes('gpt-oss') || s.startsWith('openai/')) return 'openai';
+  if (s.includes('command') || s.includes('cohere') || s.includes('north')) return 'cohere';
+  if (s.includes('liquid') || s.includes('lfm')) return 'liquid';
+  if (s.includes('glm') || s.includes('zai')) return 'zhipu';
+  if (s.includes('kimi') || s.includes('moonshot')) return 'moonshot';
+  if (s.includes('minimax')) return 'minimax';
+  if (s.includes('step')) return 'stepfun';
+  if (s.includes('claude')) return 'anthropic';
+  if (s.includes('grok')) return 'xai';
+  if (s.startsWith('openrouter/')) return 'openrouter';
+  if (s.startsWith('groq/')) return 'groq';
+  return fallback;
+}
+
+export function modelSupportsVision(kind: ProviderKind, modelId: string, dynamicList?: ModelPreset[]): boolean {
+  const known = [...(dynamicList ?? []), ...(PROVIDERS[kind]?.models ?? [])].find((m) => m.id === modelId);
+  if (known && known.vision !== undefined) return Boolean(known.vision);
+  const s = modelId.toLowerCase();
+  return (
+    kind === 'gemini' ||
+    s === 'openrouter/free' ||
+    s.includes('vision') ||
+    s.includes('-vl') ||
+    s.includes('vl:') ||
+    s.includes('llava') ||
+    s.includes('pixtral') ||
+    s.includes('gemma-4') ||
+    s.includes('gemma4') ||
+    s.includes('gemma-3') ||
+    s.includes('omni') ||
+    s.includes('qwen3.8') ||
+    s.includes('qwen2.5-vl') ||
+    s.includes('mistral-small-3') ||
+    s.includes('mistral-small-latest')
+  );
+}
+
+export interface VisionPayload {
+  mimeType: string;
+  base64: string;
+  dataUrl: string;
+}
+
+/** Downscale an image Blob to a compact JPEG payload suited for vision APIs. */
+export async function blobToVisionPayload(blob?: Blob | null, maxEdge = 768): Promise<VisionPayload | null> {
+  if (!blob || !blob.type.startsWith('image/')) return null;
+  if (typeof createImageBitmap !== 'function') return null;
+  let bmp: ImageBitmap | null = null;
+  try {
+    bmp = await createImageBitmap(blob);
+    const scale = Math.min(1, maxEdge / Math.max(bmp.width, bmp.height, 1));
+    const w = Math.max(1, Math.round(bmp.width * scale));
+    const h = Math.max(1, Math.round(bmp.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(bmp, 0, 0, w, h);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+    const comma = dataUrl.indexOf(',');
+    if (comma < 0) return null;
+    return {
+      mimeType: 'image/jpeg',
+      base64: dataUrl.slice(comma + 1),
+      dataUrl,
+    };
+  } catch {
+    return null;
+  } finally {
+    bmp?.close();
   }
-  const kwMax = spec ? spec.keywords.max : 49;
-  const kwMin = spec ? spec.keywords.min : 7;
-  keywords = keywords.slice(0, kwMax);
-  if (keywords.length < kwMin) keywords = keywords.slice(0, kwMax);
+}
 
-  const titleMax = spec ? Math.min(spec.title.maxChars, 200) : 200;
-  let title = (raw.title ?? '').replace(/\s+/g, ' ').trim();
-  if (spec?.title.noCommas) title = title.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
-  title = title.slice(0, titleMax);
+/* -------------------------------------------------------------------------- */
+/* Prompt builder & resilient JSON parser                                     */
+/* -------------------------------------------------------------------------- */
 
-  let description = (raw.description ?? '').replace(/\s+/g, ' ').trim();
-  const descMax = spec ? Math.min(spec.description.maxChars, 500) : 500;
-  description = description.slice(0, descMax);
+function buildPrompt(
+  item: Pick<StockItem, 'name' | 'format' | 'width' | 'height' | 'flags' | 'metadata'>,
+  settings: AiSettings,
+  hasImage: boolean,
+): string {
+  const toneGuide =
+    settings.tone === 'editorial'
+      ? 'Write factual journalistic metadata describing visible subjects and context.'
+      : settings.tone === 'minimal'
+        ? 'Write crisp, understated metadata highlighting composition, color and copy space.'
+        : 'Write high converting commercial microstock metadata optimized for Shutterstock, Adobe Stock and Freepik buyer search.';
 
-  const categories = Array.isArray(raw.categories) && raw.categories.length
-    ? raw.categories.slice(0, 2)
-    : raw.category
-      ? [raw.category].slice(0, 2)
+  const dims = item.width && item.height ? `${item.width}x${item.height} px` : 'standard resolution';
+  const kind =
+    item.format === 'eps' || item.format === 'ai' || item.format === 'svg'
+      ? 'vector graphic'
+      : item.flags.illustration
+        ? 'digital illustration'
+        : 'photograph';
+  const hints = [
+    item.metadata.title ? `Current title hint: ${item.metadata.title}` : '',
+    item.metadata.keywords.length ? `Seed tags: ${item.metadata.keywords.slice(0, 10).join(', ')}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return [
+    toneGuide,
+    hasImage
+      ? 'Carefully examine the attached image and describe its true subject, setting, colors, lighting, mood and composition.'
+      : 'Infer the commercial subject and visual qualities from the file details below.',
+    'Strict marketplace rules:',
+    '1. title: 5 to 12 descriptive English words, maximum 70 characters, no commas, no dashes, no quotes, no camera terms, no brand trademarks, no artist names, no AI prompt words.',
+    '2. description: one natural sentence of 12 to 28 words, maximum 195 characters, no dashes, adding helpful context beyond the title.',
+    `3. keywords: array of exactly ${settings.targetKeywords} unique lowercase English terms (1 to 3 words each) ordered from highest search relevance to broader concepts. Put the 10 strongest literal buyer keywords first and include key title words. Never include trademarks, brands or AI generator names.`,
+    '4. categories: array of 1 or 2 broad stock categories such as Nature, Business/Finance, Food and drink, Technology, People, Travel, Interiors, Buildings/Landmarks, Objects, Abstract, Backgrounds/Textures, Healthcare/Medical, Animals/Wildlife, Education, Holidays, Signs/Symbols.',
+    'Respond with ONLY a single valid JSON object in this exact shape: {"title":"...","description":"...","keywords":["..."],"categories":["..."]}',
+    '',
+    `Filename: ${item.name}`,
+    `Asset type: ${kind} (${item.format.toUpperCase()}, ${dims})`,
+    hints,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+export function extractJsonMetadata(raw: string, fallback: StockMetadata, targetCount = 49): StockMetadata {
+  // Strip <think>...</think> reasoning blocks and code fences before locating JSON.
+  const stripped = raw
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<thought>[\s\S]*?<\/thought>/gi, '')
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim();
+
+  const start = stripped.indexOf('{');
+  const end = stripped.lastIndexOf('}');
+  if (start < 0 || end <= start) {
+    throw new Error('Provider response did not include valid JSON metadata.');
+  }
+
+  const candidate = stripped
+    .slice(start, end + 1)
+    .replace(/,\s*([}\]])/g, '$1');
+
+  let parsed: {
+    title?: unknown;
+    description?: unknown;
+    keywords?: unknown;
+    tags?: unknown;
+    categories?: unknown;
+    category?: unknown;
+  };
+  try {
+    parsed = JSON.parse(candidate);
+  } catch {
+    throw new Error('Could not parse JSON returned by the AI model.');
+  }
+
+  const rawTitle = typeof parsed.title === 'string' ? parsed.title : fallback.title;
+  const title = cleanStockSentence(rawTitle, 200, true) || fallback.title;
+
+  const rawDesc = typeof parsed.description === 'string' ? parsed.description : title;
+  let description = cleanStockSentence(rawDesc, 200, false) || title;
+  if (description.split(/\s+/).filter(Boolean).length < 5) {
+    description = cleanStockSentence(`${description}. Commercial stock asset ready for creative projects.`, 200, false);
+  }
+
+  const kwSource = parsed.keywords ?? parsed.tags;
+  const rawKeywords = Array.isArray(kwSource)
+    ? kwSource.map((k) => String(k))
+    : typeof kwSource === 'string'
+      ? kwSource.split(/[,;\n]+/)
       : [];
+  const keywords = scrubStockKeywords(rawKeywords, Math.min(49, Math.max(7, targetCount)));
 
-  return { title, description, keywords, categories };
+  const catSource = parsed.categories ?? parsed.category;
+  const rawCats = Array.isArray(catSource)
+    ? catSource.map((c) => String(c).trim()).filter(Boolean)
+    : typeof catSource === 'string' && catSource.trim()
+      ? [catSource.trim()]
+      : fallback.categories;
+
+  return {
+    title,
+    description,
+    keywords: keywords.length >= 5 ? keywords : scrubStockKeywords([...keywords, ...fallback.keywords], targetCount),
+    categories: rawCats.slice(0, 2),
+  };
 }
 
-/* ------------------------------------------------------------------ */
-/* Transports                                                         */
-/* ------------------------------------------------------------------ */
-
-export interface GenerateArgs {
-  item: StockItem;
-  settings: AiSettings;
-  platform?: PlatformId;
-  signal?: AbortSignal;
-}
-
-interface OpenAiReply {
-  choices?: { message?: { content?: string } }[];
-}
-
-interface GeminiReply {
-  candidates?: { content?: { parts?: { text?: string }[] } }[];
-}
-
-async function requestOpenAi(args: GenerateArgs): Promise<string> {
-  const { settings, item, platform, signal } = args;
-  const provider = getProvider(settings.provider);
-  const url = `${resolvedBaseUrl(settings)}/chat/completions`;
-  const headers: Record<string, string> = { 'content-type': 'application/json' };
-  if (provider.auth === 'bearer' && settings.apiKey.trim()) {
-    headers.authorization = `Bearer ${settings.apiKey.trim()}`;
+function parseApiError(status: number, text: string, providerName: string): string {
+  try {
+    const parsed = JSON.parse(text) as {
+      error?: { message?: string } | string;
+      message?: string;
+    };
+    const msg =
+      typeof parsed.error === 'string'
+        ? parsed.error
+        : parsed.error?.message || parsed.message || text.slice(0, 220);
+    return `${providerName} (${status}): ${msg.replace(/[-–—]+/g, ' ').trim()}`;
+  } catch {
+    return `${providerName} error ${status}: ${(text || 'Empty response').slice(0, 200)}`;
   }
-  if (provider.auth === 'x-api-key' && settings.apiKey.trim()) {
-    headers['x-api-key'] = settings.apiKey.trim();
+}
+
+/* -------------------------------------------------------------------------- */
+/* Provider transport implementations                                         */
+/* -------------------------------------------------------------------------- */
+
+async function callOpenAiProtocol(
+  settings: AiSettings,
+  prompt: string,
+  vision: VisionPayload | null,
+  overrideModel?: string,
+): Promise<string> {
+  const preset = PROVIDERS[settings.kind];
+  const base = normalizeOpenAiBase(settings.baseUrl, preset.baseUrl);
+  const key = settings.keys[settings.kind]?.trim();
+  const model = (overrideModel || settings.model).trim();
+
+  if (preset.needsKey && !key) {
+    throw new Error(`Enter your ${preset.name} API key in AI settings.`);
   }
-  if (provider.id === 'openrouter') {
-    headers['HTTP-Referer'] = 'https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro';
+  if (!model) {
+    throw new Error(`Select or enter a model for ${preset.name}.`);
+  }
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (key) headers.Authorization = `Bearer ${key}`;
+  if (settings.kind === 'openrouter') {
+    headers['HTTP-Referer'] = 'https://microstocker.app';
     headers['X-Title'] = 'Micro Stocker Advanced Pro';
   }
 
-  const response = await fetch(url, {
-    method: 'POST',
-    signal,
-    headers,
-    body: JSON.stringify({
-      model: resolvedModel(settings),
-      temperature: settings.temperature,
-      max_tokens: 700,
+  const postOnce = async (withJsonFormat: boolean, withVision: boolean) => {
+    const userContent =
+      withVision && vision
+        ? [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: vision.dataUrl } },
+          ]
+        : prompt;
+
+    const payload: Record<string, unknown> = {
+      model,
+      temperature: 0.35,
+      max_tokens: 1400,
       messages: [
         {
           role: 'system',
-          content: 'You are a precise microstock metadata writer. Answer with JSON only.',
+          content: 'You are an expert commercial microstock metadata specialist. Return strictly valid JSON only.',
         },
-        { role: 'user', content: buildPrompt(item, platform) },
+        { role: 'user', content: userContent },
       ],
-    }),
-  });
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new Error(describeHttpError(response.status, detail, provider.label));
-  }
-  const data = (await response.json()) as OpenAiReply;
-  const content = data.choices?.[0]?.message?.content ?? '';
-  if (!content) throw new Error(`${provider.label} returned an empty response.`);
-  return content;
-}
-
-async function requestGemini(args: GenerateArgs): Promise<string> {
-  const { settings, item, platform, signal } = args;
-  const provider = getProvider(settings.provider);
-  const model = resolvedModel(settings);
-  const url = `${resolvedBaseUrl(settings)}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(settings.apiKey.trim())}`;
-  const response = await fetch(url, {
-    method: 'POST',
-    signal,
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: buildPrompt(item, platform) }] }],
-      generationConfig: {
-        temperature: settings.temperature,
-        maxOutputTokens: 900,
-        responseMimeType: 'application/json',
-      },
-    }),
-  });
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new Error(describeHttpError(response.status, detail, provider.label));
-  }
-  const data = (await response.json()) as GeminiReply;
-  const content = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
-  if (!content) throw new Error(`${provider.label} returned an empty response.`);
-  return content;
-}
-
-function describeHttpError(status: number, detail: string, label: string): string {
-  const trimmed = detail.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180);
-  switch (status) {
-    case 400:
-      return `${label}: request rejected (400). ${trimmed}`;
-    case 401:
-    case 403:
-      return `${label}: key rejected (${status}). Check the API key.`;
-    case 404:
-      return `${label}: model not found (404). Pick another model.`;
-    case 429:
-      return `${label}: free-tier rate limit hit (429). Wait a moment or switch provider.`;
-    default:
-      return `${label}: HTTP ${status}. ${trimmed}`;
-  }
-}
-
-/** Generate metadata with the configured provider. Throws on any failure. */
-export async function generateWithProvider(args: GenerateArgs): Promise<StockMetadata> {
-  const provider = getProvider(args.settings.provider);
-  if (provider.id === 'offline') throw new Error('No AI provider selected.');
-  const raw = provider.api === 'gemini' ? await requestGemini(args) : await requestOpenAi(args);
-  return normalizeMetadata(parseModelJson(raw), args.platform);
-}
-
-/* ------------------------------------------------------------------ */
-/* Connectivity checks                                                */
-/* ------------------------------------------------------------------ */
-
-export interface ProviderProbe {
-  ok: boolean;
-  message: string;
-  /** Suggested models, when the provider can enumerate them. */
-  models?: string[];
-}
-
-/** Ping the provider with the smallest possible request. */
-export async function probeProvider(settings: AiSettings): Promise<ProviderProbe> {
-  const provider = getProvider(settings.provider);
-  try {
-    if (provider.id === 'offline') return { ok: true, message: 'Built-in generator ready.' };
-
-    if (provider.id === 'ollama') {
-      const base = resolvedBaseUrl(settings);
-      const tags = await fetch(`${base}/api/tags`, { signal: AbortSignal.timeout(6000) });
-      if (!tags.ok) throw new Error(`Ollama replied ${tags.status}`);
-      const data = (await tags.json()) as { models?: { name: string }[] };
-      const names = (data.models ?? []).map((m) => m.name);
-      return {
-        ok: true,
-        message: names.length ? `Ollama running · ${names.length} model(s)` : 'Ollama running, no models pulled yet',
-        models: names,
-      };
+    };
+    if (withJsonFormat) {
+      payload.response_format = { type: 'json_object' };
     }
 
-    if (!settings.apiKey.trim()) return { ok: false, message: 'Add an API key first.' };
+    return httpRequest({
+      url: `${base}/chat/completions`,
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+      timeoutMs: 65000,
+    });
+  };
 
-    const probeItem = {
-      id: 'probe',
-      name: 'golden-retriever-puppy.jpg',
-      format: 'jpg',
-      sizeBytes: 1,
-      metadata: { title: '', description: '', keywords: [], categories: [] },
-      flags: { aiGenerated: false, aiTool: '', editorial: false, mature: false, illustration: false, license: 'pro' },
-      embeddedAt: null,
-      importedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    } as StockItem;
+  // Avoid forcing response_format on OpenRouter free models and Gemma/DeepSeek R1 models that reject it.
+  const prefersPlainJson =
+    settings.kind === 'openrouter' ||
+    settings.kind === 'custom' ||
+    settings.kind === 'nvidia' ||
+    settings.kind === 'together' ||
+    /gemma|deepseek-r1|compound|lfm/i.test(model);
 
-    const started = performance.now();
-    const result = await generateWithProvider({ item: probeItem, settings });
-    const ms = Math.round(performance.now() - started);
-    return {
-      ok: result.keywords.length > 0,
-      message: result.keywords.length
-        ? `Working · ${result.keywords.length} keywords in ${ms} ms`
-        : 'Connected, but the reply had no keywords.',
+  let res = await postOnce(!prefersPlainJson, Boolean(vision));
+
+  // If the chosen model rejects image_url, retry text only automatically.
+  if (!res.ok && vision && (res.status === 400 || res.status === 404 || res.status === 422)) {
+    const errText = (res.text || '').toLowerCase();
+    if (/image|vision|multimodal|content.*array|unsupported/i.test(errText)) {
+      res = await postOnce(false, false);
+    }
+  }
+
+  // If the chosen model rejects response_format json_object, retry without it.
+  if (!res.ok && !prefersPlainJson && (res.status === 400 || res.status === 422)) {
+    res = await postOnce(false, Boolean(vision));
+  }
+
+  // Automatic OpenRouter free fallback when an individual :free endpoint is rate limited or rotated.
+  if (
+    !res.ok &&
+    settings.kind === 'openrouter' &&
+    model !== 'openrouter/free' &&
+    (res.status === 404 || res.status === 429 || res.status === 502 || res.status === 503)
+  ) {
+    return callOpenAiProtocol(settings, prompt, vision, 'openrouter/free');
+  }
+
+  if (!res.ok) {
+    if (res.status === 0) {
+      throw new Error(`Could not connect to ${preset.name}: ${res.error || 'network unreachable'}`);
+    }
+    throw new Error(parseApiError(res.status, res.text || '', preset.name));
+  }
+
+  const data = JSON.parse(res.text || '{}') as {
+    choices?: Array<{
+      message?: { content?: string | Array<{ type?: string; text?: string }> };
+    }>;
+  };
+  const rawContent = data.choices?.[0]?.message?.content;
+  const content = Array.isArray(rawContent)
+    ? rawContent.map((part) => part.text ?? '').join('\n')
+    : (rawContent ?? '');
+  if (!content.trim()) {
+    throw new Error(`${preset.name} returned an empty completion.`);
+  }
+  return content;
+}
+
+async function callGeminiProtocol(
+  settings: AiSettings,
+  prompt: string,
+  vision: VisionPayload | null,
+): Promise<string> {
+  const key = settings.keys.gemini?.trim();
+  if (!key) throw new Error('Enter your Google Gemini API key in AI settings.');
+  const base = (settings.baseUrl.trim() || PROVIDERS.gemini.baseUrl).replace(/\/+$/, '');
+  const model = (settings.model.trim() || 'gemini-2.5-flash').replace(/^models\//, '');
+  const isGemma = /^gemma/i.test(model);
+
+  const parts: Array<Record<string, unknown>> = [{ text: prompt }];
+  if (vision) {
+    parts.push({
+      inlineData: {
+        mimeType: vision.mimeType,
+        data: vision.base64,
+      },
+    });
+  }
+
+  const send = async (useJsonMime: boolean) => {
+    const generationConfig: Record<string, unknown> = {
+      temperature: 0.35,
+      maxOutputTokens: 2048,
     };
+    if (useJsonMime) {
+      generationConfig.responseMimeType = 'application/json';
+    }
+    const url = `${base}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+    return httpRequest({
+      url,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts }],
+        generationConfig,
+      }),
+      timeoutMs: 65000,
+    });
+  };
+
+  let res = await send(!isGemma);
+  if (!res.ok && !isGemma && res.status === 400 && /mime|json|generation/i.test(res.text || '')) {
+    res = await send(false);
+  }
+
+  if (!res.ok) {
+    if (res.status === 0) {
+      throw new Error(`Could not reach Google Gemini: ${res.error || 'network unreachable'}`);
+    }
+    throw new Error(parseApiError(res.status, res.text || '', 'Google Gemini'));
+  }
+
+  const data = JSON.parse(res.text || '{}') as {
+    candidates?: Array<{
+      content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+    }>;
+  };
+  const outParts = data.candidates?.[0]?.content?.parts ?? [];
+  const text = outParts
+    .filter((p) => !p.thought && typeof p.text === 'string')
+    .map((p) => p.text)
+    .join('\n')
+    .trim();
+  if (!text) {
+    throw new Error('Google Gemini returned an empty response.');
+  }
+  return text;
+}
+
+async function callOllamaProtocol(
+  settings: AiSettings,
+  prompt: string,
+  vision: VisionPayload | null,
+): Promise<string> {
+  const base = normalizeOllamaBase(settings.baseUrl);
+  const model = settings.model.trim();
+  if (!model) throw new Error('Choose or install an Ollama model first.');
+
+  const send = async (withVision: boolean) => {
+    const userMessage: Record<string, unknown> = { role: 'user', content: prompt };
+    if (withVision && vision) userMessage.images = [vision.base64];
+    return httpRequest({
+      url: `${base}/api/chat`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        stream: false,
+        format: 'json',
+        options: { temperature: 0.35 },
+        messages: [
+          {
+            role: 'system',
+            content: 'You generate commercial microstock metadata and respond strictly in valid JSON.',
+          },
+          userMessage,
+        ],
+      }),
+      timeoutMs: 120000,
+    });
+  };
+
+  let res = await send(Boolean(vision));
+  if (!res.ok && vision && res.status === 400) {
+    res = await send(false);
+  }
+  if (!res.ok) {
+    if (res.status === 0) {
+      throw new Error(
+        `Could not connect to Ollama at ${base}. Start Ollama locally with ollama serve.`,
+      );
+    }
+    throw new Error(parseApiError(res.status, res.text || '', 'Ollama'));
+  }
+  const data = JSON.parse(res.text || '{}') as { message?: { content?: string }; response?: string };
+  const text = data.message?.content ?? data.response ?? '';
+  if (!text.trim()) throw new Error('Ollama returned an empty response.');
+  return text;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Public generation, testing, live model discovery & Ollama pull             */
+/* -------------------------------------------------------------------------- */
+
+export async function generateAiMetadata(
+  item: Pick<StockItem, 'name' | 'format' | 'width' | 'height' | 'flags' | 'metadata'>,
+  settings: AiSettings,
+  options?: { imageBlob?: Blob | null },
+): Promise<StockMetadata> {
+  const cleanSettings = sanitizeAiSettings(settings);
+
+  // Built in Local AI: zero keys, inspects pixels + filename + stock rules.
+  if (cleanSettings.kind === 'local') {
+    const visuals = cleanSettings.useVision ? await analyzeImageVisuals(options?.imageBlob) : null;
+    const drafted = draftMetadata(item, cleanSettings.targetKeywords, visuals);
+    if (cleanSettings.tone === 'editorial') {
+      return {
+        ...drafted,
+        description: cleanStockSentence(
+          `${drafted.title}. Documentary view captured with authentic natural detail.`,
+          200,
+          false,
+        ),
+      };
+    }
+    if (cleanSettings.tone === 'minimal') {
+      return {
+        ...drafted,
+        description: cleanStockSentence(
+          `${drafted.title}. Clean composition with generous copy space.`,
+          200,
+          false,
+        ),
+      };
+    }
+    return drafted;
+  }
+
+  const preset = PROVIDERS[cleanSettings.kind];
+  const fallback = draftMetadata(item, cleanSettings.targetKeywords);
+  const canSee =
+    cleanSettings.useVision &&
+    Boolean(options?.imageBlob) &&
+    modelSupportsVision(cleanSettings.kind, cleanSettings.model);
+  const vision = canSee ? await blobToVisionPayload(options?.imageBlob) : null;
+  const prompt = buildPrompt(item, cleanSettings, Boolean(vision));
+
+  let raw: string;
+  if (preset.protocol === 'gemini') {
+    raw = await callGeminiProtocol(cleanSettings, prompt, vision);
+  } else if (preset.protocol === 'ollama') {
+    raw = await callOllamaProtocol(cleanSettings, prompt, vision);
+  } else {
+    raw = await callOpenAiProtocol(cleanSettings, prompt, vision);
+  }
+
+  return extractJsonMetadata(raw, fallback, cleanSettings.targetKeywords);
+}
+
+/** Verify end to end connectivity and JSON generation for the active provider. */
+export async function testAiConnection(
+  settings: AiSettings,
+): Promise<{ ok: true; latencyMs: number; sampleTitle: string } | { ok: false; error: string }> {
+  const started = performance.now();
+  try {
+    const sample = await generateAiMetadata(
+      {
+        name: 'morning_coffee_cup_wooden_desk.jpg',
+        format: 'jpg',
+        width: 6000,
+        height: 4000,
+        flags: {
+          aiGenerated: false,
+          aiTool: '',
+          editorial: false,
+          mature: false,
+          illustration: false,
+          license: 'free',
+        },
+        metadata: { title: '', description: '', keywords: [], categories: [] },
+      },
+      { ...settings, targetKeywords: 12, useVision: false },
+    );
+    const latencyMs = Math.max(1, Math.round(performance.now() - started));
+    return { ok: true, latencyMs, sampleTitle: sample.title };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : String(error) };
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
 
-/** Providers grouped for the picker. */
-export const PROVIDER_GROUPS = [
-  { id: 'local' as const, label: 'On this computer', providers: AI_PROVIDERS.filter((p) => p.kind === 'local' || p.id === 'openai-compatible') },
-  { id: 'cloud' as const, label: 'Free tiers (your key)', providers: AI_PROVIDERS.filter((p) => p.kind === 'cloud') },
-];
+/** Discover currently live free or local models directly from the provider API. */
+export async function syncProviderModels(
+  settings: AiSettings,
+): Promise<{ ok: true; models: ModelPreset[] } | { ok: false; error: string }> {
+  const preset = PROVIDERS[settings.kind];
+  if (settings.kind === 'local') {
+    return { ok: true, models: preset.models };
+  }
 
-/** Marketplaces that accept AI content — used to warn before export. */
-export const AI_FRIENDLY = PLATFORM_LIST.filter((p) => p.aiPolicy === 'allowed-labeled').map((p) => p.id);
+  try {
+    if (settings.kind === 'ollama') {
+      const base = normalizeOllamaBase(settings.baseUrl);
+      const res = await httpRequest({ url: `${base}/api/tags`, timeoutMs: 12000 });
+      if (!res.ok) {
+        return {
+          ok: false,
+          error: `Could not reach Ollama at ${base}. Ensure ollama serve is running.`,
+        };
+      }
+      const data = JSON.parse(res.text || '{}') as {
+        models?: Array<{ name?: string; details?: { parameter_size?: string } }>;
+      };
+      const installed: ModelPreset[] = (data.models ?? [])
+        .map((m) => String(m.name ?? '').trim())
+        .filter(Boolean)
+        .map((id) => ({
+          id,
+          label: id,
+          brand: inferModelBrand(id, 'ollama'),
+          vision: modelSupportsVision('ollama', id),
+          free: true,
+        }));
+      return { ok: true, models: installed };
+    }
+
+    if (settings.kind === 'openrouter') {
+      const res = await httpRequest({ url: 'https://openrouter.ai/api/v1/models', timeoutMs: 20000 });
+      if (!res.ok) return { ok: false, error: `OpenRouter returned ${res.status}.` };
+      const parsed = JSON.parse(res.text || '{}') as {
+        data?: Array<{
+          id?: string;
+          name?: string;
+          pricing?: { prompt?: string; completion?: string };
+          architecture?: { input_modalities?: string[]; modality?: string };
+        }>;
+      };
+      const freeList: ModelPreset[] = [
+        { id: 'openrouter/free', label: 'OpenRouter Free Auto (Vision)', brand: 'openrouter', vision: true, free: true },
+      ];
+      for (const item of parsed.data ?? []) {
+        const id = String(item.id ?? '').trim();
+        if (!id || id === 'openrouter/free') continue;
+        const promptCost = Number(item.pricing?.prompt ?? '1');
+        const compCost = Number(item.pricing?.completion ?? '1');
+        const isFree = id.endsWith(':free') || (promptCost === 0 && compCost === 0);
+        if (!isFree) continue;
+        const modalities = item.architecture?.input_modalities ?? [];
+        const hasVision =
+          modalities.includes('image') || Boolean(item.architecture?.modality?.includes('image'));
+        const cleanLabel = String(item.name || id)
+          .replace(/\(free\)/gi, '')
+          .replace(/[-–—]+/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        freeList.push({
+          id,
+          label: hasVision ? `${cleanLabel} (Vision)` : cleanLabel,
+          brand: inferModelBrand(id, 'openrouter'),
+          vision: hasVision,
+          free: true,
+        });
+      }
+      return { ok: true, models: freeList };
+    }
+
+    if (settings.kind === 'gemini') {
+      const key = settings.keys.gemini?.trim();
+      if (!key) return { ok: false, error: 'Enter your Gemini API key first to load live models.' };
+      const base = (settings.baseUrl.trim() || preset.baseUrl).replace(/\/+$/, '');
+      const res = await httpRequest({
+        url: `${base}/models?key=${encodeURIComponent(key)}`,
+        timeoutMs: 15000,
+      });
+      if (!res.ok) return { ok: false, error: parseApiError(res.status, res.text || '', 'Gemini') };
+      const parsed = JSON.parse(res.text || '{}') as {
+        models?: Array<{
+          name?: string;
+          displayName?: string;
+          supportedGenerationMethods?: string[];
+        }>;
+      };
+      const models: ModelPreset[] = [];
+      for (const m of parsed.models ?? []) {
+        if (!m.supportedGenerationMethods?.includes('generateContent')) continue;
+        const id = String(m.name ?? '').replace(/^models\//, '');
+        if (!id || /embedding|imagen|veo|tts|audio|aqa|1\.5|2\.0/i.test(id)) continue;
+        if (!/flash|gemma/i.test(id)) continue;
+        models.push({
+          id,
+          label: String(m.displayName || id).replace(/[-–—]+/g, ' '),
+          brand: inferModelBrand(id, 'gemini'),
+          vision: true,
+          free: true,
+        });
+      }
+      return { ok: true, models: models.length ? models : preset.models };
+    }
+
+    // Standard OpenAI /models discovery (Groq, Cerebras, Mistral, NVIDIA, Together, Custom)
+    const base = normalizeOpenAiBase(settings.baseUrl, preset.baseUrl);
+    const key = settings.keys[settings.kind]?.trim();
+    if (preset.needsKey && !key) {
+      return { ok: false, error: `Enter your ${preset.name} API key first.` };
+    }
+    const headers: Record<string, string> = {};
+    if (key) headers.Authorization = `Bearer ${key}`;
+    const res = await httpRequest({ url: `${base}/models`, headers, timeoutMs: 15000 });
+    if (!res.ok) {
+      return { ok: false, error: parseApiError(res.status, res.text || '', preset.name) };
+    }
+    const parsed = JSON.parse(res.text || '{}');
+    const rawItems: Array<{ id?: string; display_name?: string; pricing?: { input?: number; output?: number } }> =
+      Array.isArray(parsed) ? parsed : Array.isArray(parsed.data) ? parsed.data : [];
+
+    const models: ModelPreset[] = [];
+    for (const item of rawItems) {
+      const id = String(item.id ?? '').trim();
+      if (!id) continue;
+      if (/whisper|tts|embed|guard|moderation|rerank|playai|orpheus|dall-e|flux|sdxl/i.test(id)) {
+        continue;
+      }
+      if (settings.kind === 'together') {
+        const isFree =
+          /free/i.test(id) ||
+          (item.pricing !== undefined &&
+            Number(item.pricing.input ?? 1) === 0 &&
+            Number(item.pricing.output ?? 1) === 0);
+        if (!isFree) continue;
+      }
+      const vision = modelSupportsVision(settings.kind, id);
+      models.push({
+        id,
+        label: item.display_name ? String(item.display_name).replace(/[-–—]+/g, ' ') : id,
+        brand: inferModelBrand(id, preset.brand),
+        vision,
+        free: true,
+      });
+    }
+    return { ok: true, models: models.length ? models : preset.models };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/** Pull a local Ollama model directly from inside the app. */
+export async function pullOllamaModelInApp(
+  baseUrl: string,
+  modelName: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const base = normalizeOllamaBase(baseUrl);
+  const name = modelName.trim();
+  if (!name) return { ok: false, error: 'Enter a model name to install.' };
+  const res = await httpRequest({
+    url: `${base}/api/pull`,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, stream: false }),
+    timeoutMs: 180000,
+  });
+  if (!res.ok) {
+    return {
+      ok: false,
+      error:
+        res.status === 0
+          ? `Ollama is not reachable at ${base}. Start Ollama first.`
+          : parseApiError(res.status, res.text || '', 'Ollama'),
+    };
+  }
+  return { ok: true };
+}

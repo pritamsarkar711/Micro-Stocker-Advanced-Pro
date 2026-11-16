@@ -1,166 +1,148 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-export type CloudProvider = 'supabase' | 'none';
-
 export interface CloudConfig {
-  provider: CloudProvider;
-  url: string;
-  anonKey: string;
-  enabled: boolean;
-  savedAt: string | null;
+  supabaseUrl: string;
+  supabaseAnonKey: string;
+  projectLabel?: string;
+  savedAt?: string;
 }
 
-export const EMPTY_CLOUD_CONFIG: CloudConfig = {
-  provider: 'none',
-  url: '',
-  anonKey: '',
-  enabled: false,
-  savedAt: null,
-};
-
-/** Values baked in at build time from `.env.local` (optional). */
-export const ENV_CLOUD: Partial<CloudConfig> = {
-  url: (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() ?? '',
-  anonKey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() ?? '',
-};
-
-export function isConfigured(config: CloudConfig | null | undefined): boolean {
-  if (!config) return false;
-  return Boolean(config.url && config.anonKey && /^https?:\/\//i.test(config.url));
-}
-
-export function mergeEnvConfig(config: CloudConfig): CloudConfig {
-  if (isConfigured(config)) return config;
-  if (ENV_CLOUD.url && ENV_CLOUD.anonKey) {
-    return {
-      ...config,
-      provider: 'supabase',
-      url: ENV_CLOUD.url as string,
-      anonKey: ENV_CLOUD.anonKey as string,
-      enabled: config.enabled,
-    };
-  }
-  return config;
-}
-
-export type ConnectionState =
-  | 'local' // no cloud configured -> offline/local storage
-  | 'connecting'
-  | 'online'
-  | 'error';
+export type ConnectionState = 'local' | 'connecting' | 'online' | 'schema-missing' | 'error';
 
 export interface ConnectionReport {
   state: ConnectionState;
   message: string;
   latencyMs: number | null;
   checkedAt: string | null;
-  hint?: string;
 }
 
-let client: SupabaseClient | null = null;
-let clientKey = '';
+export const EMPTY_CLOUD_CONFIG: CloudConfig = {
+  supabaseUrl: '',
+  supabaseAnonKey: '',
+  projectLabel: '',
+};
 
-/** Lazily create (and cache) a Supabase client for the given config. */
-export async function getSupabase(config: CloudConfig): Promise<SupabaseClient | null> {
-  if (!isConfigured(config)) return null;
-  const key = `${config.url}|${config.anonKey.slice(0, 12)}`;
-  if (client && clientKey === key) return client;
+export function mergeEnvConfig(stored: CloudConfig | null | undefined): CloudConfig {
+  const envUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() ?? '';
+  const envKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() ?? '';
+  const envLabel = (import.meta.env.VITE_SUPABASE_LABEL as string | undefined)?.trim() ?? '';
+  return {
+    supabaseUrl: stored?.supabaseUrl?.trim() || envUrl,
+    supabaseAnonKey: stored?.supabaseAnonKey?.trim() || envKey,
+    projectLabel: stored?.projectLabel?.trim() || envLabel,
+    savedAt: stored?.savedAt,
+  };
+}
+
+export function isConfigured(cfg: CloudConfig | null | undefined): cfg is CloudConfig {
+  if (!cfg) return false;
+  return Boolean(cfg.supabaseUrl.trim() && cfg.supabaseAnonKey.trim());
+}
+
+export function validateConfig(cfg: CloudConfig): string | null {
+  const url = cfg.supabaseUrl.trim();
+  const key = cfg.supabaseAnonKey.trim();
+  if (!url && !key) return null;
+  if (!url) return 'Project URL is required.';
+  if (!/^https:\/\/[a-z0-9.-]+\.[a-z]{2,}/i.test(url)) {
+    return 'Project URL must start with https://';
+  }
+  if (!key || key.length < 24) {
+    return 'Public key looks incomplete.';
+  }
+  return null;
+}
+
+let cached: { signature: string; client: SupabaseClient } | null = null;
+
+export async function getSupabase(cfg: CloudConfig): Promise<SupabaseClient | null> {
+  if (!isConfigured(cfg)) return null;
+  const url = cfg.supabaseUrl.trim().replace(/\/+$/, '');
+  const key = cfg.supabaseAnonKey.trim();
+  const signature = `${url}::${key}`;
+  if (cached && cached.signature === signature) return cached.client;
 
   const { createClient } = await import('@supabase/supabase-js');
-  client = createClient(config.url, config.anonKey, {
+  const client = createClient(url, key, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: false,
+      storageKey: 'msap.supabase.auth',
     },
-    global: { headers: { 'x-client-info': 'micro-stocker-advanced-pro' } },
+    global: {
+      headers: { 'x-client-info': 'micro-stocker-advanced-pro' },
+    },
   });
-  clientKey = key;
+  cached = { signature, client };
   return client;
 }
 
-/**
- * Verify the credentials and report *why* something failed, in plain English.
- * `app_meta` is part of the schema in lib/cloud/schema.ts.
- */
-export async function testCloudConnection(config: CloudConfig): Promise<ConnectionReport> {
-  if (!isConfigured(config)) {
+export async function testCloudConnection(cfg: CloudConfig): Promise<ConnectionReport> {
+  const checkedAt = new Date().toISOString();
+  if (!isConfigured(cfg)) {
     return {
       state: 'local',
-      message: 'No cloud project configured. Running fully offline.',
+      message: 'Stored on this device',
       latencyMs: null,
-      checkedAt: new Date().toISOString(),
-      hint: 'Add your Supabase URL + anon key below, or leave it empty to stay offline.',
+      checkedAt,
     };
+  }
+
+  const invalid = validateConfig(cfg);
+  if (invalid) {
+    return { state: 'error', message: invalid, latencyMs: null, checkedAt };
   }
 
   const started = performance.now();
   try {
-    const supabase = await getSupabase(config);
-    if (!supabase) throw new Error('Could not create the Supabase client');
+    const client = await getSupabase(cfg);
+    if (!client) {
+      return { state: 'local', message: 'Stored on this device', latencyMs: null, checkedAt };
+    }
 
-    const { error } = await supabase.from('app_meta').select('id').limit(1);
+    const { error } = await client
+      .from('app_meta')
+      .select('schema_version', { head: false })
+      .limit(1);
+
     const latencyMs = Math.round(performance.now() - started);
 
     if (!error) {
       return {
         state: 'online',
-        message: 'Connected. The app_meta table is readable.',
+        message: 'Connected',
         latencyMs,
-        checkedAt: new Date().toISOString(),
+        checkedAt,
       };
     }
 
-    const message = String(error.message ?? error);
-    const code = (error as { code?: string }).code;
+    const missing =
+      error.code === '42P01' ||
+      error.code === 'PGRST205' ||
+      /relation .* does not exist|could not find the table/i.test(error.message);
 
-    if (code === '42P01' || /does not exist/i.test(message)) {
+    if (missing) {
       return {
-        state: 'error',
-        message: 'Credentials work, but the database tables are missing.',
+        state: 'schema-missing',
+        message: 'Connected, schema setup required',
         latencyMs,
-        checkedAt: new Date().toISOString(),
-        hint: 'Run the SQL from "Schema" below in Supabase → SQL Editor, then test again.',
+        checkedAt,
       };
     }
-    if (/invalid api key|jwt|apikey/i.test(message) || code === 'PGRST301') {
-      return {
-        state: 'error',
-        message: 'Rejected: the anon key looks wrong or was revoked.',
-        latencyMs,
-        checkedAt: new Date().toISOString(),
-        hint: 'Copy the key again from Supabase → Project Settings → API (anon public).',
-      };
-    }
-    if (/row-level security|permission denied/i.test(message)) {
-      return {
-        state: 'error',
-        message: 'Connected, but Row Level Security blocked the read.',
-        latencyMs,
-        checkedAt: new Date().toISOString(),
-        hint: 'Check the RLS policies in the generated SQL.',
-      };
-    }
+
     return {
       state: 'error',
-      message: `Supabase error: ${message}`,
+      message: error.message || 'Connection error',
       latencyMs,
-      checkedAt: new Date().toISOString(),
+      checkedAt,
     };
   } catch (error) {
     const latencyMs = Math.round(performance.now() - started);
-    const message = error instanceof Error ? error.message : String(error);
-    const looksLikeNetwork = /fetch|network|failed to fetch|ERR_|CORS/i.test(message);
     return {
       state: 'error',
-      message: looksLikeNetwork
-        ? 'Could not reach Supabase (network blocked or the URL is wrong).'
-        : `Connection failed: ${message}`,
+      message: error instanceof Error ? error.message : String(error),
       latencyMs,
-      checkedAt: new Date().toISOString(),
-      hint: looksLikeNetwork
-        ? 'Check the project URL, your internet connection, and that no firewall blocks *.supabase.co.'
-        : undefined,
+      checkedAt,
     };
   }
 }

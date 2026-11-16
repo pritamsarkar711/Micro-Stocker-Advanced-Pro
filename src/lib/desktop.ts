@@ -1,16 +1,4 @@
-/**
- * Typed access to the Electron preload bridge (`window.desktop`).
- *
- * The exact same React code runs in three places:
- *   1. packaged desktop app  -> real bridge (files on disk, native dialogs,
- *                               native Real-ESRGAN binary)
- *   2. `npm run dev`         -> real bridge
- *   3. plain browser preview -> the fallbacks below (localStorage / downloads)
- *
- * That is what makes the UI testable before an installer exists.
- */
-
-import { APP_VERSION } from './version';
+import { APP_NAME, APP_VERSION } from './version';
 
 export interface AppInfo {
   name: string;
@@ -18,25 +6,39 @@ export interface AppInfo {
   electron?: string;
   chrome: string;
   node?: string;
-  platform: string;
+  platform: 'win32' | 'darwin' | 'linux' | 'web';
   arch?: string;
   isDev: boolean;
   userDataPath?: string;
   dataDir?: string;
 }
 
-export interface KvResult<T> {
+export interface DataResult<T = unknown> {
   ok: boolean;
-  value?: T;
+  value?: T | null;
   keys?: string[];
   error?: string;
-  canceled?: boolean;
 }
 
-export interface ExportPayload {
+export interface ExportTextPayload {
   defaultName?: string;
   text: string;
-  filters?: { name: string; extensions: string[] }[];
+  filters?: Array<{ name: string; extensions: string[] }>;
+}
+
+export interface ExportResult {
+  ok: boolean;
+  canceled?: boolean;
+  filePath?: string;
+  error?: string;
+}
+
+export interface OpenJsonResult<T = unknown> {
+  ok: boolean;
+  canceled?: boolean;
+  filePath?: string;
+  value?: T;
+  error?: string;
 }
 
 export interface PickedFile {
@@ -45,74 +47,149 @@ export interface PickedFile {
   size: number;
 }
 
-export interface UpscalerRunArgs {
-  inPath?: string;
-  inBase64?: string;
-  /** Renderer-side source; the preload converts it to base64 for the IPC call. */
-  blob?: Blob;
-  binary: string;
-  modelId: string;
-  /** Native 4× passes. */
-  passes: number[];
-  /** Left over to be applied by the renderer after the passes. */
-  tailScale?: number;
-  /** NCNN tile size; 0 = auto, lower values reduce VRAM use. */
-  tileSize?: number;
-  outFormat: 'png' | 'jpg' | 'webp';
-  quality: number;
-  onLog?: (label: string) => void;
+export interface NetRequestPayload {
+  url: string;
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  headers?: Record<string, string>;
+  body?: string;
+  timeoutMs?: number;
 }
 
-export interface UpscalerRunResult {
+export interface NetResponse {
   ok: boolean;
-  blob?: Blob;
+  status: number;
+  text?: string;
   error?: string;
-  log?: string;
+}
+
+export interface ModelInstallFile {
+  url: string;
+  name?: string;
+  subDir?: string;
+  label?: string;
+  extractZip?: boolean;
+  executable?: string;
+  skipIfExists?: boolean;
+  checkName?: string;
+}
+
+export interface ModelInstallSpec {
+  id: string;
+  kind: 'image-upscale' | 'video-upscale' | 'bg-remove';
+  sharedGroup?: string;
+  binary?: string;
+  primaryFile?: string;
+  approxBytes?: number;
+  files: ModelInstallFile[];
+}
+
+export interface InstalledModelRecord {
+  id: string;
+  kind: string;
+  dir?: string;
+  binary?: string;
+  primaryFile?: string;
+  sizeBytes: number;
+  installedAt: string;
+}
+
+export interface ModelProgressEvent {
+  id: string;
+  phase: 'downloading' | 'extracting' | 'ready';
+  fileIndex: number;
+  fileCount: number;
+  loadedBytes: number;
+  totalBytes: number;
+  speedBps: number;
+  label: string;
 }
 
 export interface DesktopBridge {
   isDesktop: boolean;
-  platform: string;
+  platform: AppInfo['platform'];
   app: {
     info: () => Promise<AppInfo>;
-    onNavigate: (callback: (path: string) => void) => () => void;
+    onNavigate: (cb: (path: string) => void) => () => void;
   };
   data: {
-    read: <T>(key: string) => Promise<KvResult<T | null>>;
-    write: (key: string, value: unknown) => Promise<KvResult<null>>;
-    remove: (key: string) => Promise<KvResult<null>>;
-    list: () => Promise<KvResult<null>>;
+    read: <T = unknown>(key: string) => Promise<DataResult<T>>;
+    write: (key: string, value: unknown) => Promise<DataResult>;
+    remove: (key: string) => Promise<DataResult>;
+    list: () => Promise<DataResult>;
   };
   window: {
     minimize: () => Promise<void>;
     toggleMaximize: () => Promise<boolean>;
     close: () => Promise<void>;
     isMaximized: () => Promise<boolean>;
-    onMaximizeChanged: (callback: (value: boolean) => void) => () => void;
+    onMaximizeChanged: (cb: (maximized: boolean) => void) => () => void;
   };
   view: {
     zoom: (delta: number) => Promise<number>;
     setZoom: (factor: number) => Promise<number>;
     getZoom: () => Promise<number>;
   };
-  theme: { set: (theme: 'light' | 'dark' | 'system') => Promise<string> };
-  shell: { openExternal: (url: string) => Promise<KvResult<null>> };
-  fs: {
-    exportText: (payload: ExportPayload) => Promise<KvResult<null> & { filePath?: string }>;
-    openJson: () => Promise<KvResult<unknown>>;
-    readBytes: (path: string) => Promise<Uint8Array>;
-    writeBytes: (path: string, bytes: Uint8Array) => Promise<KvResult<null>>;
-    pickFiles: (title?: string) => Promise<{ canceled: boolean; files: PickedFile[] }>;
-    rename: (from: string, to: string) => Promise<KvResult<null>>;
+  theme: {
+    set: (theme: 'light' | 'dark' | 'system') => Promise<string>;
   };
-  upscaler: {
-    ensure: (url: string, binary: string, models: string[]) => Promise<{ ok: boolean; path?: string; models?: string[]; error?: string }>;
-    run: (args: UpscalerRunArgs) => Promise<UpscalerRunResult>;
+  shell: {
+    openExternal: (url: string) => Promise<{ ok: boolean; error?: string }>;
+  };
+  net: {
+    request: (payload: NetRequestPayload) => Promise<NetResponse>;
+  };
+  fs: {
+    exportText: (payload: ExportTextPayload) => Promise<ExportResult>;
+    openJson: <T = unknown>() => Promise<OpenJsonResult<T>>;
+    readBytes: (path: string) => Promise<Uint8Array>;
+    writeBytes: (path: string, bytes: Uint8Array) => Promise<{ ok: boolean; error?: string }>;
+    pickFiles: (title?: string) => Promise<{ canceled: boolean; files: PickedFile[] }>;
+    rename: (from: string, to: string) => Promise<{ ok: boolean; error?: string }>;
   };
   watch: {
     start: () => Promise<{ ok: boolean; dir?: string; error?: string }>;
     stop: () => Promise<{ ok: boolean }>;
-    onFile: (callback: (file: PickedFile) => void) => () => void;
+    onFile: (cb: (file: PickedFile) => void) => () => void;
+  };
+  models: {
+    list: () => Promise<{ ok: boolean; items: InstalledModelRecord[]; root?: string }>;
+    install: (spec: ModelInstallSpec) => Promise<{
+      ok: boolean;
+      canceled?: boolean;
+      record?: InstalledModelRecord;
+      error?: string;
+    }>;
+    cancel: (id: string) => Promise<{ ok: boolean }>;
+    remove: (id: string) => Promise<{ ok: boolean }>;
+    readBytes: (id: string, fileName?: string) => Promise<Uint8Array>;
+    onProgress: (cb: (event: ModelProgressEvent) => void) => () => void;
+  };
+  upscaler: {
+    ensure: (
+      url: string,
+      binary: string,
+      models: string[],
+      engineGroup?: string,
+    ) => Promise<{ ok: boolean; path?: string; models?: string[]; error?: string }>;
+    run: (args: {
+      inPath?: string;
+      inBase64?: string;
+      blob?: Blob;
+      binary: string;
+      engineGroup?: string;
+      engineFamily?: 'realesrgan' | 'realcugan' | 'waifu2x' | 'realsr' | 'srmd';
+      modelsSubDir?: string;
+      modelId: string;
+      noiseLevel?: number;
+      passes: Array<2 | 3 | 4>;
+      tailScale: number;
+      tileSize: number;
+      outFormat: 'png' | 'jpg' | 'webp';
+      quality: number;
+    }) => Promise<{ ok: boolean; blob?: Blob; log?: string; error?: string }>;
+  };
+  video: {
+    probeFfmpeg: () => Promise<{ ok: boolean; available: boolean }>;
   };
 }
 
@@ -122,72 +199,26 @@ declare global {
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/* Browser fallback (used in the live preview and on the web build)            */
-/* -------------------------------------------------------------------------- */
-
 const LS_PREFIX = 'msap:data:';
 
-const browserInfo = (): AppInfo => ({
-  name: 'Micro Stocker Advanced Pro',
-  version: APP_VERSION,
-  chrome: navigator.userAgent.match(/Chrome\/([\d.]+)/)?.[1] ?? 'unknown',
-  platform: 'browser',
-  isDev: import.meta.env.DEV,
-});
-
-function downloadBlob(filename: string, blob: Blob) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1500);
-}
-
-function downloadText(filename: string, text: string) {
-  downloadBlob(filename, new Blob([text], { type: 'text/plain;charset=utf-8' }));
-}
-
-function pickJsonFile(): Promise<KvResult<unknown>> {
-  return new Promise((resolve) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json,application/json';
-    input.onchange = () => {
-      const file = input.files?.[0];
-      if (!file) return resolve({ ok: false, canceled: true });
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          resolve({ ok: true, value: JSON.parse(String(reader.result)) });
-        } catch (error) {
-          resolve({ ok: false, error: String(error) });
-        }
-      };
-      reader.onerror = () => resolve({ ok: false, error: 'Could not read file' });
-      reader.readAsText(file);
-    };
-    input.click();
-  });
-}
-
-let browserZoom = 1;
-function applyBrowserZoom() {
-  document.documentElement.style.fontSize = `${browserZoom * 100}%`;
-}
-
-const browserBridge: DesktopBridge = {
+const browserFallback: DesktopBridge = {
   isDesktop: false,
-  platform: 'browser',
+  platform: 'web',
   app: {
-    info: async () => browserInfo(),
-    onNavigate: () => () => undefined,
+    info: async () => ({
+      name: APP_NAME,
+      version: APP_VERSION,
+      chrome:
+        (typeof navigator !== 'undefined' &&
+          navigator.userAgent.match(/Chrome\/([\d.]+)/)?.[1]) ||
+        'Web',
+      platform: 'web',
+      isDev: import.meta.env.DEV,
+    }),
+    onNavigate: () => () => {},
   },
   data: {
-    read: async <T,>(key: string): Promise<KvResult<T | null>> => {
+    read: async <T,>(key: string): Promise<DataResult<T>> => {
       try {
         const raw = localStorage.getItem(LS_PREFIX + key);
         return { ok: true, value: raw === null ? null : (JSON.parse(raw) as T) };
@@ -195,82 +226,165 @@ const browserBridge: DesktopBridge = {
         return { ok: false, error: String(error) };
       }
     },
-    write: async (key: string, value: unknown) => {
+    write: async (key, value) => {
       try {
         localStorage.setItem(LS_PREFIX + key, JSON.stringify(value));
-        return { ok: true, value: null };
+        return { ok: true };
       } catch (error) {
         return { ok: false, error: String(error) };
       }
     },
-    remove: async (key: string) => {
-      localStorage.removeItem(LS_PREFIX + key);
-      return { ok: true, value: null };
+    remove: async (key) => {
+      try {
+        localStorage.removeItem(LS_PREFIX + key);
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, error: String(error) };
+      }
     },
-    list: async () => ({
-      ok: true,
-      value: null,
-      keys: Object.keys(localStorage)
-        .filter((k) => k.startsWith(LS_PREFIX))
-        .map((k) => k.slice(LS_PREFIX.length)),
-    }),
+    list: async () => {
+      const keys: string[] = [];
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(LS_PREFIX)) keys.push(k.slice(LS_PREFIX.length));
+      }
+      return { ok: true, keys };
+    },
   },
   window: {
-    minimize: async () => undefined,
+    minimize: async () => {},
     toggleMaximize: async () => false,
-    close: async () => window.close(),
+    close: async () => {},
     isMaximized: async () => false,
-    onMaximizeChanged: () => () => undefined,
+    onMaximizeChanged: () => () => {},
   },
   view: {
-    zoom: async (delta: number) => {
-      browserZoom = Math.min(2, Math.max(0.6, browserZoom + delta));
-      applyBrowserZoom();
-      return browserZoom;
+    zoom: async (delta) => {
+      const current = Number(document.documentElement.dataset.zoom || '1');
+      const next = Math.min(2, Math.max(0.75, +(current + delta).toFixed(2)));
+      document.documentElement.dataset.zoom = String(next);
+      document.documentElement.style.fontSize = `${next * 100}%`;
+      return next;
     },
-    setZoom: async (factor: number) => {
-      browserZoom = Math.min(2, Math.max(0.6, factor));
-      applyBrowserZoom();
-      return browserZoom;
+    setZoom: async (factor) => {
+      const next = Math.min(2, Math.max(0.75, +factor.toFixed(2)));
+      document.documentElement.dataset.zoom = String(next);
+      document.documentElement.style.fontSize = `${next * 100}%`;
+      return next;
     },
-    getZoom: async () => browserZoom,
+    getZoom: async () => Number(document.documentElement.dataset.zoom || '1'),
   },
-  theme: { set: async (theme) => theme },
+  theme: {
+    set: async (theme) => theme,
+  },
   shell: {
     openExternal: async (url) => {
       window.open(url, '_blank', 'noopener,noreferrer');
-      return { ok: true, value: null };
+      return { ok: true };
+    },
+  },
+  net: {
+    request: async ({ url, method = 'GET', headers, body, timeoutMs = 60000 }) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { method, headers, body, signal: controller.signal });
+        const text = await res.text();
+        return { ok: res.ok, status: res.status, text };
+      } catch (error) {
+        return {
+          ok: false,
+          status: 0,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      } finally {
+        clearTimeout(timer);
+      }
     },
   },
   fs: {
     exportText: async ({ defaultName = 'export.txt', text }) => {
-      downloadText(defaultName, text);
-      return { ok: true, value: null };
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = defaultName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(href), 2000);
+      return { ok: true, filePath: defaultName };
     },
-    openJson: pickJsonFile,
+    openJson: <T,>() =>
+      new Promise<OpenJsonResult<T>>((resolve) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json,application/json';
+        input.onchange = async () => {
+          const file = input.files?.[0];
+          if (!file) {
+            resolve({ ok: false, canceled: true });
+            return;
+          }
+          try {
+            const value = JSON.parse(await file.text()) as T;
+            resolve({ ok: true, filePath: file.name, value });
+          } catch (error) {
+            resolve({ ok: false, error: String(error) });
+          }
+        };
+        input.click();
+      }),
     readBytes: async () => {
-      throw new Error('Direct disk access requires the desktop build. Import files with the picker instead.');
+      throw new Error('Raw disk reads require the desktop app');
     },
-    writeBytes: async (_path, bytes) => {
-      downloadBlob(_path.split(/[\\/]/).pop() ?? 'file.bin', new Blob([bytes as unknown as BlobPart]));
-      return { ok: true, value: null };
-    },
+    writeBytes: async () => ({ ok: false, error: 'In place writes require the desktop app' }),
     pickFiles: async () => ({ canceled: true, files: [] }),
-    rename: async () => ({ ok: false, error: 'Renaming on disk requires the desktop build.' }),
-  },
-  upscaler: {
-    ensure: async () => ({ ok: false, error: 'Real-ESRGAN runs in the desktop build only.' }),
-    run: async () => ({ ok: false, error: 'Real-ESRGAN runs in the desktop build only. Use the built-in resampler here.' }),
+    rename: async () => ({ ok: false, error: 'File renaming requires the desktop app' }),
   },
   watch: {
-    start: async () => ({ ok: false, error: 'Folder watching runs in the desktop build only.' }),
+    start: async () => ({ ok: false, error: 'Folder watch is available in the desktop app' }),
     stop: async () => ({ ok: true }),
-    onFile: () => () => undefined,
+    onFile: () => () => {},
+  },
+  models: {
+    list: async () => ({ ok: true, items: [] }),
+    install: async () => ({ ok: false, error: 'Native runtime requires the desktop app' }),
+    cancel: async () => ({ ok: true }),
+    remove: async () => ({ ok: true }),
+    readBytes: async () => {
+      throw new Error('Model not installed');
+    },
+    onProgress: () => () => {},
+  },
+  upscaler: {
+    ensure: async () => ({ ok: false, error: 'GPU runtime is available in the desktop app' }),
+    run: async () => ({ ok: false, error: 'GPU runtime is available in the desktop app' }),
+  },
+  video: {
+    probeFfmpeg: async () => ({ ok: true, available: false }),
   },
 };
 
-export const desktop: DesktopBridge = window.desktop ?? browserBridge;
-export const isDesktop = desktop.isDesktop;
-export const isMac = desktop.platform === 'darwin';
-export const isWindows = desktop.platform === 'win32';
-export const isLinux = desktop.platform === 'linux';
+export const desktop: DesktopBridge =
+  typeof window !== 'undefined' && window.desktop ? window.desktop : browserFallback;
+
+/** Platform independent HTTP helper that avoids browser CORS inside Electron. */
+export async function httpRequest(payload: NetRequestPayload): Promise<NetResponse> {
+  if (typeof window !== 'undefined' && window.desktop?.net?.request) {
+    return window.desktop.net.request(payload);
+  }
+  return browserFallback.net.request(payload);
+}
+
+/** Save any binary blob cleanly and release its object URL after download. */
+export function triggerBlobDownload(blob: Blob, filename: string) {
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 2500);
+}

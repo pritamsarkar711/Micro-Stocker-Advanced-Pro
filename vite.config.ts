@@ -8,6 +8,8 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig(({ command }) => ({
   base: command === 'build' ? './' : '/',
   plugins: [react(), tailwindcss()],
+  assetsInclude: ['**/*.wasm'],
+  worker: { format: 'es' },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -40,9 +42,19 @@ export default defineConfig(({ command }) => ({
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined;
-          if (id.includes('recharts') || id.includes('d3-')) return 'charts';
+          if (id.includes('onnxruntime-web')) return 'onnx';
           if (id.includes('@supabase')) return 'supabase';
-          if (id.includes('lucide-react')) return 'icons';
+          if (
+            id.includes('@jsquash') ||
+            id.includes('codec-openjpeg') ||
+            id.includes('pdfjs-dist') ||
+            id.includes('libraw-wasm') ||
+            id.includes('heic-to') ||
+            id.includes('ag-psd') ||
+            id.includes('utif2') ||
+            id.includes('jpeg-js')
+          )
+            return 'codecs';
           return 'vendor';
         },
       },

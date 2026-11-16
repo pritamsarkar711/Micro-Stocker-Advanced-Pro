@@ -1,326 +1,410 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
-import {
-  Check,
-  Cpu,
-  ExternalLink,
-  HardDrive,
-  KeyRound,
-  Loader2,
-  Server,
-  Sparkles,
-  Trash2,
-  Wand2,
-} from 'lucide-react';
-import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Field, Input, SegmentedControl, Select } from '@/components/ui/Field';
+import { Badge } from '@/components/ui/Badge';
+import { Field, Input, Switch } from '@/components/ui/Field';
+import { RichSelect, type RichSelectOption } from '@/components/ui/RichSelect';
+import { BrandLogo } from '@/components/ui/BrandLogo';
+import { GIcon } from '@/components/ui/GoogleIcon';
 import { useToast } from '@/state/ToastState';
+import { desktop } from '@/lib/desktop';
 import {
-  EMPTY_AI_SETTINGS,
-  AI_PROVIDERS,
-  getProvider,
-  isAiReady,
-  probeProvider,
-  resolvedBaseUrl,
-  resolvedModel,
-  type AiProvider,
+  DEFAULT_AI,
+  inferModelBrand,
+  loadAiSettings,
+  PROVIDER_LIST,
+  PROVIDERS,
+  pullOllamaModelInApp,
+  saveAiSettings,
+  syncProviderModels,
+  testAiConnection,
   type AiSettings,
+  type ModelPreset,
+  type ProviderKind,
 } from '@/lib/stock/ai';
 
-const PROVIDER_ICON: Record<AiProvider['kind'], typeof Cpu> = {
-  local: HardDrive,
-  cloud: Sparkles,
-  custom: Server,
-};
+export interface AiPanelProps {
+  compact?: boolean;
+  onChange?: (settings: AiSettings) => void;
+}
 
-const CREATIVITY = [
-  { value: '0.3', label: 'Exact' },
-  { value: '0.6', label: 'Balanced' },
-  { value: '0.9', label: 'Varied' },
-];
-
-const LOCAL_IDS = new Set(['offline', 'ollama', 'openai-compatible']);
-
-/**
- * AI connection panel.
- *
- * Two free routes, both optional: a model on this machine (Ollama, or any
- * OpenAI-compatible local server) or a hosted free tier reachable with the
- * user's own key. The built-in generator works with none of it.
- */
-export function AiPanel({
-  settings,
-  onSave,
-}: {
-  settings: AiSettings;
-  onSave: (next: AiSettings) => Promise<void>;
-}) {
+export function AiPanel({ compact = false, onChange }: AiPanelProps) {
   const toast = useToast();
-  const [draft, setDraft] = useState<AiSettings>(settings);
-  const [busy, setBusy] = useState(false);
-  const [detected, setDetected] = useState<string[]>([]);
-  const [test, setTest] = useState<{ ok: boolean; message: string } | null>(null);
-  const mounted = useRef(true);
+  const [settings, setSettings] = useState<AiSettings>(DEFAULT_AI);
+  const [showKey, setShowKey] = useState(false);
+  const [customModel, setCustomModel] = useState('');
+  const [liveModels, setLiveModels] = useState<Partial<Record<ProviderKind, ModelPreset[]>>>({});
+  const [syncing, setSyncing] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [pulling, setPulling] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
+    void loadAiSettings().then(setSettings);
   }, []);
 
-  useEffect(() => setDraft(settings), [settings]);
+  const preset = PROVIDERS[settings.kind];
+  const currentKey = settings.keys[settings.kind] ?? '';
 
-  const provider = getProvider(draft.provider);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(settings);
-  const ready = isAiReady(draft);
-  const patch = (next: Partial<AiSettings>) => {
-    setDraft((prev) => ({ ...prev, ...next }));
-    setTest(null);
-  };
+  function commit(next: AiSettings) {
+    setSettings(next);
+    setTestResult(null);
+    void saveAiSettings(next);
+    onChange?.(next);
+  }
 
-  const pickProvider = (id: AiSettings['provider']) => {
-    const next = getProvider(id);
-    patch({
-      provider: id,
-      apiKey: draft.provider === id ? draft.apiKey : '',
-      baseUrl: '',
-      model: id === 'offline' ? '' : draft.model && draft.provider === id ? draft.model : next.defaultModel,
+  function selectProvider(kind: ProviderKind) {
+    const p = PROVIDERS[kind];
+    const remembered = settings.modelsByProvider?.[kind];
+    const nextModel = remembered || p.models[0]?.id || '';
+    commit({
+      ...settings,
+      kind,
+      model: nextModel,
+      baseUrl: kind === 'ollama' || kind === 'custom' ? p.baseUrl : '',
+      modelsByProvider: { ...settings.modelsByProvider, [settings.kind]: settings.model },
     });
-    setDetected([]);
-  };
+    setShowKey(false);
+  }
 
-  const save = async () => {
-    setBusy(true);
-    await onSave(draft);
-    setBusy(false);
-    toast.success('AI saved', draft.provider === 'offline' ? 'Built-in generator' : provider.label);
-  };
+  function selectModel(modelId: string) {
+    commit({
+      ...settings,
+      model: modelId,
+      modelsByProvider: { ...settings.modelsByProvider, [settings.kind]: modelId },
+    });
+  }
 
-  const runTest = async () => {
-    setBusy(true);
-    setTest(null);
-    const result = await probeProvider(draft);
-    if (!mounted.current) return;
-    setBusy(false);
-    setTest({ ok: result.ok, message: result.message });
-    if (result.models?.length) setDetected(result.models);
-    if (result.ok && result.models?.length && !draft.model.trim()) {
-      patch({ model: result.models[0] });
+  const availableModels = useMemo<ModelPreset[]>(() => {
+    const synced = liveModels[settings.kind];
+    const base = synced && synced.length ? synced : preset.models;
+    if (settings.model && !base.some((m) => m.id === settings.model)) {
+      return [
+        {
+          id: settings.model,
+          label: settings.model,
+          brand: inferModelBrand(settings.model, preset.brand),
+          free: true,
+        },
+        ...base,
+      ];
     }
-  };
+    return base;
+  }, [liveModels, preset, settings.kind, settings.model]);
 
-  const modelOptions = useMemo(() => {
-    const seen = new Set<string>();
-    const list: { value: string; label: string }[] = [];
-    for (const entry of [...detected.map((id) => ({ id, label: id })), ...provider.models]) {
-      if (seen.has(entry.id)) continue;
-      seen.add(entry.id);
-      list.push({ value: entry.id, label: entry.label });
-    }
-    if (draft.model.trim() && !seen.has(draft.model.trim())) {
-      list.unshift({ value: draft.model.trim(), label: draft.model.trim() });
-    }
-    return list;
-  }, [detected, provider, draft.model]);
+  const modelOptions = useMemo<RichSelectOption[]>(
+    () =>
+      availableModels.map((m) => ({
+        value: m.id,
+        label: m.label,
+        icon: <BrandLogo brand={m.brand} size={16} />,
+        badge: m.vision ? 'Vision' : 'Free',
+      })),
+    [availableModels],
+  );
 
-  const groups = [
-    { title: 'On this computer', items: AI_PROVIDERS.filter((p) => LOCAL_IDS.has(p.id)) },
-    { title: 'Free tiers', items: AI_PROVIDERS.filter((p) => !LOCAL_IDS.has(p.id)) },
-  ];
+  async function handleSyncModels() {
+    setSyncing(true);
+    try {
+      const result = await syncProviderModels(settings);
+      if (!result.ok) {
+        toast.error('Model sync failed', result.error);
+        return;
+      }
+      setLiveModels((prev) => ({ ...prev, [settings.kind]: result.models }));
+      if (result.models.length && !result.models.some((m) => m.id === settings.model)) {
+        selectModel(result.models[0].id);
+      }
+      toast.success(
+        `${result.models.length} ${settings.kind === 'ollama' ? 'installed' : 'free'} models loaded`,
+      );
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function handleTest() {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const result = await testAiConnection(settings);
+      if (result.ok) {
+        const text = `Verified in ${result.latencyMs} ms: "${result.sampleTitle}"`;
+        setTestResult({ ok: true, text });
+        toast.success(`${preset.name} ready`, `${result.latencyMs} ms response`);
+      } else {
+        setTestResult({ ok: false, text: result.error });
+        toast.error(`${preset.name} check failed`, result.error);
+      }
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  async function handlePullOllama() {
+    const target = (customModel.trim() || settings.model.trim());
+    if (!target) return;
+    setPulling(true);
+    try {
+      const res = await pullOllamaModelInApp(settings.baseUrl, target);
+      if (!res.ok) {
+        toast.error('Ollama install failed', res.error);
+        return;
+      }
+      selectModel(target);
+      setCustomModel('');
+      toast.success('Model installed in Ollama', target);
+      void handleSyncModels();
+    } finally {
+      setPulling(false);
+    }
+  }
 
   return (
-    <div className="flex flex-col gap-4">
-      {groups.map((group) => (
-        <div key={group.title} className="flex flex-col gap-1.5">
-          <p className="text-[0.6875rem] font-semibold tracking-[0.08em] text-fg-subtle uppercase">
-            {group.title}
-          </p>
-          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
-            {group.items.map((item) => {
-              const Icon = PROVIDER_ICON[item.kind];
-              const active = item.id === draft.provider;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => pickProvider(item.id)}
-                  aria-pressed={active}
-                  className={clsx(
-                    'group flex items-center gap-2.5 r-control border px-2.5 py-2 text-left transition-colors duration-150',
-                    active
-                      ? 'border-brand bg-brand-soft'
-                      : 'border-line bg-surface hover:border-line-strong hover:bg-surface-2',
-                  )}
-                >
-                  <span
-                    className={clsx(
-                      'flex size-7 shrink-0 items-center justify-center r-chip',
-                      active ? 'bg-brand text-white' : 'bg-surface-3 text-fg-muted',
-                    )}
-                  >
-                    <Icon className="size-3.5" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[0.8125rem] font-medium text-fg">
-                      {item.label}
-                    </span>
-                    <span className="block truncate text-[0.6875rem] text-fg-subtle">
-                      {item.kind === 'local' ? 'No key needed' : item.kind === 'custom' ? 'Any server' : 'Your own key'}
-                    </span>
-                  </span>
-                  {active && <Check className="size-3.5 shrink-0 text-brand" />}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-
-      {provider.id !== 'offline' && (
-        <div className="r-control border border-line bg-surface-2 p-3">
-          <div className="mb-2 flex flex-wrap items-center gap-1.5">
-            <Badge tone={ready ? 'ok' : 'neutral'} dot>
-              {ready ? 'Ready' : 'Needs setup'}
-            </Badge>
-            <span className="truncate text-[0.6875rem] text-fg-muted">{provider.freeTierNote}</span>
-            {provider.keyUrl && (
-              <a
-                href={provider.keyUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="ml-auto inline-flex items-center gap-1 text-[0.6875rem] font-medium text-brand hover:underline"
-              >
-                Get key <ExternalLink className="size-3" />
-              </a>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-            <Field label="Model">
-              {modelOptions.length ? (
-                <Select
-                  value={resolvedModel(draft)}
-                  onChange={(event) => patch({ model: event.target.value })}
-                  options={modelOptions}
-                />
-              ) : (
-                <Input
-                  value={draft.model}
-                  onChange={(event) => patch({ model: event.target.value })}
-                  placeholder="model name"
-                  spellCheck={false}
-                />
-              )}
-            </Field>
-
-            {provider.kind === 'local' ? (
-              <Field label="Endpoint">
-                <Input
-                  value={draft.baseUrl}
-                  onChange={(event) => patch({ baseUrl: event.target.value })}
-                  placeholder={provider.baseUrl}
-                  spellCheck={false}
-                />
-              </Field>
-            ) : (
-              <Field label="API key">
-                <Input
-                  type="password"
-                  value={draft.apiKey}
-                  onChange={(event) => patch({ apiKey: event.target.value })}
-                  placeholder="Paste key"
-                  spellCheck={false}
-                  autoComplete="off"
-                  prefix={<KeyRound className="size-3.5" />}
-                />
-              </Field>
-            )}
-
-            {provider.editableBaseUrl && provider.kind !== 'local' && (
-              <Field label="Endpoint">
-                <Input
-                  value={draft.baseUrl}
-                  onChange={(event) => patch({ baseUrl: event.target.value })}
-                  placeholder={provider.baseUrl}
-                  spellCheck={false}
-                />
-              </Field>
-            )}
-
-            <Field label="Creativity">
-              <SegmentedControl
-                size="sm"
-                value={String(draft.temperature)}
-                onChange={(value) => patch({ temperature: Number(value) })}
-                options={CREATIVITY.map((option) => ({
-                  value: option.value,
-                  label: option.label,
-                }))}
-              />
-            </Field>
-          </div>
-
-          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-            <Button size="sm" onClick={save} loading={busy} disabled={!dirty} icon={<Check className="size-4" />}>
-              Save
-            </Button>
-            <Button size="sm" variant="outline" onClick={runTest} disabled={busy} icon={<Wand2 className="size-4" />}>
-              Test
-            </Button>
-            {provider.id === 'ollama' && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={runTest}
-                disabled={busy}
-                icon={<Cpu className="size-4" />}
-              >
-                Detect models
-              </Button>
-            )}
+    <div className="space-y-4">
+      <div
+        className={clsx(
+          'grid gap-2',
+          compact ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
+        )}
+      >
+        {PROVIDER_LIST.map((p) => {
+          const active = settings.kind === p.kind;
+          const hasKey = Boolean(settings.keys[p.kind]?.trim());
+          return (
             <button
+              key={p.kind}
               type="button"
-              onClick={() => {
-                setDraft(EMPTY_AI_SETTINGS);
-                setDetected([]);
-                setTest(null);
-              }}
-              className="ml-auto inline-flex items-center gap-1 text-[0.6875rem] font-medium text-fg-subtle hover:text-danger"
-            >
-              <Trash2 className="size-3" /> Remove
-            </button>
-          </div>
-
-          {busy && !test && (
-            <p className="mt-2 flex items-center gap-1.5 text-[0.6875rem] text-fg-muted">
-              <Loader2 className="size-3 animate-spin" /> Checking…
-            </p>
-          )}
-          {test && (
-            <p
+              onClick={() => selectProvider(p.kind)}
               className={clsx(
-                'mt-2 r-chip px-2 py-1 text-[0.6875rem] leading-relaxed',
-                test.ok ? 'bg-ok-soft text-ok' : 'bg-danger-soft text-danger',
+                'flex items-center gap-2.5 rounded-[var(--r-control)] border px-3 py-2.5 text-left transition-colors',
+                active
+                  ? 'border-accent bg-accent-soft/70 text-ink'
+                  : 'border-line bg-surface hover:border-line-strong hover:bg-surface-2/60',
               )}
             >
-              {test.message}
-            </p>
-          )}
-          {test?.ok && detected.length > 0 && (
-            <p className="mt-1.5 truncate text-[0.6875rem] text-fg-subtle" title={detected.join(', ')}>
-              {detected.length} model{detected.length === 1 ? '' : 's'} detected
-            </p>
-          )}
-        </div>
+              <BrandLogo brand={p.brand} size={22} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1 truncate text-xs font-semibold text-ink">
+                  <span className="truncate">{p.name}</span>
+                  {hasKey && <GIcon name="check_circle" size={13} className="shrink-0 text-accent" />}
+                </div>
+                <div className="truncate text-2xs text-ink-muted">{p.badge}</div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {(preset.needsKey || preset.optionalKey) && (
+        <Field
+          label={preset.optionalKey ? `${preset.name} API key (optional)` : `${preset.name} API key`}
+          hint={
+            preset.keyUrl ? (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-accent hover:underline"
+                onClick={() => void desktop.shell.openExternal(preset.keyUrl!)}
+              >
+                Get free key <GIcon name="open_in_new" size={12} />
+              </button>
+            ) : undefined
+          }
+        >
+          <Input
+            type={showKey ? 'text' : 'password'}
+            value={currentKey}
+            onChange={(e) =>
+              commit({ ...settings, keys: { ...settings.keys, [settings.kind]: e.target.value } })
+            }
+            placeholder={preset.optionalKey ? 'Leave blank for local server' : `Paste ${preset.name} key`}
+            leading={<GIcon name="key" size={15} />}
+            trailing={
+              <button
+                type="button"
+                onClick={() => setShowKey((v) => !v)}
+                className="pointer-events-auto text-ink-muted hover:text-ink"
+                aria-label={showKey ? 'Hide key' : 'Show key'}
+              >
+                <GIcon name={showKey ? 'visibility_off' : 'visibility'} size={15} />
+              </button>
+            }
+          />
+        </Field>
       )}
 
-      <p className="text-[0.6875rem] leading-relaxed text-fg-subtle">
-        {provider.id === 'offline'
-          ? 'Built-in generator: filename, folder and keyword bank. Works with no internet and no key.'
-          : `Requests go straight from this computer to ${provider.label} at ${resolvedBaseUrl(draft) || 'the default endpoint'}. Keys are stored locally only.`}
-      </p>
+      {(settings.kind === 'ollama' || settings.kind === 'custom') && (
+        <Field label="Server URL">
+          <Input
+            value={settings.baseUrl}
+            onChange={(e) => commit({ ...settings, baseUrl: e.target.value })}
+            placeholder={preset.baseUrl}
+            leading={<GIcon name="dns" size={15} />}
+          />
+        </Field>
+      )}
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <Field
+          label="Model"
+          hint={
+            settings.kind !== 'local' ? (
+              <button
+                type="button"
+                disabled={syncing}
+                onClick={() => void handleSyncModels()}
+                className="inline-flex items-center gap-1 text-accent hover:underline disabled:opacity-50"
+              >
+                <GIcon name="refresh" size={12} className={syncing ? 'animate-spin' : undefined} />
+                {syncing
+                  ? 'Loading'
+                  : settings.kind === 'ollama'
+                    ? 'Detect local models'
+                    : 'Refresh free models'}
+              </button>
+            ) : undefined
+          }
+        >
+          {modelOptions.length > 0 ? (
+            <RichSelect
+              value={settings.model}
+              options={modelOptions}
+              onChange={selectModel}
+              ariaLabel="AI model"
+            />
+          ) : (
+            <Input
+              value={settings.model}
+              onChange={(e) => selectModel(e.target.value)}
+              placeholder="Enter model ID"
+              leading={<BrandLogo brand={preset.brand} size={15} />}
+            />
+          )}
+        </Field>
+
+        {settings.kind !== 'local' && (
+          <Field
+            label={
+              settings.kind === 'ollama' ? 'Install or use custom model' : 'Custom model ID (optional)'
+            }
+          >
+            <div className="flex gap-2">
+              <Input
+                value={customModel}
+                onChange={(e) => setCustomModel(e.target.value)}
+                placeholder={
+                  settings.kind === 'ollama'
+                    ? 'Example: gemma4:e4b or qwen3:8b'
+                    : settings.model || 'Enter model ID'
+                }
+              />
+              {settings.kind === 'ollama' ? (
+                <Button
+                  variant="secondary"
+                  size="md"
+                  loading={pulling}
+                  icon={<GIcon name="download" size={15} />}
+                  onClick={() => void handlePullOllama()}
+                >
+                  Install
+                </Button>
+              ) : (
+                <Button
+                  variant="secondary"
+                  size="md"
+                  disabled={!customModel.trim()}
+                  onClick={() => {
+                    selectModel(customModel.trim());
+                    setCustomModel('');
+                    toast.success('Model selected');
+                  }}
+                >
+                  Use
+                </Button>
+              )}
+            </div>
+          </Field>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Field label={`Keywords (${settings.targetKeywords})`}>
+          <input
+            type="range"
+            min={10}
+            max={49}
+            value={settings.targetKeywords}
+            onChange={(e) => commit({ ...settings, targetKeywords: Number(e.target.value) })}
+            className="mt-2 w-full accent-[var(--accent)]"
+          />
+        </Field>
+
+        <Field label="Style">
+          <div className="grid grid-cols-3 gap-1 rounded-[var(--r-control)] border border-line bg-surface-2 p-0.5">
+            {(['commercial', 'editorial', 'minimal'] as const).map((tone) => (
+              <button
+                key={tone}
+                type="button"
+                onClick={() => commit({ ...settings, tone })}
+                className={clsx(
+                  'h-8 rounded-[5px] text-xs font-medium capitalize',
+                  settings.tone === tone
+                    ? 'bg-accent text-accent-fg'
+                    : 'text-ink-muted hover:text-ink',
+                )}
+              >
+                {tone}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        <div className="flex items-end pb-1">
+          <Switch
+            checked={settings.useVision}
+            onChange={(useVision) => commit({ ...settings, useVision })}
+            label="Image vision"
+          />
+        </div>
+
+        <div className="flex items-end pb-1">
+          <Switch
+            checked={settings.autoEmbed}
+            onChange={(autoEmbed) => commit({ ...settings, autoEmbed })}
+            label="Auto embed IPTC & XMP"
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            loading={testing}
+            icon={<GIcon name="play_arrow" size={16} />}
+            onClick={() => void handleTest()}
+          >
+            Verify provider
+          </Button>
+          {testResult && (
+            <Badge tone={testResult.ok ? 'brand' : 'danger'}>
+              <GIcon name={testResult.ok ? 'check_circle' : 'error'} size={13} />
+              <span className="max-w-[340px] truncate">{testResult.text}</span>
+            </Badge>
+          )}
+        </div>
+        <span className="inline-flex items-center gap-1.5 text-xs text-ink-muted">
+          <BrandLogo brand={preset.brand} size={15} />
+          <span>{preset.name}</span>
+          {settings.model && (
+            <>
+              <span>·</span>
+              <span className="max-w-[200px] truncate font-mono text-2xs">{settings.model}</span>
+            </>
+          )}
+        </span>
+      </div>
     </div>
   );
 }

@@ -1,30 +1,26 @@
 import clsx from 'clsx';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
-import { Loader2 } from 'lucide-react';
+import { GIcon } from './GoogleIcon';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success';
 export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg' | 'icon' | 'icon-sm' | 'icon-lg';
 
-/**
- * Material-style button scale. Heights step 28 → 44 so the same control works
- * in a table toolbar and in a dialog footer without looking out of place.
- */
 const VARIANTS: Record<ButtonVariant, string> = {
   primary:
-    'bg-brand text-white shadow-[0_1px_2px_rgb(16_24_40/0.10)] hover:bg-brand-hover active:bg-brand-hover',
+    'bg-brand text-white shadow-[0_1px_2px_rgb(15_23_42/0.14)] hover:bg-brand-hover active:scale-[0.99]',
   secondary:
-    'bg-brand-soft text-brand-fg hover:bg-brand/12 active:bg-brand/16',
+    'bg-brand-soft text-brand-fg hover:brightness-97 dark:hover:brightness-110 active:scale-[0.99]',
   outline:
-    'bg-surface text-fg border border-line-strong hover:bg-surface-2 hover:border-fg-subtle/50',
+    'bg-surface text-fg border border-line-strong hover:bg-surface-2 hover:border-fg-subtle/60 active:scale-[0.99]',
   ghost: 'bg-transparent text-fg-muted hover:bg-surface-2 hover:text-fg',
-  danger: 'bg-danger text-white shadow-[0_1px_2px_rgb(16_24_40/0.10)] hover:brightness-108',
-  success: 'bg-ok text-white shadow-[0_1px_2px_rgb(16_24_40/0.10)] hover:brightness-108',
+  danger: 'bg-danger text-white shadow-[0_1px_2px_rgb(15_23_42/0.14)] hover:brightness-95 active:scale-[0.99]',
+  success: 'bg-ok text-white shadow-[0_1px_2px_rgb(15_23_42/0.14)] hover:brightness-95 active:scale-[0.99]',
 };
 
 const SIZES: Record<ButtonSize, string> = {
-  xs: 'h-7 gap-1.5 px-2 text-[0.75rem]',
-  sm: 'h-8 gap-1.5 px-2.5 text-[0.8125rem]',
-  md: 'h-9 gap-2 px-3.5 text-[0.8125rem]',
+  xs: 'h-7 gap-1.5 px-2.5 text-[0.75rem]',
+  sm: 'h-8.5 gap-1.5 px-3 text-[0.8125rem]',
+  md: 'h-9.5 gap-2 px-4 text-[0.8125rem]',
   lg: 'h-11 gap-2 px-5 text-sm',
   icon: 'size-9',
   'icon-sm': 'size-8',
@@ -58,8 +54,8 @@ export function Button({
       type={type}
       disabled={disabled || loading}
       className={clsx(
-        'r-control inline-flex shrink-0 select-none items-center justify-center font-medium whitespace-nowrap',
-        'transition-[background-color,box-shadow,color] duration-150 ease-[var(--ease-standard)]',
+        'r-control inline-flex shrink-0 cursor-pointer select-none items-center justify-center font-semibold whitespace-nowrap',
+        'transition-[background-color,border-color,color,transform] duration-100 ease-[var(--ease-standard)]',
         'disabled:pointer-events-none disabled:opacity-45',
         VARIANTS[variant],
         SIZES[size],
@@ -68,7 +64,7 @@ export function Button({
       )}
       {...rest}
     >
-      {loading ? <Loader2 className="size-4 shrink-0 animate-spin" /> : icon}
+      {loading ? <GIcon name="progress_activity" size={16} className="animate-spin" /> : icon}
       {children}
       {iconRight}
     </button>

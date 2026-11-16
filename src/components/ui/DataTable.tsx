@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import { useMemo, useState, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-react';
+import { GIcon } from './GoogleIcon';
 import { EmptyState } from './Misc';
 
 export type BreakpointKey = 'sm' | 'md' | 'lg' | 'xl';
@@ -8,12 +8,9 @@ export type BreakpointKey = 'sm' | 'md' | 'lg' | 'xl';
 export interface Column<T> {
   key: string;
   header: ReactNode;
-  /** Cell renderer; falls back to `row[key]` when omitted. */
   render?: (row: T) => ReactNode;
   align?: 'left' | 'right' | 'center';
-  /** Hide this column below the given breakpoint to keep tables readable. */
   hideBelow?: BreakpointKey;
-  /** Column used as the card title in the mobile card view. */
   primary?: boolean;
   sortable?: boolean;
   sortValue?: (row: T) => string | number;
@@ -45,11 +42,6 @@ export interface DataTableProps<T> {
   footer?: ReactNode;
 }
 
-/**
- * Responsive data table.
- *  - ≥ md: real table, low-priority columns collapse away
- *  - < md: the same rows render as stacked cards (no horizontal scrolling trap)
- */
 export function DataTable<T>({
   rows,
   columns,
@@ -99,11 +91,10 @@ export function DataTable<T>({
 
   const primary = columns.find((c) => c.primary) ?? columns[0];
   const secondary = columns.filter((c) => c !== primary);
-  const cellPad = dense ? 'px-2.5 py-1.5' : 'px-4 py-2.5';
+  const cellPad = dense ? 'px-3 py-2' : 'px-4 py-2.5';
 
   return (
     <div className="w-full">
-      {/* ---------- table view (md and up) ---------- */}
       <div className="hidden w-full overflow-x-auto md:block">
         <table className="w-full border-collapse text-[0.8125rem]">
           <thead>
@@ -139,12 +130,12 @@ export function DataTable<T>({
                     {column.sortable &&
                       (sort?.key === column.key ? (
                         sort.dir === 'asc' ? (
-                          <ArrowUp className="size-3" />
+                          <GIcon name="arrow_upward" size={13} />
                         ) : (
-                          <ArrowDown className="size-3" />
+                          <GIcon name="arrow_downward" size={13} />
                         )
                       ) : (
-                        <ChevronsUpDown className="size-3 opacity-40" />
+                        <GIcon name="unfold_more" size={13} className="opacity-45" />
                       ))}
                   </span>
                 </th>
@@ -157,7 +148,7 @@ export function DataTable<T>({
                 key={rowKey(row)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 className={clsx(
-                  'border-b border-line/70 transition-colors last:border-0',
+                  'border-b border-line/70 last:border-0',
                   onRowClick && 'cursor-pointer hover:bg-surface-2',
                 )}
               >
@@ -173,7 +164,7 @@ export function DataTable<T>({
                   >
                     {column.render
                       ? column.render(row)
-                      : String((row as Record<string, unknown>)[column.key] ?? '—')}
+                      : String((row as Record<string, unknown>)[column.key] ?? '')}
                   </td>
                 ))}
               </tr>
@@ -182,8 +173,7 @@ export function DataTable<T>({
         </table>
       </div>
 
-      {/* ---------- card view (below md) ---------- */}
-      <ul className="flex flex-col gap-2 md:hidden">
+      <ul className="flex flex-col gap-2 p-2 md:hidden">
         {sorted.map((row) => (
           <li key={rowKey(row)}>
             <div
@@ -196,7 +186,7 @@ export function DataTable<T>({
               <div className="text-[0.8125rem] font-semibold text-fg">
                 {primary.render
                   ? primary.render(row)
-                  : String((row as Record<string, unknown>)[primary.key] ?? '—')}
+                  : String((row as Record<string, unknown>)[primary.key] ?? '')}
               </div>
               <dl className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1">
                 {secondary.map((column) => (
@@ -207,7 +197,7 @@ export function DataTable<T>({
                     <dd className="truncate text-[0.8125rem] text-fg">
                       {column.render
                         ? column.render(row)
-                        : String((row as Record<string, unknown>)[column.key] ?? '—')}
+                        : String((row as Record<string, unknown>)[column.key] ?? '')}
                     </dd>
                   </div>
                 ))}
@@ -217,7 +207,9 @@ export function DataTable<T>({
         ))}
       </ul>
 
-      {footer && <div className="border-t border-line px-3 py-2 text-[0.75rem] text-fg-muted">{footer}</div>}
+      {footer && (
+        <div className="border-t border-line px-3.5 py-2 text-[0.75rem] text-fg-muted">{footer}</div>
+      )}
     </div>
   );
 }

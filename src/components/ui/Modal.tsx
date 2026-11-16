@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import clsx from 'clsx';
-import { X } from 'lucide-react';
+import { GIcon } from './GoogleIcon';
 import { Button } from './Button';
 
 export interface ModalProps {
@@ -21,10 +21,6 @@ const SIZES = {
   xl: 'max-w-4xl',
 };
 
-/**
- * Responsive dialog: a centred modal on ≥sm screens, a bottom sheet on phones.
- * Closes on Escape and on backdrop click; locks body scroll while open.
- */
 export function Modal({ open, onClose, title, description, children, footer, size = 'md' }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -45,7 +41,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
         'input, select, textarea, button, [tabindex]:not([tabindex="-1"])',
       );
       focusable?.focus();
-    }, 40);
+    }, 30);
 
     return () => {
       document.removeEventListener('keydown', onKey);
@@ -70,22 +66,22 @@ export function Modal({ open, onClose, title, description, children, footer, siz
         aria-label={typeof title === 'string' ? title : 'Dialog'}
         className={clsx(
           'relative flex w-full flex-col overflow-hidden border border-line bg-surface shadow-[var(--shadow-pop)]',
-          'rounded-t-xl sm:rounded-xl',
+          'rounded-t-[8px] sm:r-dialog',
           'max-h-[92dvh] sm:max-h-[85dvh]',
           SIZES[size],
         )}
-        style={{ animation: 'toast-in 180ms ease-out both' }}
+        style={{ animation: 'toast-in 150ms ease-out both' }}
       >
         {(title || description) && (
           <header className="flex items-start justify-between gap-4 border-b border-line px-4 py-3">
             <div className="min-w-0">
-              {title && <h2 className="text-base font-semibold text-fg">{title}</h2>}
+              {title && <h2 className="text-base font-bold text-fg">{title}</h2>}
               {description && (
                 <p className="mt-0.5 text-[0.75rem] text-fg-muted">{description}</p>
               )}
             </div>
             <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close dialog">
-              <X className="size-4" />
+              <GIcon name="close" size={18} />
             </Button>
           </header>
         )}

@@ -1,56 +1,162 @@
-import type { ReactNode } from 'react';
-import {
-  BarChart3,
-  BookMarked,
-  CalendarCheck,
-  Cloud,
-  FileDown,
-  FileSignature,
-  Gauge,
-  Images,
-  Layers,
-  Settings,
-  ShieldCheck,
-  Store,
-  Zap,
-} from 'lucide-react';
+import type { GoogleIconName } from '@/components/ui/GoogleIcon';
 
 export interface NavItem {
   to: string;
   label: string;
-  icon: ReactNode;
-  group: 'workflow' | 'data' | 'system';
-  /** One of the four phone tab-bar entries. */
-  tab?: boolean;
-  /** Extra search terms for Ctrl+K. */
-  keywords?: string;
+  shortLabel?: string;
+  icon: GoogleIconName;
+  group: 'workspace' | 'tools' | 'catalog' | 'system';
+  keywords?: string[];
+  mobileTab?: boolean;
 }
 
-export const NAV_GROUPS = [
-  { id: 'workflow', title: 'Workflow' },
-  { id: 'data', title: 'Data' },
-  { id: 'system', title: 'System' },
-] as const;
-
-/**
- * Grouped by the job a contributor is doing: prepare files, publish them,
- * then read the numbers. Each item carries a single-word label — the icon
- * plus the label is the whole affordance.
- */
-export const NAV_ITEMS: NavItem[] = [
-  { to: '/', label: 'Overview', icon: <Gauge className="size-[1.15rem]" />, group: 'workflow', keywords: 'dashboard home status' },
-  { to: '/library', label: 'Library', icon: <Images className="size-[1.15rem]" />, group: 'workflow', tab: true, keywords: 'files import metadata keywords edit' },
-  { to: '/prepare', label: 'Prepare', icon: <ShieldCheck className="size-[1.15rem]" />, group: 'workflow', keywords: 'file doctor exif gps vector sanitize resize' },
-  { to: '/upscale', label: 'Upscale', icon: <Zap className="size-[1.15rem]" />, group: 'workflow', tab: true, keywords: 'ai real-esrgan 8k upscale enlarge' },
-  { to: '/export', label: 'Export', icon: <FileDown className="size-[1.15rem]" />, group: 'workflow', tab: true, keywords: 'csv download rename embed' },
-  { to: '/plan', label: 'Planner', icon: <CalendarCheck className="size-[1.15rem]" />, group: 'workflow', keywords: 'queue submission caps batch' },
-  { to: '/platforms', label: 'Platforms', icon: <Store className="size-[1.15rem]" />, group: 'workflow', tab: true, keywords: 'marketplace rules requirements limits' },
-  { to: '/releases', label: 'Releases', icon: <FileSignature className="size-[1.15rem]" />, group: 'data', keywords: 'model property release contract' },
-  { to: '/earnings', label: 'Earnings', icon: <BarChart3 className="size-[1.15rem]" />, group: 'data', keywords: 'sales revenue royalties reports' },
-  { to: '/bank', label: 'Keywords', icon: <BookMarked className="size-[1.15rem]" />, group: 'data', keywords: 'bank synonyms categories translations' },
-  { to: '/cloud', label: 'Cloud', icon: <Cloud className="size-[1.15rem]" />, group: 'system', keywords: 'supabase sync backup' },
-  { to: '/settings', label: 'Settings', icon: <Settings className="size-[1.15rem]" />, group: 'system', keywords: 'theme zoom density preferences backup' },
-  { to: '/about', label: 'About', icon: <Layers className="size-[1.15rem]" />, group: 'system', keywords: 'version licence build' },
+export const NAV_GROUPS: Array<{ id: NavItem['group']; label: string }> = [
+  { id: 'workspace', label: 'Workspace' },
+  { id: 'tools', label: 'Studio Tools' },
+  { id: 'catalog', label: 'Catalog' },
+  { id: 'system', label: 'System & Help' },
 ];
 
-export const TAB_ITEMS = NAV_ITEMS.filter((item) => item.tab);
+export const NAV_ITEMS: NavItem[] = [
+  {
+    to: '/',
+    label: 'Overview',
+    icon: 'dashboard',
+    group: 'workspace',
+    keywords: ['home', 'summary', 'stats'],
+    mobileTab: true,
+  },
+  {
+    to: '/library',
+    label: 'Library & Metadata',
+    shortLabel: 'Library',
+    icon: 'photo_library',
+    group: 'workspace',
+    keywords: ['import', 'keywords', 'title', 'ai', 'tag', 'xmp', 'iptc'],
+    mobileTab: true,
+  },
+  {
+    to: '/prepare',
+    label: 'Prepare',
+    icon: 'tune',
+    group: 'workspace',
+    keywords: ['exif', 'gps', 'strip', 'svg', 'eps', 'duplicates', 'resize'],
+  },
+  {
+    to: '/export',
+    label: 'Export & CSV',
+    shortLabel: 'Export',
+    icon: 'upload_file',
+    group: 'workspace',
+    keywords: ['csv', 'shutterstock', 'adobe', 'freepik', 'embed', 'xmp'],
+    mobileTab: true,
+  },
+
+  /* Studio tools */
+  {
+    to: '/upscale',
+    label: 'Image Upscaler',
+    shortLabel: 'Upscale',
+    icon: 'photo_size_select_large',
+    group: 'tools',
+    keywords: ['4k', '8k', 'realesrgan', 'waifu2x', 'enlarge', 'super resolution'],
+    mobileTab: true,
+  },
+  {
+    to: '/video-upscale',
+    label: 'Video Upscaler',
+    shortLabel: 'Video',
+    icon: 'videocam',
+    group: 'tools',
+    keywords: ['footage', '4k', '8k', '60fps', 'rife', 'anime4k', 'mp4'],
+  },
+  {
+    to: '/bg-remove',
+    label: 'Background Remover',
+    shortLabel: 'Cutout',
+    icon: 'content_cut',
+    group: 'tools',
+    keywords: ['cutout', 'transparent', 'png', 'rembg', 'u2net', 'birefnet', 'isnet', 'isolate'],
+  },
+  {
+    to: '/convert',
+    label: 'Image Converter',
+    shortLabel: 'Convert',
+    icon: 'swap_horiz',
+    group: 'tools',
+    keywords: ['jpg', 'png', 'webp', 'avif', 'tiff', 'bmp', 'ico', 'gif', 'svg', 'format'],
+    mobileTab: true,
+  },
+
+  /* Catalog */
+  { to: '/plan', label: 'Submission Tracker', icon: 'assignment_turned_in', group: 'catalog', keywords: ['queue', 'submission', 'status'] },
+  { to: '/earnings', label: 'Earnings', icon: 'table_chart', group: 'catalog', keywords: ['sales', 'royalties', 'revenue'] },
+  {
+    to: '/planner',
+    label: 'Planner',
+    icon: 'calendar_month',
+    group: 'catalog',
+    keywords: ['seasonal', 'holidays', 'events', 'schedule'],
+  },
+  {
+    to: '/platforms',
+    label: 'Platform Rules',
+    shortLabel: 'Platforms',
+    icon: 'storefront',
+    group: 'catalog',
+    keywords: ['shutterstock', 'adobe', 'freepik', 'getty', 'requirements', 'specs'],
+  },
+  {
+    to: '/releases',
+    label: 'Releases',
+    icon: 'assignment_turned_in',
+    group: 'catalog',
+    keywords: ['model release', 'property release', 'consent'],
+  },
+  {
+    to: '/bank',
+    label: 'Keyword Bank',
+    icon: 'local_offer',
+    group: 'catalog',
+    keywords: ['synonyms', 'vocabulary', 'translations'],
+  },
+
+  /* System & Help */
+  {
+    to: '/cloud',
+    label: 'Cloud Sync',
+    icon: 'cloud_sync',
+    group: 'system',
+    keywords: ['supabase', 'backup', 'sync', 'database'],
+  },
+  {
+    to: '/settings',
+    label: 'Settings',
+    icon: 'settings',
+    group: 'system',
+    keywords: ['theme', 'currency', 'ai', 'openrouter', 'gemini', 'ollama', 'color'],
+  },
+  {
+    to: '/contact',
+    label: 'Contact',
+    icon: 'send',
+    group: 'system',
+    keywords: ['telegram', 'support', 'creator', 'message', 'joegoldberg2025'],
+  },
+  {
+    to: '/report',
+    label: 'Report Issue',
+    icon: 'bug_report',
+    group: 'system',
+    keywords: ['bug', 'feedback', 'problem', 'report'],
+  },
+  {
+    to: '/about',
+    label: 'About',
+    icon: 'info',
+    group: 'system',
+    keywords: ['version', 'license', 'desktop'],
+  },
+];
+
+export const MOBILE_TABS = NAV_ITEMS.filter((item) => item.mobileTab);

@@ -1,176 +1,181 @@
-import { desktop, isDesktop } from '@/lib/desktop';
-import type { PlatformSpec } from '../platforms';
-import type { PlatformId, StockItem } from '../types';
-import { megapixels } from '../types';
+import { desktop } from '@/lib/desktop';
+import { installModelInApp } from '@/lib/modelStore';
 import { upscaleClassic } from './classic';
-import { ENGINE_RELEASES, UPSCALE_MODELS } from './models';
+import {
+  buildUpscaleInstallSpec,
+  engineBinaryFor,
+  resolveTargetSize,
+  UPSCALE_MODELS,
+  type UpscaleModel,
+  type UpscaleTarget,
+} from './models';
 
-export type EngineId = 'classic' | 'realesrgan';
-
-export interface TargetPreset {
-  id: string;
-  label: string;
-  minMP?: number;
-  targetWidth?: number;
-  platform?: PlatformId;
-  note: string;
-}
-
-/** 8K UHD = 7680×4320 ≈ 33.2 MP — the highest preset we expose. */
-export const MP_8K = 33.2;
-
-export const TARGET_PRESETS: TargetPreset[] = [
-  { id: '8k', label: '8K UHD (7680×4320 · 33.2 MP)', targetWidth: 7680, minMP: MP_8K, note: 'Highest preset; stays under Adobe’s 100 MP ceiling.' },
-  { id: '4k', label: '4K UHD (3840×2160 · 8.3 MP)', targetWidth: 3840, minMP: 8.3, note: 'Clears every agency minimum including Alamy’s ~6 MP.' },
-  { id: 'adobe', label: 'Adobe Stock sweet spot (24 MP)', minMP: 24, note: 'Big crop room, still ≤ 100 MP and ≤ 45 MB when saved at q92.' },
-  { id: 'alamy', label: 'Alamy safe (≥ 6 MP / 17 MB uncompressed)', minMP: 6, note: 'Alamy measures uncompressed size: ≈ 6 MP at 8-bit RGB.' },
-  { id: 'freepik', label: 'Freepik web panel (4000 px long edge)', targetWidth: 4000, note: 'Inside Freepik’s 2000-10000 px window.' },
-  { id: 'min-all', label: 'Clear all minimums (6.5 MP)', minMP: 6.5, note: 'Smallest export that passes Adobe+Shutterstock+Alamy at once.' },
-];
-
-export interface ScalePlan {
-  /** Native 4× passes handed to the model. */
-  passes: number[];
-  /** Exact multiplier needed to hit the target. */
-  finalScale: number;
-  /** Resize factor applied after the last pass (≥ 1). */
-  tailScale: number;
-  reason: string;
-}
-
-/** Chain of native 4× model passes that reaches the target, plus a fine tail. */
-export function planScale(item: StockItem, preset: TargetPreset, maxScale = 16): ScalePlan {
-  const mp = megapixels(item) ?? 1;
-  const width = item.width ?? 1000;
-  let needed = 1;
-  if (preset.targetWidth) needed = Math.max(needed, preset.targetWidth / width);
-  if (preset.minMP) needed = Math.max(needed, Math.sqrt(preset.minMP / mp));
-  needed = Math.min(needed, maxScale);
-
-  // Shipped NCNN weights are 4x only, so chains are 4, 4x4, 4x4x4.
-  // `finalScale` is the exact multiplier; `tailScale` is the final resize that
-  // makes up the difference between a 4x pass and the exact target.
-  const chains: number[][] = [[4], [4, 4], [4, 4, 4]];
-  for (const chain of chains) {
-    const total = chain.reduce((a, b) => a * b, 1);
-    if (total + 1e-9 >= needed) {
-      return {
-        passes: chain,
-        finalScale: needed,
-        tailScale: Math.max(1, needed / total),
-        reason: needed === total ? `${total}× in ${chain.length} pass${chain.length === 1 ? '' : 'es'}` : `${total}× then resized to ${needed.toFixed(2)}×`,
-      };
-    }
-  }
-  return { passes: [4, 4, 4], finalScale: 64, tailScale: 1, reason: 'capped at 64×' };
-}
-
-export interface UpscaleRequest {
-  item: StockItem;
-  engine: EngineId;
+export interface UpscaleJobInput {
+  blob?: Blob;
+  path?: string;
+  name: string;
+  width: number;
+  height: number;
   modelId: string;
-  passes: number[];
-  /** Extra resize after the AI passes, to land exactly on the target. */
-  tailScale?: number;
+  target: UpscaleTarget;
   outFormat: 'png' | 'jpg' | 'webp';
   quality: number;
+  tileSize?: number;
   onProgress?: (ratio: number, label: string) => void;
 }
 
-export interface UpscaleResult {
+export interface UpscaleJobResult {
   blob: Blob;
+  filename: string;
   width: number;
   height: number;
-  engine: EngineId;
-  modelId: string;
-  passes: number[];
-  ms: number;
+  megapixels: number;
+  usedAi: boolean;
+  log?: string;
 }
 
-/**
- * The NCNN build only ships 4× weights, so a scale chain is expressed as
- * 4× passes plus one optional final 2× resample done in the renderer.
- * `planScale` therefore returns powers of four only, and the last fractional
- * step is applied by `upscaleClassic` — never by asking the model for a scale
- * it has no weights for.
- */
-export function engineAvailability(): { id: EngineId; label: string; available: boolean; why?: string }[] {
-  return [
-    { id: 'classic', label: 'Built-in high-quality resampler', available: true },
-    {
-      id: 'realesrgan',
-      label: 'Real-ESRGAN NCNN-Vulkan (AI, local GPU)',
-      available: isDesktop,
-      why: isDesktop ? undefined : 'Desktop build only — the browser preview cannot spawn the native binary.',
-    },
-  ];
+export function planPasses(
+  neededFactor: number,
+  scales: Array<2 | 3 | 4>,
+): { passes: Array<2 | 3 | 4>; tail: number } {
+  if (neededFactor <= 1.01) return { passes: [], tail: neededFactor };
+  const maxS = scales.includes(4) ? 4 : scales.includes(3) ? 3 : 2;
+  const pick = (remain: number): 2 | 3 | 4 => {
+    for (const s of [2, 3, 4] as const) {
+      if (scales.includes(s) && s >= remain - 0.02) return s;
+    }
+    return maxS;
+  };
+  const passes: Array<2 | 3 | 4> = [];
+  let achieved = 1;
+  while (achieved < neededFactor - 0.02 && passes.length < 2) {
+    const step = pick(neededFactor / achieved);
+    passes.push(step);
+    achieved *= step;
+  }
+  return { passes, tail: neededFactor / achieved };
 }
 
-export async function ensureRealEsrgan(
-  onProgress?: (label: string) => void,
-): Promise<{ ok: boolean; path?: string; models?: string[]; error?: string }> {
-  if (!isDesktop) return { ok: false, error: 'Requires the packaged desktop app.' };
-  onProgress?.('Checking Real-ESRGAN installation…');
-  const release = ENGINE_RELEASES[(desktop.platform === 'win32' ? 'win32' : desktop.platform === 'darwin' ? 'darwin' : 'linux') as keyof typeof ENGINE_RELEASES];
-  return desktop.upscaler.ensure(release.url, release.binary, UPSCALE_MODELS.map((m) => m.id));
+export function outputFilename(
+  sourceName: string,
+  target: UpscaleTarget,
+  format: 'png' | 'jpg' | 'webp',
+): string {
+  const dot = sourceName.lastIndexOf('.');
+  const base = (dot > 0 ? sourceName.slice(0, dot) : sourceName).replace(/[-–—\s]+/g, '_');
+  return `${base}_${target.id}.${format}`;
 }
 
-export async function runUpscale(sourceBlob: Blob, request: UpscaleRequest): Promise<UpscaleResult> {
-  const started = performance.now();
+export async function ensureModelInstalled(
+  model: UpscaleModel,
+): Promise<{ ok: boolean; error?: string; canceled?: boolean }> {
+  if (model.family === 'builtin') return { ok: true };
+  const spec = buildUpscaleInstallSpec(model);
+  if (!spec) return { ok: true };
+  const res = await installModelInApp(spec);
+  return { ok: res.ok, error: res.error, canceled: res.canceled };
+}
 
-  if (request.engine === 'classic') {
-    const total = request.passes.length;
-    let blob = sourceBlob;
-    for (let i = 0; i < total; i++) {
-      const pass = request.passes[i] as 2 | 3 | 4;
-      request.onProgress?.(i / total, `Resampling pass ${i + 1}/${total} (${pass}×)`);
-      blob = await upscaleClassic(blob, {
-        scale: pass,
-        outFormat: request.outFormat,
-        quality: request.quality,
+export async function runUpscale(job: UpscaleJobInput): Promise<UpscaleJobResult> {
+  const model = UPSCALE_MODELS.find((m) => m.id === job.modelId) ?? UPSCALE_MODELS[0];
+  const goal = resolveTargetSize(job.width, job.height, job.target);
+  const { passes, tail } = planPasses(goal.factor, model.scales);
+  const wantAi = model.family !== 'builtin';
+
+  if (wantAi && desktop.isDesktop) {
+    if (passes.length === 0) {
+      if (!job.blob) throw new Error('Image buffer is missing');
+      const resized = await upscaleClassic(job.blob, {
+        exactScale: goal.factor,
+        mode: 'lanczos-pro',
+        outFormat: job.outFormat,
+        quality: job.quality,
+        onProgress: job.onProgress,
+      });
+      return {
+        blob: resized,
+        filename: outputFilename(job.name, job.target, job.outFormat),
+        width: goal.width,
+        height: goal.height,
+        megapixels: +((goal.width * goal.height) / 1_000_000).toFixed(1),
+        usedAi: false,
+      };
+    }
+
+    job.onProgress?.(0.08, `Preparing ${model.name}`);
+    const installed = await ensureModelInstalled(model);
+    if (!installed.ok) {
+      throw new Error(installed.error || 'Model installation failed');
+    }
+
+    const runtime = engineBinaryFor(model.family as Exclude<UpscaleModel['family'], 'builtin'>);
+    job.onProgress?.(0.2, `Upscaling with ${model.name}`);
+    const res = await desktop.upscaler.run({
+      inPath: job.path,
+      blob: job.path ? undefined : job.blob,
+      binary: runtime.binary,
+      engineGroup: runtime.group,
+      engineFamily: model.family as 'realesrgan' | 'realcugan' | 'waifu2x' | 'realsr' | 'srmd',
+      modelsSubDir: model.modelsSubDir,
+      modelId: model.ncnnModelName ?? model.id,
+      noiseLevel: model.noiseLevel,
+      passes,
+      tailScale: tail,
+      tileSize: job.tileSize ?? 0,
+      outFormat: Math.abs(tail - 1) > 0.02 ? 'png' : job.outFormat,
+      quality: Math.round(job.quality * 100),
+    });
+    if (!res.ok || !res.blob) {
+      throw new Error(res.error ?? `${model.name} failed`);
+    }
+
+    let finalBlob = res.blob;
+    if (Math.abs(tail - 1) > 0.02) {
+      job.onProgress?.(0.88, `Fitting to ${goal.width} by ${goal.height}`);
+      finalBlob = await upscaleClassic(res.blob, {
+        exactScale: tail,
+        mode: 'plain',
+        outFormat: job.outFormat,
+        quality: job.quality,
       });
     }
-    if (request.tailScale && request.tailScale > 1.01) {
-      request.onProgress?.(0.95, 'Final resize to target');
-      blob = await upscaleClassic(blob, {
-        // resampleExact keeps the aspect and lands on the requested width
-        exactScale: request.tailScale,
-        outFormat: request.outFormat,
-        quality: request.quality,
-      });
-    }
-    const dims = await probe(blob);
-    return { blob, ...dims, engine: 'classic', modelId: 'canvas-high', passes: request.passes, ms: performance.now() - started };
+    job.onProgress?.(1, 'Complete');
+    return {
+      blob: finalBlob,
+      filename: outputFilename(job.name, job.target, job.outFormat),
+      width: goal.width,
+      height: goal.height,
+      megapixels: +((goal.width * goal.height) / 1_000_000).toFixed(1),
+      usedAi: true,
+      log: res.log,
+    };
   }
 
-  // Real-ESRGAN path: the native binary does every pass on the GPU.
-  const release = ENGINE_RELEASES[(desktop.platform === 'win32' ? 'win32' : desktop.platform === 'darwin' ? 'darwin' : 'linux') as keyof typeof ENGINE_RELEASES];
-  request.onProgress?.(0, 'Starting Real-ESRGAN NCNN-Vulkan…');
-  const result = await desktop.upscaler.run({
-    inPath: request.item.path,
-    blob: request.item.path ? undefined : sourceBlob,
-    binary: release.binary,
-    modelId: request.modelId,
-    passes: request.passes,
-    tailScale: request.tailScale,
-    outFormat: request.outFormat,
-    quality: request.quality,
+  // Built in commercial upscaler (and graceful browser path)
+  if (!job.blob) throw new Error('Image pixels unavailable. Reimport the file.');
+  const fallbackMode =
+    model.builtinMode ??
+    (model.purpose === 'anime'
+      ? 'anime4k-shader'
+      : model.purpose === 'restore'
+        ? 'photo-restore'
+        : model.purpose === 'faithful'
+          ? 'edge-crisp'
+          : 'lanczos-pro');
+
+  const blob = await upscaleClassic(job.blob, {
+    exactScale: goal.factor,
+    mode: fallbackMode,
+    outFormat: job.outFormat,
+    quality: job.quality,
+    onProgress: job.onProgress,
   });
-  if (!result.ok || !result.blob) throw new Error(result.error ?? 'Upscale failed');
-  const dims = await probe(result.blob);
-  return { blob: result.blob, ...dims, engine: 'realesrgan', modelId: request.modelId, passes: request.passes, ms: performance.now() - started };
-}
-
-async function probe(blob: Blob): Promise<{ width: number; height: number }> {
-  const bitmap = await createImageBitmap(blob);
-  const dims = { width: bitmap.width, height: bitmap.height };
-  bitmap.close();
-  return dims;
-}
-
-/** Validation helper reused by the Upscale studio and Export centre. */
-export function passesPlatform(item: { width?: number; height?: number; sizeBytes: number }, spec: PlatformSpec): boolean {
-  if (!item.width || !item.height) return false;
-  const mp = (item.width * item.height) / 1_000_000;
-  return mp >= spec.minMP && (spec.maxMP === null || mp <= spec.maxMP) && item.sizeBytes / 1_048_576 <= spec.maxFileMB;
+  return {
+    blob,
+    filename: outputFilename(job.name, job.target, job.outFormat),
+    width: goal.width,
+    height: goal.height,
+    megapixels: +((goal.width * goal.height) / 1_000_000).toFixed(1),
+    usedAi: false,
+  };
 }
