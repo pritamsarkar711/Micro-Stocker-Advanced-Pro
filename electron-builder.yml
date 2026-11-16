@@ -61,7 +61,7 @@ linux:
   icon: resources/icon.png
   maintainer: pritamsarkar711
   synopsis: All-in-one toolkit for microstock contributors
-  description: Metadata generation, per-platform CSV export, IPTC/XMP embedding, local AI upscaling and submission tracking for 10 microstock marketplaces.
+  description: Metadata generation, per-platform CSV export, IPTC/XMP embedding, local AI upscaling and submission tracking for 14 microstock marketplaces.
   artifactName: ${productName}-${version}-linux-${arch}.${ext}
 
 # Used by `electron-updater` and by the GitHub Actions release workflow.

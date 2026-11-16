@@ -11,7 +11,7 @@ upscaling to 8K, validation, submission tracking and earnings analytics for
 
 [![latest](https://img.shields.io/github/v/release/pritamsarkar711/Micro-Stocker-Advanced-Pro?style=for-the-badge&label=release&color=1d4ed8)](https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro/releases)
 [![platforms](https://img.shields.io/badge/marketplaces-14-1d4ed8?style=for-the-badge)](#-supported-marketplaces)
-[![tests](https://img.shields.io/badge/tests-57%20passing-15803d?style=for-the-badge)](#testing)
+[![tests](https://img.shields.io/badge/tests-73%20passing-15803d?style=for-the-badge)](#testing)
 [![licence](https://img.shields.io/badge/licence-source--available-575e6b?style=for-the-badge)](LICENSE)
 
 [Download](#-download) · [Marketplaces](#-supported-marketplaces) · [Features](#-whats-inside) · [Build](#-build-from-source) · [Support](#-support)
@@ -22,19 +22,24 @@ upscaling to 8K, validation, submission tracking and earnings analytics for
 
 ## 📥 Download
 
-Installers are published on the **[Releases page](https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro/releases)**.
+**No installers are published yet** — the
+**[Releases page](https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro/releases)**
+currently carries tags only, with no binaries attached. To run the app today,
+build it from source (below). To start publishing installers, activate
+`docs/ci/build-desktop-installers.yml` as `.github/workflows/build.yml` and push
+a `v*.*.*` tag; it produces the artifacts below on GitHub's runners.
 
-| Platform | File |
+| Platform | Artifact name (when built) |
 | --- | --- |
-| Windows 10/11 (x64) | `Micro-Stocker-Advanced-Pro-Setup-<version>.exe` |
-| Windows (no install) | `Micro-Stocker-Advanced-Pro-<version>.exe` (portable) |
+| Windows 10/11 (x64) | `Micro-Stocker-Advanced-Pro-Setup-<version>-win-x64.exe` |
+| Windows (no install) | `Micro-Stocker-Advanced-Pro-<version>-portable-win-x64.exe` |
 | macOS (Apple silicon + Intel) | `.dmg` |
-| Linux (x64) | `.AppImage` |
+| Linux (x64) | `.AppImage`, `.deb` |
 
-No account, no subscription, no telemetry, and **no paid AI required**. Download
-once and the app runs fully offline; the only connections it ever makes are the
-ones you start — the optional one-time Real-ESRGAN download, the optional
-Supabase sync, and the AI provider you pick (none by default).
+No account, no subscription, no telemetry, and **no paid AI required**. The app
+runs fully offline; the only connections it ever makes are the ones you start —
+the optional one-time Real-ESRGAN download, the optional Supabase sync, and the
+AI provider you pick (none by default).
 
 ## 🌍 Supported marketplaces
 
@@ -85,7 +90,7 @@ npm install
 
 npm run dev        # Electron window + hot reload
 npm run dev:web    # browser-only preview
-npm run verify     # typecheck + 57 tests + production build
+npm run verify     # typecheck + 73 tests + production build
 npm run dist:win   # Windows installer + portable exe into ./release
 ```
 
@@ -98,7 +103,7 @@ and `npm run dist:mac`; a macOS `.dmg` needs to be produced on macOS.
 npm test
 ```
 
-The suite bundles the pure domain layer with esbuild and runs **57 assertions**
+The suite bundles the pure domain layer with esbuild and runs **73 assertions**
 on Node: every CSV dialect, validators, the metadata engine, binary IPTC/XMP
 round-trips through real PNG/JPEG/SVG/EPS fixtures, SVG/EPS analysis, sales
 parsing, planner maths, and a completeness check that all 14 marketplaces carry

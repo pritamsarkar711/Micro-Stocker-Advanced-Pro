@@ -31,6 +31,8 @@ import { can, entitlements, FREE_FEATURES, PRO_FEATURES, resolveEdition } from '
 import { UPSCALE_MODELS, isBundledModel } from '@/lib/stock/upscale/models';
 import { detectMapping, mapRows, monthlySeries, parseDelimited, platformTotals, topTitles } from '@/lib/stock/sales';
 import { PLATFORM_CAPS, STATUS_ORDER, countByStatus, setStatus, statusOf } from '@/lib/stock/submissions';
+import { sizeCapOptions } from '@/lib/stock/sizecaps';
+import { APP_VERSION } from '@/lib/version';
 import { DEFAULT_FLAGS, EMPTY_METADATA, kindOf, megapixels, type StockItem } from '@/lib/stock/types';
 
 /** Injected by scripts/run-tests.mjs: absolute path to tests/fixtures. */
@@ -162,6 +164,14 @@ test('findPlatform maps portal labels and aliases', () => {
   equal(findPlatform('Magnific'), 'freepik');
   equal(findPlatform('Adobe Stock'), 'adobe');
   equal(findPlatform('some unknown portal'), null);
+});
+
+test('Prepare size caps are unique so Select keys stay stable', () => {
+  const options = sizeCapOptions();
+  const values = options.map((option) => option.value);
+  equal(new Set(values).size, values.length, 'size-cap values are unique');
+  assert(values.includes('45'), 'the 45 MB Adobe cap is offered');
+  assert(options.every((option) => option.label.includes('MB cap')), 'every label names its cap');
 });
 
 /* ============================== CSV writers ============================== */
@@ -691,6 +701,14 @@ test('a hypothetical pro edition is a superset of free, never a subset', () => {
   const pro = entitlements('pro');
   equal(pro.edition, 'pro');
   for (const feature of free.features) assert(pro.can(feature), `${feature} lost in pro`);
+});
+
+/* ================================ app shell ============================== */
+group('App shell');
+
+test('the renderer version fallback matches package.json', () => {
+  const pkg = JSON.parse(readFileSync(path.join(FIXTURE_DIR, '..', '..', 'package.json'), 'utf8'));
+  equal(APP_VERSION, pkg.version, 'APP_VERSION tracks package.json');
 });
 
 /* ================================ summary ================================ */
