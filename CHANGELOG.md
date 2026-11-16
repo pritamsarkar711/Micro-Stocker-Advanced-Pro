@@ -3,7 +3,14 @@
 All notable changes to Micro Stocker Advanced Pro are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.2.1] - 2026-11-16
+
+### Added
+- **Installers are now built and published.** Activated
+  `.github/workflows/build.yml` (from the `docs/ci` template): pushing a
+  `v*.*.*` tag builds the Windows `.exe` (installer + portable), macOS `.dmg`
+  and Linux `.AppImage`/`.deb` on GitHub's runners and attaches them to the
+  release.
 
 ### Fixed
 - **Prepare → Size cap listed duplicate options.** Six marketplaces share a

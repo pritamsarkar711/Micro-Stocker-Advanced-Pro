@@ -6,4 +6,4 @@
  * bridge, so it falls back to this constant — kept in sync with package.json
  * by a test in `tests/logic.test.ts`.
  */
-export const APP_VERSION = '1.2.0';
+export const APP_VERSION = '1.2.1';
