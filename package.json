@@ -2,7 +2,7 @@
   "name": "micro-stocker-advanced-pro",
   "productName": "Micro Stocker Advanced Pro",
   "private": false,
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Source-available desktop workspace for microstock contributors: metadata, keywording, per-platform CSV for 14 marketplaces, IPTC/XMP embedding, local AI upscaling, validation, submission tracking and earnings analytics. Electron + React + TypeScript.",
   "author": {
     "name": "pritamsarkar711",
