@@ -1,151 +1,170 @@
-import { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
-import { Menu, Moon, Search, Sun } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { StatusDot } from '@/components/ui/Badge';
 import { NAV_ITEMS } from '@/lib/nav';
+import { GIcon } from '@/components/ui/GoogleIcon';
+import { ThemeSwitch } from '@/components/ui/ThemeSwitch';
 import { useApp } from '@/state/AppState';
+import { useAuth } from '@/state/AuthState';
+import { useLibrary } from '@/state/library';
 
-export function Topbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
-  const { connection, settings, updateSettings } = useApp();
+export interface TopbarProps {
+  onOpenMobileNav: () => void;
+}
+
+export function Topbar({ onOpenMobileNav }: TopbarProps) {
   const navigate = useNavigate();
-  const location = useLocation();
+  const { connection } = useApp();
+  const { user, openAuth } = useAuth();
+  const { items } = useLibrary();
 
   const [query, setQuery] = useState('');
-  const [open, setOpen] = useState(false);
+  const [focused, setFocused] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const current = NAV_ITEMS.find((item) =>
-    item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to),
-  );
 
   useEffect(() => {
-    const focus = () => {
-      setOpen(true);
-      inputRef.current?.focus();
+    if (!focused) return;
+    const onDown = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setFocused(false);
     };
-    document.addEventListener('msap:focus-search', focus);
-    return () => document.removeEventListener('msap:focus-search', focus);
-  }, []);
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [focused]);
 
-  useEffect(() => {
-    const away = (event: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', away);
-    return () => document.removeEventListener('mousedown', away);
-  }, []);
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const navHits = NAV_ITEMS.filter(
+      (n) =>
+        n.label.toLowerCase().includes(q) ||
+        n.keywords?.some((k) => k.toLowerCase().includes(q)),
+    ).map((n) => ({ id: `nav:${n.to}`, label: n.label, sub: 'Open tool', icon: n.icon, to: n.to }));
 
-  const needle = query.trim().toLowerCase();
-  const results = NAV_ITEMS.filter(
-    (item) =>
-      item.label.toLowerCase().includes(needle) ||
-      (item.keywords ?? '').includes(needle),
-  );
+    const libHits = items
+      .filter(
+        (it) =>
+          it.name.toLowerCase().includes(q) ||
+          it.metadata.title.toLowerCase().includes(q) ||
+          it.metadata.keywords.some((k) => k.includes(q)),
+      )
+      .slice(0, 5)
+      .map((it) => ({
+        id: `it:${it.id}`,
+        label: it.name,
+        sub: it.metadata.title || 'Library asset',
+        icon: 'image' as const,
+        to: `/library?item=${encodeURIComponent(it.id)}`,
+      }));
 
-  const go = (to: string) => {
-    navigate(to);
-    setQuery('');
-    setOpen(false);
-  };
+    return [...navHits, ...libHits].slice(0, 8);
+  }, [items, query]);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-bg-elevated/85 backdrop-blur-md">
-      <div className="flex h-14 items-center gap-2 px-3 sm:px-4 lg:px-6">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="lg:hidden"
+    <header className="sticky top-0 z-30 flex h-[52px] shrink-0 items-center justify-between gap-2.5 border-b border-line bg-surface px-3 sm:px-5">
+      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        <button
+          type="button"
           onClick={onOpenMobileNav}
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-[var(--r-control)] text-ink-muted hover:bg-surface-2 hover:text-ink lg:hidden"
           aria-label="Open menu"
         >
-          <Menu className="size-[1.15rem]" />
-        </Button>
+          <GIcon name="menu" size={20} />
+        </button>
 
-        <h1 className="display hidden shrink-0 truncate text-[0.875rem] font-bold tracking-[-0.01em] text-fg md:block">
-          {current?.label ?? 'Overview'}
-        </h1>
-
-        <div ref={wrapRef} className="relative ml-auto min-w-0 w-full max-w-[19rem]">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-fg-subtle" />
+        <div ref={wrapRef} className="relative w-full max-w-sm">
+          <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-ink-faint">
+            <GIcon name="search" size={16} />
+          </span>
           <input
-            ref={inputRef}
+            type="search"
             value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setOpen(true);
+            onFocus={() => setFocused(true)}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && results[0]) {
+                navigate(results[0].to);
+                setQuery('');
+                setFocused(false);
+              } else if (e.key === 'Escape') {
+                setQuery('');
+                setFocused(false);
+              }
             }}
-            onFocus={() => setOpen(true)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && results[0]) go(results[0].to);
-              if (event.key === 'Escape') setOpen(false);
-            }}
-            placeholder="Search"
-            aria-label="Search"
-            className="r-control h-9 w-full border border-line bg-surface-2 pr-14 pl-8 text-[0.8125rem] text-fg transition-colors placeholder:text-fg-subtle hover:border-line-strong focus:border-brand focus:bg-surface focus:ring-[3px] focus:ring-brand/15 focus:outline-none"
+            placeholder="Search tools, pages or files"
+            aria-label="Search tools, pages or files"
+            className="h-8 w-full rounded-[var(--r-control)] border border-line bg-surface-2/70 pr-3 pl-8 text-xs text-ink placeholder:text-ink-faint hover:border-line-strong focus:border-accent focus:bg-surface focus:outline-none"
           />
-          <kbd className="pointer-events-none absolute top-1/2 right-2 hidden -translate-y-1/2 r-chip border border-line bg-surface px-1.5 py-0.5 text-[0.625rem] font-medium text-fg-subtle sm:block">
-            Ctrl K
-          </kbd>
 
-          {open && needle && (
-            <ul className="card absolute inset-x-0 top-11 z-50 overflow-hidden p-1 shadow-[var(--shadow-pop)]">
+          {focused && query.trim() !== '' && (
+            <div className="absolute top-[calc(100%+4px)] right-0 left-0 z-50 overflow-hidden rounded-[var(--r-card)] border border-line-strong bg-surface p-1 shadow-md">
               {results.length === 0 ? (
-                <li className="px-2 py-3 text-[0.8125rem] text-fg-muted">No match</li>
+                <div className="px-3 py-3 text-center text-xs text-ink-muted">No matching results</div>
               ) : (
-                results.map((item) => (
-                  <li key={item.to}>
-                    <button
-                      type="button"
-                      onClick={() => go(item.to)}
-                      className="r-control flex w-full items-center gap-2.5 px-2.5 py-2 text-left text-[0.8125rem] text-fg transition-colors hover:bg-surface-2"
-                    >
-                      <span className="text-fg-subtle">{item.icon}</span>
-                      {item.label}
-                    </button>
-                  </li>
+                results.map((hit) => (
+                  <button
+                    key={hit.id}
+                    type="button"
+                    onClick={() => {
+                      navigate(hit.to);
+                      setQuery('');
+                      setFocused(false);
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-[var(--r-xs)] px-2.5 py-2 text-left text-xs hover:bg-surface-2"
+                  >
+                    <GIcon name={hit.icon} size={16} className="shrink-0 text-accent" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium text-ink">{hit.label}</span>
+                      <span className="block truncate text-2xs text-ink-muted">{hit.sub}</span>
+                    </span>
+                    <GIcon name="chevron_right" size={14} className="shrink-0 text-ink-faint" />
+                  </button>
                 ))
               )}
-            </ul>
+            </div>
           )}
         </div>
+      </div>
 
+      <div className="flex shrink-0 items-center gap-2">
         <button
           type="button"
           onClick={() => navigate('/cloud')}
-          title={connection.message}
-          aria-label="Cloud status"
           className={clsx(
-            'r-control ml-1 flex h-9 items-center gap-1.5 border px-2.5 text-[0.6875rem] font-medium transition-colors',
+            'hidden h-8 items-center gap-1.5 rounded-[var(--r-control)] border border-line px-2.5 text-2xs font-medium md:inline-flex',
             connection.state === 'online'
-              ? 'border-ok/30 bg-ok-soft text-ok'
-              : connection.state === 'error'
-                ? 'border-danger/30 bg-danger-soft text-danger'
-                : 'border-line bg-surface-2 text-fg-muted hover:text-fg',
+              ? 'bg-accent-soft text-accent'
+              : 'bg-surface text-ink-muted hover:bg-surface-2 hover:text-ink',
           )}
+          title={connection.message}
         >
-          <StatusDot state={connection.state} />
-          <span className="hidden sm:inline">
-            {connection.state === 'online' ? 'Synced' : 'Local'}
-          </span>
+          <GIcon name={connection.state === 'online' ? 'cloud_done' : 'cloud_off'} size={14} />
+          <span>{connection.state === 'online' ? 'Synced' : 'Local'}</span>
         </button>
 
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => updateSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' })}
-          aria-label="Toggle theme"
-          title="Theme"
-          className="size-9"
-        >
-          {settings.theme === 'dark' ? (
-            <Sun className="size-[1.15rem]" />
-          ) : (
-            <Moon className="size-[1.15rem]" />
-          )}
-        </Button>
+        <ThemeSwitch />
+
+        {user ? (
+          <button
+            type="button"
+            onClick={() => openAuth('account')}
+            className="inline-flex h-8 items-center gap-2 rounded-[var(--r-control)] border border-line bg-surface pr-2.5 pl-1.5 text-xs font-medium text-ink hover:border-line-strong hover:bg-surface-2"
+            title={user.email}
+          >
+            <span className="inline-flex size-5 items-center justify-center rounded-full bg-accent text-[11px] font-bold text-accent-fg">
+              {user.displayName.slice(0, 1).toUpperCase()}
+            </span>
+            <span className="hidden max-w-[110px] truncate sm:inline">{user.displayName}</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => openAuth('login')}
+            className="inline-flex h-8 items-center gap-1.5 rounded-[var(--r-control)] bg-accent px-3 text-xs font-semibold text-accent-fg hover:bg-accent-hover"
+          >
+            <GIcon name="account_circle" size={15} />
+            <span>Sign in</span>
+          </button>
+        )}
       </div>
     </header>
   );

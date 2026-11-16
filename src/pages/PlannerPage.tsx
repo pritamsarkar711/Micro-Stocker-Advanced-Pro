@@ -1,223 +1,101 @@
-import { useEffect, useMemo, useState } from 'react';
-import { CalendarClock, CheckCircle2, CircleDashed, ListChecks, Send, TriangleAlert, XCircle } from 'lucide-react';
+import { useMemo } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Select } from '@/components/ui/Field';
-import { DataTable, type Column } from '@/components/ui/DataTable';
-import { EmptyState } from '@/components/ui/Misc';
-import { PlatformLogo } from '@/components/stock/PlatformLogo';
-import { useLibrary } from '@/state/library';
+import { Button } from '@/components/ui/Button';
+import { GIcon } from '@/components/ui/GoogleIcon';
 import { useToast } from '@/state/ToastState';
-import { PLATFORM_LIST } from '@/lib/stock/platforms';
-import type { PlatformId } from '@/lib/stock/types';
-import { validateItem } from '@/lib/stock/validate';
-import {
-  countByStatus, loadSubmissions, PLATFORM_CAPS, saveSubmissions, setStatus, statusOf,
-  STATUS_ORDER, STATUS_TONE, type SubmissionMap, type SubmissionStatus,
-} from '@/lib/stock/submissions';
 
-const STATUS_ICON: Record<SubmissionStatus, typeof CircleDashed> = {
-  todo: CircleDashed,
-  queued: ListChecks,
-  submitted: Send,
-  accepted: CheckCircle2,
-  rejected: XCircle,
-};
+interface SeasonalEvent {
+  title: string;
+  month: number; // 1..12
+  leadWeeks: number;
+  keywords: string[];
+}
+
+const SEASONAL_EVENTS: SeasonalEvent[] = [
+  { title: 'New Year & Goals', month: 1, leadWeeks: 8, keywords: ['new year', 'celebration', 'goals', 'planning', 'calendar', 'minimal'] },
+  { title: 'Lunar New Year', month: 2, leadWeeks: 8, keywords: ['lunar new year', 'lantern', 'red gold', 'festival', 'prosperity', 'tradition'] },
+  { title: 'Valentines Day', month: 2, leadWeeks: 8, keywords: ['valentine', 'love', 'heart', 'romance', 'gift', 'couple', 'flowers'] },
+  { title: 'Ramadan & Eid', month: 3, leadWeeks: 8, keywords: ['ramadan', 'eid', 'crescent', 'lantern', 'iftar', 'islamic', 'greeting'] },
+  { title: 'Womens Day', month: 3, leadWeeks: 6, keywords: ['empowerment', 'leadership', 'women', 'equality', 'portrait', 'community'] },
+  { title: 'Earth Day & Sustainability', month: 4, leadWeeks: 7, keywords: ['sustainability', 'renewable energy', 'ecology', 'green', 'nature', 'recycling'] },
+  { title: 'Mothers & Fathers Day', month: 5, leadWeeks: 7, keywords: ['family', 'gratitude', 'gift', 'greeting card', 'parent', 'warm light'] },
+  { title: 'Summer Travel & Vacation', month: 7, leadWeeks: 9, keywords: ['summer', 'beach', 'travel', 'tropical', 'holiday', 'sunshine', 'leisure'] },
+  { title: 'Back to School', month: 8, leadWeeks: 8, keywords: ['education', 'school', 'learning', 'notebook', 'student', 'study', 'classroom'] },
+  { title: 'Autumn & Harvest', month: 10, leadWeeks: 8, keywords: ['autumn', 'foliage', 'cozy', 'pumpkin', 'warm tones', 'harvest', 'october'] },
+  { title: 'Diwali Festival of Lights', month: 11, leadWeeks: 8, keywords: ['diwali', 'diya', 'rangoli', 'festival', 'lights', 'celebration', 'gold'] },
+  { title: 'Black Friday & Ecommerce', month: 11, leadWeeks: 7, keywords: ['sale', 'shopping', 'retail', 'discount', 'packaging', 'banner', 'ecommerce'] },
+  { title: 'Winter Holidays & Christmas', month: 12, leadWeeks: 10, keywords: ['christmas', 'winter', 'holiday', 'festive', 'gift', 'snow', 'ornament'] },
+];
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export function PlannerPage() {
-  const library = useLibrary();
   const toast = useToast();
-  const [platform, setPlatform] = useState<PlatformId>('freepik');
-  const [map, setMap] = useState<SubmissionMap>({});
-  const [ready, setReady] = useState(false);
+  const currentMonth = new Date().getMonth() + 1;
 
-  useEffect(() => {
-    loadSubmissions().then((stored) => {
-      setMap(stored);
-      setReady(true);
-    });
-  }, []);
+  const ordered = useMemo(() => {
+    return SEASONAL_EVENTS.map((ev) => {
+      const monthsAhead = (ev.month - currentMonth + 12) % 12;
+      const uploadNow = monthsAhead >= 1 && monthsAhead <= 3;
+      return { ...ev, monthsAhead, uploadNow };
+    }).sort((a, b) => a.monthsAhead - b.monthsAhead);
+  }, [currentMonth]);
 
-  const update = (next: SubmissionMap) => {
-    setMap(next);
-    void saveSubmissions(next);
-  };
-
-  const spec = PLATFORM_LIST.find((p) => p.id === platform)!;
-  const cap = PLATFORM_CAPS[platform];
-
-  const rows = useMemo(
-    () =>
-      library.items.map((item) => ({
-        item,
-        status: statusOf(map, item.id, platform),
-        errors: validateItem(item, platform, library.items).filter((i) => i.level === 'error').length,
-      })),
-    [library.items, map, platform],
-  );
-
-  const counts = countByStatus(map, platform);
-  const submittedCount = counts.submitted + counts.accepted;
-  const eligible = rows.filter((r) => r.errors === 0);
-
-  const firstBatchIssue =
-    cap?.firstBatch && submittedCount === 0 && library.items.length > 0
-      ? library.items.length < cap.firstBatch[0]
-        ? `First ${spec.name} submission needs ${cap.firstBatch[0]}-${cap.firstBatch[1]} files of ONE format — you have ${library.items.length}. Keep producing until you reach the window; the submit button stays disabled below it.`
-        : library.items.length > cap.firstBatch[1]
-          ? `First batch cap is ${cap.firstBatch[1]} files — select exactly ${cap.firstBatch[1]} (same format) and queue them, leave the rest for next month.`
-          : `You are inside the first-batch window (${cap.firstBatch[0]}-${cap.firstBatch[1]}). Queue all ${library.items.length} files of one format and submit together.`
-      : null;
-
-  const monthlyIssue =
-    cap?.monthly && submittedCount > cap.monthly
-      ? `Monthly cap exceeded: ${submittedCount}/${cap.monthly} submitted this cycle — the portal will refuse extras until reset.`
-      : cap?.monthly
-        ? `${submittedCount}/${cap.monthly} of the monthly quota used on ${spec.name}.`
-        : null;
-
-  const columns: Column<(typeof rows)[number]>[] = [
-    {
-      key: 'name',
-      header: 'File',
-      primary: true,
-      render: (row) => (
-        <span className="flex min-w-0 items-center gap-2">
-          {row.item.thumbUrl ? <img src={row.item.thumbUrl} alt="" className="size-8 shrink-0 r-chip border border-line object-cover" /> : <span className="size-8 shrink-0 r-chip border border-line bg-surface-2" />}
-          <span className="min-w-0">
-            <span className="block truncate font-medium text-fg">{row.item.name}</span>
-            <span className="block truncate text-[0.625rem] text-fg-subtle">{row.item.metadata.title || 'no title'}</span>
-          </span>
-        </span>
-      ),
-    },
-    {
-      key: 'errors',
-      header: 'Validation',
-      hideBelow: 'md',
-      render: (row) =>
-        row.errors ? (
-          <Badge tone="danger" icon={<TriangleAlert className="size-3" />}>{row.errors} blocker{row.errors === 1 ? '' : 's'}</Badge>
-        ) : (
-          <Badge tone="ok" dot>eligible</Badge>
-        ),
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      hideBelow: 'sm',
-      render: (row) => {
-        const Icon = STATUS_ICON[row.status];
-        return (
-          <Badge tone={STATUS_TONE[row.status]} icon={<Icon className="size-3" />}>
-            {row.status}
-            {map[row.item.id]?.[platform]?.at ? ` · ${new Date(map[row.item.id]![platform]!.at).toLocaleDateString()}` : ''}
-          </Badge>
-        );
-      },
-    },
-    {
-      key: 'action',
-      header: '',
-      align: 'right',
-      render: (row) => (
-        <Select
-          value={row.status}
-          className="h-8 w-32 text-xs"
-          onChange={(event) => update(setStatus(map, row.item.id, platform, event.target.value as SubmissionStatus))}
-          options={STATUS_ORDER.map((status) => ({ value: status, label: status }))}
-        />
-      ),
-    },
-  ];
+  async function copyTags(ev: SeasonalEvent) {
+    try {
+      await navigator.clipboard.writeText(ev.keywords.join(', '));
+      toast.success(`Copied ${ev.title} tags`);
+    } catch {
+      toast.error('Clipboard unavailable');
+    }
+  }
 
   return (
-    <>
-      <PageHeader
-        title="Planner"
-        
-        actions={
-          <span className="flex w-full items-center gap-2 sm:w-auto">
-            <PlatformLogo id={platform} size={30} className="hidden sm:inline-flex" />
-            <Select
-              value={platform}
-              onChange={(event) => setPlatform(event.target.value as PlatformId)}
-              className="w-full sm:w-52"
-              options={PLATFORM_LIST.map((p) => ({ value: p.id, label: p.name }))}
-            />
-          </span>
-        }
-      >
-        <div className="grid-auto-fit gap-3">
-          {STATUS_ORDER.map((status) => {
-            const StatusIcon = STATUS_ICON[status];
-            return (
-              <div key={status} className="card flex items-center gap-2.5 px-3.5 py-2.5">
-                <Badge tone={STATUS_TONE[status]} icon={<StatusIcon className="size-3" />}>
-                  {status}
+    <div className="space-y-5">
+      <PageHeader title="Seasonal Planner" />
+
+      <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2 lg:grid-cols-3">
+        {ordered.map((ev) => (
+          <Card key={ev.title} className="flex flex-col justify-between gap-3">
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <Badge tone={ev.uploadNow ? 'brand' : 'neutral'}>
+                  <GIcon name="calendar_month" size={12} />
+                  {MONTHS[ev.month - 1]}
                 </Badge>
-                <p className="nums display ml-auto text-[1.25rem] leading-none font-extrabold text-fg">
-                  {counts[status]}
-                </p>
+                {ev.uploadNow && <Badge tone="brand">Upload window open</Badge>}
               </div>
-            );
-          })}
-        </div>
-      </PageHeader>
+              <h2 className="mt-2 text-sm font-bold text-ink">{ev.title}</h2>
+              <div className="mt-0.5 text-2xs text-ink-muted">
+                Submit {ev.leadWeeks} weeks ahead of peak buyer search
+              </div>
+              <div className="mt-3 flex flex-wrap gap-1">
+                {ev.keywords.map((kw) => (
+                  <span
+                    key={kw}
+                    className="rounded-[var(--r-xs)] border border-line bg-surface-2 px-2 py-0.5 text-2xs text-ink"
+                  >
+                    {kw}
+                  </span>
+                ))}
+              </div>
+            </div>
 
-      {(firstBatchIssue || monthlyIssue || cap) && (
-        <Card className="mb-3" title={`${spec.name} caps`} action={<CalendarClock className="size-4 text-brand" />}>
-          {cap && <p className="text-xs text-fg-muted">{cap.note}</p>}
-          {firstBatchIssue && (
-            <p className="mt-2 flex items-start gap-2 r-control bg-warn-soft px-3 py-2 text-[0.75rem] leading-relaxed text-warn">
-              <TriangleAlert className="mt-0.5 size-4 shrink-0" /> {firstBatchIssue}
-            </p>
-          )}
-          {monthlyIssue && (
-            <p className="mt-2 flex items-start gap-2 r-control bg-surface-2 px-3 py-2 text-[0.75rem] text-fg-muted">
-              <CalendarClock className="mt-0.5 size-4 shrink-0" /> {monthlyIssue}
-            </p>
-          )}
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                let next = map;
-                for (const row of eligible) if (statusOf(next, row.item.id, platform) === 'todo') next = setStatus(next, row.item.id, platform, 'queued');
-                update(next);
-                toast.success('Eligible files queued', `${eligible.length} validation-clean file(s) marked queued for ${spec.name}.`);
-              }}
-            >
-              Queue eligible ({eligible.length})
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                let next = map;
-                for (const row of rows) if (statusOf(next, row.item.id, platform) === 'queued') next = setStatus(next, row.item.id, platform, 'submitted');
-                update(next);
-                toast.info('Marked submitted', 'Update to accepted/rejected once review finishes.');
-              }}
-            >
-              Queued → submitted
-            </Button>
-          </div>
-        </Card>
-      )}
-
-      <Card flush>
-        {!ready ? (
-          <p className="p-6 text-center text-[0.8125rem] text-fg-subtle">Loading…</p>
-        ) : rows.length === 0 ? (
-          <EmptyState icon={<ListChecks className="size-7" />} title="No files" />
-        ) : (
-          <DataTable rows={rows} columns={columns} rowKey={(row) => row.item.id} dense footer={`${eligible.length} of ${rows.length} files currently pass ${spec.name} validation.`} />
-        )}
-      </Card>
-    </>
+            <div className="flex justify-end border-t border-line pt-2.5">
+              <Button
+                size="xs"
+                variant="secondary"
+                icon={<GIcon name="content_copy" size={13} />}
+                onClick={() => void copyTags(ev)}
+              >
+                Copy tags
+              </Button>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
   );
 }

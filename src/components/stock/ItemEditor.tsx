@@ -1,388 +1,585 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
-import { Check, Copy, Download, PenLine, Wand2, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { PlatformLogo } from '@/components/stock/PlatformLogo';
 import { Field, Input, Select, Switch, Textarea } from '@/components/ui/Field';
-import { Tabs } from '@/components/ui/Tabs';
+import { Modal } from '@/components/ui/Modal';
+import { GIcon } from '@/components/ui/GoogleIcon';
+import { BrandLogo } from '@/components/ui/BrandLogo';
+import { FormatIcon } from '@/components/ui/FormatIcon';
+import { PlatformLogo } from './PlatformLogo';
+import { AiPanel } from '@/components/settings/AiPanel';
 import { useLibrary } from '@/state/library';
-import { useToast } from '@/state/ToastState';
-import { isDesktop } from '@/lib/desktop';
-import { formatBytes } from '@/lib/stock/files';
-import { megapixels, type StockItem } from '@/lib/stock/types';
-import { PLATFORM_LIST, PLATFORMS } from '@/lib/stock/platforms';
-import type { PlatformId } from '@/lib/stock/types';
-import { adaptForPlatform } from '@/lib/stock/metadata';
-import { sanitizeFilename, validateItem } from '@/lib/stock/validate';
-import { CATEGORY_KEYS } from '@/lib/stock/categories';
-import { useReleases, isExpired } from '@/state/releases';
 import { useBank } from '@/state/bank';
+import { useReleases } from '@/state/releases';
+import { useToast } from '@/state/ToastState';
+import { DEFAULT_AI, loadAiSettings, PROVIDERS, type AiSettings } from '@/lib/stock/ai';
+import { mergeKeywords, parseKeywordInput } from '@/lib/stock/metadata';
+import { PLATFORM_LIST, SHUTTERSTOCK_CATEGORIES } from '@/lib/stock/platforms';
+import { validateEverywhere, worstLevel } from '@/lib/stock/validate';
+import { canEmbedFormat } from '@/lib/stock/xmp';
+import { formatBytes } from '@/lib/modelStore';
+import { megapixels, type PlatformId, type StockItem } from '@/lib/stock/types';
 
-type EditorTab = 'metadata' | 'platforms' | 'embed';
-
-export function ItemEditor({ item, onClose }: { item: StockItem; onClose: () => void }) {
-  const library = useLibrary();
-  const toast = useToast();
-  const [tab, setTab] = useState<EditorTab>('metadata');
-  const [keywordInput, setKeywordInput] = useState('');
-  const [bulkMode, setBulkMode] = useState(false);
-  const [bulkText, setBulkText] = useState(item.metadata.keywords.join(', '));
-  const [subject, setSubject] = useState('');
-  const [concepts, setConcepts] = useState('');
-  const [style, setStyle] = useState<'auto' | 'vector' | 'photo'>('auto');
-  const [backup, setBackup] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [safeName, setSafeName] = useState(() => sanitizeFilename(item.name).name);
-  const { releases } = useReleases();
-  const { bank } = useBank();
-
-  const appendTranslations = () => {
-    const extra: string[] = [];
-    for (const keyword of item.metadata.keywords) {
-      const entry = bank.translations[keyword];
-      if (!entry) continue;
-      for (const value of Object.values(entry)) if (value && !extra.includes(value)) extra.push(value);
-    }
-    if (extra.length === 0) {
-      toast.info('No dictionary terms');
-      return;
-    }
-    library.setMetadata(item.id, { keywords: Array.from(new Set([...item.metadata.keywords, ...extra])).slice(0, 50) });
-    toast.success(`+${extra.length} translated`);
-  };
-
-  const mp = megapixels(item);
-
-  const addKeywords = (raw: string) => {
-    const parts = raw.split(',').map((p) => p.trim().toLowerCase()).filter(Boolean);
-    if (!parts.length) return;
-    const merged = Array.from(new Set([...item.metadata.keywords, ...parts])).slice(0, 50);
-    library.setMetadata(item.id, { keywords: merged });
-    setKeywordInput('');
-  };
-
-  const onGenerate = async () => {
-    setBusy(true);
-    const result = await library.generateFor([item.id], {
-      subject: subject || undefined,
-      style,
-      categories: item.metadata.categories,
-      concepts: concepts.split(',').map((c) => c.trim()).filter(Boolean),
-    });
-    setBusy(false);
-    if (result.error) toast.error('AI failed — used built-in instead', result.error);
-    else toast.success('Generated', result.aiUsed ? result.providerLabel : 'Built-in generator');
-  };
-
-  const onEmbed = async () => {
-    setBusy(true);
-    const result = await library.embedFor([item.id], { backup });
-    setBusy(false);
-    if (result.done) toast.success('Embedded');
-    else toast.error('Embed failed', result.failed[0]);
-  };
-
-  const onDownloadEmbedded = async () => {
-    try {
-      const bytes = await library.getItemBytes(item.id);
-      const blob = new Blob([bytes as unknown as BlobPart]);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = item.name;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1500);
-    } catch (error) {
-      toast.error('Download failed', error instanceof Error ? error.message : String(error));
-    }
-  };
-
-  const platformIssues = useMemo(
-    () => PLATFORM_LIST.map((p) => ({ platform: p, issues: validateItem(item, p.id, library.items) })),
-    [item, library.items],
-  );
-  const badCount = platformIssues.filter((p) => p.issues.some((i) => i.level === 'error')).length;
-
-  return (
-    <div className="fixed inset-0 z-[70] flex justify-end">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
-      <aside className="relative flex h-full w-full flex-col border-l border-line bg-bg-elevated shadow-[var(--shadow-pop)] sm:max-w-xl lg:max-w-2xl">
-        {/* header */}
-        <header className="flex items-start gap-3 border-b border-line px-4 py-3">
-          {item.thumbUrl ? (
-            <img src={item.thumbUrl} alt="" className="size-10 shrink-0 r-chip border border-line object-cover" />
-          ) : (
-            <span className="flex size-10 shrink-0 items-center justify-center r-chip border border-line bg-surface-2 font-mono text-[0.625rem] text-fg-subtle uppercase">{item.format}</span>
-          )}
-          <div className="min-w-0 flex-1">
-            <p className="display truncate text-[0.9375rem] font-semibold text-fg" title={item.name}>{item.name}</p>
-            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.6875rem] text-fg-subtle">
-              <Badge tone="neutral">{item.format.toUpperCase()}</Badge>
-              {item.width && item.height && <span className="tabular-nums">{item.width}×{item.height}</span>}
-              {mp !== null && <span className="tabular-nums">{mp.toFixed(1)} MP</span>}
-              <span>{formatBytes(item.sizeBytes)}</span>
-              {item.embeddedAt && <Badge tone="ok" dot>embedded</Badge>}
-            </p>
-          </div>
-          <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close editor"><X className="size-4" /></Button>
-        </header>
-
-        <Tabs
-          className="px-3"
-          value={tab}
-          onChange={setTab}
-          items={[
-            { value: 'metadata', label: 'Metadata' },
-            { value: 'platforms', label: `Platforms ${badCount ? `(${badCount})` : ''}` },
-            { value: 'embed', label: 'Embed' },
-          ]}
-        />
-
-        <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          {tab === 'metadata' && (
-            <div className="flex flex-col gap-3">
-              <div className="card p-3">
-                <p className="mb-2 flex items-center gap-2 text-[0.6875rem] font-semibold tracking-wide text-fg-subtle uppercase"><Wand2 className="size-3.5 text-brand" /> Generate</p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Field label="Subject">
-                    <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="golden retriever puppy" />
-                  </Field>
-                  <Field label="Concepts">
-                    <Input value={concepts} onChange={(e) => setConcepts(e.target.value)} placeholder="friendship, loyalty" />
-                  </Field>
-                </div>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <Select value={style} onChange={(e) => setStyle(e.target.value as typeof style)} className="w-36" options={[
-                    { value: 'auto', label: 'Auto' },
-                    { value: 'vector', label: 'Vector' },
-                    { value: 'photo', label: 'Photo' },
-                  ]} />
-                  <Button size="sm" onClick={onGenerate} loading={busy} icon={<Wand2 className="size-4" />}>Generate</Button>
-                  <Button size="sm" variant="ghost" onClick={appendTranslations}>+ ES/DE/FR</Button>
-                  {library.aiReady ? <Badge tone="brand" dot>AI</Badge> : <Badge tone="neutral" dot>Built-in</Badge>}
-                </div>
-              </div>
-
-              <Field label={`Title (${item.metadata.title.length} chars)`}>
-                <Input value={item.metadata.title} onChange={(e) => library.setMetadata(item.id, { title: e.target.value })} placeholder="Descriptive sentence" />
-              </Field>
-
-              <Field label="Description">
-                <Textarea value={item.metadata.description} onChange={(e) => library.setMetadata(item.id, { description: e.target.value })} placeholder="One factual sentence" />
-              </Field>
-
-              <Field label={`Keywords ${item.metadata.keywords.length}/50`}>
-                {!bulkMode ? (
-                  <div className="flex flex-wrap gap-1.5 r-control border border-line bg-surface-2 p-2">
-                    {item.metadata.keywords.map((keyword) => (
-                      <span key={keyword} className="inline-flex items-center gap-1 r-chip bg-brand-soft px-1.5 py-0.5 text-[0.6875rem] font-medium text-brand-fg">
-                        {keyword}
-                        <button type="button" aria-label={`Remove ${keyword}`} onClick={() => library.setMetadata(item.id, { keywords: item.metadata.keywords.filter((k) => k !== keyword) })}>
-                          <X className="size-3" />
-                        </button>
-                      </span>
-                    ))}
-                    <input
-                      value={keywordInput}
-                      onChange={(e) => setKeywordInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ',') {
-                          e.preventDefault();
-                          addKeywords(keywordInput);
-                        }
-                      }}
-                      onBlur={() => keywordInput && addKeywords(keywordInput)}
-                      placeholder="add + Enter"
-                      className="min-w-32 flex-1 bg-transparent px-1 py-0.5 text-xs text-fg placeholder:text-fg-subtle focus:outline-none"
-                    />
-                  </div>
-                ) : (
-                  <Textarea value={bulkText} onChange={(e) => setBulkText(e.target.value)} onBlur={() => library.setMetadata(item.id, { keywords: Array.from(new Set(bulkText.split(',').map((k) => k.trim().toLowerCase()).filter(Boolean))).slice(0, 50) })} placeholder="comma, separated, keywords" />
-                )}
-                <button type="button" className="mt-1 text-[0.6875rem] font-medium text-brand-fg hover:underline" onClick={() => setBulkMode((v) => !v)}>
-                  {bulkMode ? 'Chips' : 'Bulk paste'}
-                </button>
-              </Field>
-
-              <Field label="Categories (2)">
-                <div className="flex flex-wrap gap-1.5">
-                  {CATEGORY_KEYS.map((category) => {
-                    const active = item.metadata.categories.includes(category);
-                    return (
-                      <button
-                        key={category}
-                        type="button"
-                        onClick={() =>
-                          library.setMetadata(item.id, {
-                            categories: active
-                              ? item.metadata.categories.filter((c) => c !== category)
-                              : [...item.metadata.categories, category].slice(0, 2),
-                          })
-                        }
-                        className={clsx(
-                          'r-chip border px-1.5 py-0.5 text-[0.6875rem] font-medium transition-colors',
-                          active ? 'border-brand bg-brand-soft text-brand-fg' : 'border-line bg-surface-2 text-fg-muted hover:text-fg',
-                        )}
-                      >
-                        {category}
-                      </button>
-                    );
-                  })}
-                </div>
-              </Field>
-
-              <div className="card flex flex-col gap-3 p-3">
-                <p className="text-[0.6875rem] font-semibold tracking-wide text-fg-subtle uppercase">Flags</p>
-                <Switch checked={item.flags.aiGenerated} onChange={(v) => library.setFlags(item.id, { aiGenerated: v })} label="AI-generated" />
-                {item.flags.aiGenerated && (
-                  <Input value={item.flags.aiTool} onChange={(e) => library.setFlags(item.id, { aiTool: e.target.value })} placeholder="Tool used (e.g. Real-ESRGAN upscale, Midjourney)" />
-                )}
-                <Switch checked={item.flags.illustration} onChange={(v) => library.setFlags(item.id, { illustration: v })} label="Illustration" />
-                <Switch checked={item.flags.editorial} onChange={(v) => library.setFlags(item.id, { editorial: v })} label="Editorial" />
-                <Switch checked={item.flags.mature} onChange={(v) => library.setFlags(item.id, { mature: v })} label="Mature content" />
-                <Field label="Vecteezy licence">
-                  <Select value={item.flags.license} onChange={(e) => library.setFlags(item.id, { license: e.target.value as typeof item.flags.license })} options={[
-                    { value: 'free', label: 'free' },
-                    { value: 'pro', label: 'pro' },
-                    { value: 'editorial', label: 'editorial' },
-                  ]} />
-                </Field>
-              </div>
-            </div>
-          )}
-
-          {tab === 'platforms' && (
-            <div className="flex flex-col gap-3">
-              {platformIssues.map(({ platform, issues }) => {
-                const adapted = adaptForPlatform(item.metadata, platform);
-                const errors = issues.filter((i) => i.level === 'error');
-                return (
-                  <details key={platform.id} className="card overflow-hidden">
-                    <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5">
-                      <PlatformLogo id={platform.id} size={18} />
-                      <span className="flex-1 truncate text-sm font-medium text-fg">{platform.name}</span>
-                      <Badge tone={errors.length ? 'danger' : issues.length ? 'warn' : 'ok'} dot>
-                        {errors.length ? `${errors.length}` : issues.length ? 'warn' : 'ok'}
-                      </Badge>
-                      <span className="text-[0.6875rem] text-fg-subtle tabular-nums">{adapted.keywords.length}/{platform.keywords.max} kw</span>
-                    </summary>
-                    <div className="border-t border-line px-3 py-3">
-                      <p className="text-xs text-fg-muted"><span className="font-semibold text-fg">Title:</span> {adapted.title || '—'}</p>
-                      <p className="mt-1 line-clamp-2 text-xs text-fg-muted">{adapted.keywords.slice(0, 12).join(', ')}{adapted.keywords.length > 12 ? '…' : ''}</p>
-                      {issues.length > 0 && (
-                        <ul className="mt-2 flex flex-col gap-1.5">
-                          {issues.map((issue, index) => (
-                            <li key={index} className={clsx('r-chip px-2 py-1.5 text-[0.6875rem] leading-relaxed', issue.level === 'error' ? 'bg-danger-soft text-danger' : issue.level === 'warn' ? 'bg-warn-soft text-warn' : 'bg-surface-2 text-fg-muted')}>
-                              {issue.message}
-                              {issue.hint && <span className="block opacity-80">{issue.hint}</span>}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      <Button
-                        size="xs"
-                        variant="ghost"
-                        className="mt-2"
-                        icon={<Copy className="size-3.5" />}
-                        onClick={async () => {
-                          await navigator.clipboard.writeText(adapted.keywords.join(', '));
-                          toast.success(`Copied ${adapted.keywords.length}`);
-                        }}
-                      >
-                        Copy adapted keywords
-                      </Button>
-                    </div>
-                  </details>
-                );
-              })}
-            </div>
-          )}
-
-          {tab === 'embed' && (
-            <div className="flex flex-col gap-3">
-              <div className="card p-3">
-                <p className="text-[0.6875rem] font-semibold tracking-wide text-fg-subtle uppercase">IPTC / XMP</p>
-                <p className="mt-1 text-[0.6875rem] text-fg-muted">
-                  Title, description and keywords written into the file; portals pre-fill on ingest.
-                </p>
-                <div className="mt-3 r-control border border-line bg-surface-2 p-3">
-                  <Switch checked={backup} onChange={setBackup} label="Keep backup copy" />
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button size="sm" onClick={onEmbed} loading={busy} icon={<PenLine className="size-4" />} disabled={!['jpg', 'png', 'svg', 'eps', 'webp'].includes(item.format)}>
-                    Embed
-                  </Button>
-                  {!isDesktop && (
-                    <Button size="sm" variant="outline" icon={<Download className="size-4" />} onClick={onDownloadEmbedded}>
-                      Download copy
-                    </Button>
-                  )}
-                </div>
-                {item.embeddedAt && (
-                  <p className="mt-2 flex items-center gap-1.5 text-[0.6875rem] text-ok"><Check className="size-3.5" /> {new Date(item.embeddedAt).toLocaleDateString()}</p>
-                )}
-              </div>
-
-              <div className="card p-3">
-                <p className="text-[0.6875rem] font-semibold tracking-wide text-fg-subtle uppercase">Releases</p>
-                <p className="mt-1 text-[0.6875rem] text-fg-muted">Silences the model-release warning.</p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {releases.length === 0 && <span className="text-[0.6875rem] text-fg-subtle">None yet</span>}
-                  {releases.map((release) => {
-                    const linked = (item.releaseIds ?? []).includes(release.id);
-                    return (
-                      <button
-                        key={release.id}
-                        type="button"
-                        onClick={() =>
-                          library.setReleaseIds(
-                            item.id,
-                            linked ? (item.releaseIds ?? []).filter((r) => r !== release.id) : [...(item.releaseIds ?? []), release.id],
-                          )
-                        }
-                        className={clsx(
-                          'r-chip border px-1.5 py-0.5 text-[0.6875rem] font-medium transition-colors',
-                          linked ? 'border-ok bg-ok-soft text-ok' : 'border-line bg-surface-2 text-fg-muted hover:text-fg',
-                          isExpired(release) && 'opacity-60 line-through',
-                        )}
-                      >
-                        {release.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="card p-3">
-                <p className="text-[0.6875rem] font-semibold tracking-wide text-fg-subtle uppercase">Filename</p>
-                <p className="mt-1 text-[0.6875rem] text-fg-muted">ASCII only · Adobe ≤ 30 chars</p>
-                <div className="mt-2 flex gap-2">
-                  <Input value={safeName} onChange={(e) => setSafeName(e.target.value)} className="font-mono text-xs" />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={async () => {
-                      const ok = await library.renameItem(item.id, safeName);
-                      if (ok) toast.success('Renamed', safeName);
-                    }}
-                  >
-                    Apply
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setSafeName(sanitizeFilename(item.name, PLATFORMS[platformGuess(item)]).name)}>
-                    Auto
-                  </Button>
-                </div>
-              </div>
-
-            </div>
-          )}
-        </div>
-      </aside>
-    </div>
-  );
+export interface ItemEditorProps {
+  item: StockItem;
+  onClose?: () => void;
 }
 
-function platformGuess(item: StockItem): PlatformId {
-  return item.format === 'eps' || item.format === 'ai' ? 'freepik' : 'adobe';
+export function ItemEditor({ item, onClose }: ItemEditorProps) {
+  const {
+    items,
+    updateMetadata,
+    updateFlags,
+    setReleases,
+    aiDraft,
+    downloadEmbeddedFile,
+    copyItemMetadata,
+    exportMetadataCsv,
+    removeItems,
+  } = useLibrary();
+  const { bank } = useBank();
+  const { releases } = useReleases();
+  const toast = useToast();
+
+  const [aiSettings, setAiSettings] = useState<AiSettings>(DEFAULT_AI);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [kwInput, setKwInput] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [embedding, setEmbedding] = useState(false);
+  const [activePlatform, setActivePlatform] = useState<PlatformId | null>(null);
+
+  useEffect(() => {
+    void loadAiSettings().then(setAiSettings);
+  }, []);
+
+  const provider = PROVIDERS[aiSettings.kind];
+  const mp = megapixels(item);
+  const embeddable = canEmbedFormat(item.format);
+
+  const report = useMemo(() => validateEverywhere(item, items), [item, items]);
+
+  async function handleGenerate() {
+    setGenerating(true);
+    try {
+      const res = await aiDraft([item.id]);
+      if (res.ok > 0) {
+        toast.success(
+          res.embedded > 0 ? 'Metadata generated and embedded' : 'Metadata generated',
+          `${provider.name}`,
+        );
+      }
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function handleEmbedDownload() {
+    setEmbedding(true);
+    try {
+      await downloadEmbeddedFile(item.id);
+    } finally {
+      setEmbedding(false);
+    }
+  }
+
+  async function copyText(label: string, text: string) {
+    if (!text.trim()) return;
+    try {
+      await navigator.clipboard.writeText(text.trim());
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error('Clipboard unavailable');
+    }
+  }
+
+  function addKeywords() {
+    const incoming = parseKeywordInput(kwInput);
+    if (!incoming.length) return;
+    updateMetadata(item.id, { keywords: mergeKeywords(item.metadata.keywords, incoming, 50) });
+    setKwInput('');
+  }
+
+  function removeKeyword(word: string) {
+    updateMetadata(item.id, {
+      keywords: item.metadata.keywords.filter((k) => k !== word),
+    });
+  }
+
+  function promoteKeyword(index: number) {
+    if (index <= 0) return;
+    const next = [...item.metadata.keywords];
+    const [moved] = next.splice(index, 1);
+    next.unshift(moved);
+    updateMetadata(item.id, { keywords: next });
+  }
+
+  const synonymSuggestions = useMemo(() => {
+    const existing = new Set(item.metadata.keywords);
+    const out: string[] = [];
+    for (const [key, list] of Object.entries(bank.synonyms)) {
+      if (existing.has(key) || item.metadata.title.toLowerCase().includes(key)) {
+        for (const w of list) {
+          if (!existing.has(w) && !out.includes(w)) out.push(w);
+        }
+      }
+    }
+    return out.slice(0, 12);
+  }, [bank.synonyms, item.metadata.keywords, item.metadata.title]);
+
+  return (
+    <div className="space-y-4">
+      {/* Asset header */}
+      <div className="flex items-start gap-3">
+        <div className="checkerboard flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-[var(--r-control)] border border-line bg-surface-2">
+          {item.thumbUrl ? (
+            <img src={item.thumbUrl} alt={item.name} className="size-full object-cover" />
+          ) : (
+            <FormatIcon format={item.format} size={22} />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold text-ink" title={item.name}>
+            {item.name}
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-2xs text-ink-muted">
+            <Badge tone="neutral">{item.format.toUpperCase()}</Badge>
+            {item.width && item.height && (
+              <span>
+                {item.width}x{item.height} ({mp?.toFixed(1)} MP)
+              </span>
+            )}
+            <span>·</span>
+            <span>{formatBytes(item.sizeBytes)}</span>
+            {item.embeddedAt && (
+              <Badge tone="brand">
+                <GIcon name="check_circle" size={12} />
+                IPTC & XMP ready
+              </Badge>
+            )}
+          </div>
+        </div>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex size-7 items-center justify-center rounded-[var(--r-xs)] text-ink-muted hover:bg-surface-2 hover:text-ink"
+            aria-label="Close editor"
+          >
+            <GIcon name="close" size={17} />
+          </button>
+        )}
+      </div>
+
+      {/* AI generation & post generation bar */}
+      <div className="rounded-[var(--r-control)] border border-line bg-surface-2/60 p-3 space-y-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setAiModalOpen(true)}
+            className="inline-flex items-center gap-2 rounded-[var(--r-xs)] border border-line bg-surface px-2.5 py-1 text-xs font-medium text-ink hover:border-accent"
+            title="Switch AI provider or model"
+          >
+            <BrandLogo brand={provider.brand} size={15} />
+            <span>{provider.name}</span>
+            <GIcon name="expand_more" size={14} className="text-ink-muted" />
+          </button>
+
+          <Button
+            size="sm"
+            variant="primary"
+            loading={generating}
+            icon={<GIcon name="auto_fix_high" size={15} />}
+            onClick={() => void handleGenerate()}
+          >
+            Generate metadata
+          </Button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5 border-t border-line pt-2.5">
+          <Button
+            size="xs"
+            variant="secondary"
+            icon={<GIcon name="content_copy" size={13} />}
+            onClick={() => void copyItemMetadata(item.id)}
+          >
+            Copy all
+          </Button>
+          {embeddable && (
+            <Button
+              size="xs"
+              variant="secondary"
+              loading={embedding}
+              icon={<GIcon name="file_download" size={13} />}
+              onClick={() => void handleEmbedDownload()}
+            >
+              Embed & save file
+            </Button>
+          )}
+          <Button
+            size="xs"
+            variant="secondary"
+            icon={<GIcon name="table_chart" size={13} />}
+            onClick={() => void exportMetadataCsv([item.id], 'universal')}
+          >
+            CSV
+          </Button>
+          <Button
+            size="xs"
+            variant="ghost"
+            icon={<PlatformLogo id="shutterstock" size={14} />}
+            onClick={() => void exportMetadataCsv([item.id], 'shutterstock')}
+          >
+            SS CSV
+          </Button>
+          <Button
+            size="xs"
+            variant="ghost"
+            icon={<PlatformLogo id="adobe" size={14} />}
+            onClick={() => void exportMetadataCsv([item.id], 'adobe')}
+          >
+            Adobe CSV
+          </Button>
+          <Button
+            size="xs"
+            variant="ghost"
+            icon={<PlatformLogo id="freepik" size={14} />}
+            onClick={() => void exportMetadataCsv([item.id], 'freepik')}
+          >
+            Freepik CSV
+          </Button>
+        </div>
+      </div>
+
+      {/* Title */}
+      <Field
+        label="Title"
+        hint={
+          <span className="inline-flex items-center gap-2 tabular-nums">
+            <span className={clsx(item.metadata.title.length > 70 && 'text-accent')}>
+              {item.metadata.title.length}/70 ideal (200 max)
+            </span>
+            <button
+              type="button"
+              onClick={() => void copyText('Title', item.metadata.title)}
+              className="text-accent hover:underline"
+            >
+              Copy
+            </button>
+          </span>
+        }
+      >
+        <Input
+          value={item.metadata.title}
+          onChange={(e) => updateMetadata(item.id, { title: e.target.value })}
+          placeholder="Descriptive buyer focused title without commas"
+        />
+      </Field>
+
+      {/* Description */}
+      <Field
+        label="Description"
+        hint={
+          <span className="inline-flex items-center gap-2 tabular-nums">
+            <span>{item.metadata.description.length}/200</span>
+            <button
+              type="button"
+              onClick={() =>
+                void copyText('Description', item.metadata.description || item.metadata.title)
+              }
+              className="text-accent hover:underline"
+            >
+              Copy
+            </button>
+          </span>
+        }
+      >
+        <Textarea
+          rows={2}
+          value={item.metadata.description}
+          onChange={(e) => updateMetadata(item.id, { description: e.target.value })}
+          placeholder="Complete descriptive sentence of 5 or more words"
+        />
+      </Field>
+
+      {/* Keywords */}
+      <Field
+        label={`Keywords (${item.metadata.keywords.length}/49)`}
+        hint={
+          <span className="inline-flex items-center gap-2">
+            <span>First 10 highlighted for Adobe Stock</span>
+            <button
+              type="button"
+              onClick={() => void copyText('Keywords', item.metadata.keywords.join(', '))}
+              className="text-accent hover:underline"
+            >
+              Copy
+            </button>
+          </span>
+        }
+      >
+        <div className="flex gap-2">
+          <Input
+            value={kwInput}
+            onChange={(e) => setKwInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addKeywords();
+              }
+            }}
+            placeholder="Add comma separated keywords"
+          />
+          <Button size="md" variant="secondary" icon={<GIcon name="add" size={15} />} onClick={addKeywords}>
+            Add
+          </Button>
+        </div>
+
+        {item.metadata.keywords.length > 0 && (
+          <div className="mt-2 flex max-h-40 flex-wrap gap-1 overflow-y-auto rounded-[var(--r-control)] border border-line bg-surface-2/40 p-2">
+            {item.metadata.keywords.map((kw, index) => (
+              <span
+                key={kw}
+                className={clsx(
+                  'inline-flex items-center gap-1 rounded-[var(--r-xs)] border px-2 py-0.5 text-2xs font-medium',
+                  index < 10
+                    ? 'border-accent/35 bg-accent-soft text-accent'
+                    : 'border-line bg-surface text-ink',
+                )}
+              >
+                {index >= 10 && (
+                  <button
+                    type="button"
+                    onClick={() => promoteKeyword(index)}
+                    className="text-ink-faint hover:text-accent"
+                    title="Move to top 10"
+                  >
+                    <GIcon name="north" size={11} />
+                  </button>
+                )}
+                <span>{kw}</span>
+                <button
+                  type="button"
+                  onClick={() => removeKeyword(kw)}
+                  className="text-ink-faint hover:text-danger"
+                  aria-label={`Remove ${kw}`}
+                >
+                  <GIcon name="close" size={11} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {synonymSuggestions.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1">
+            <span className="text-2xs text-ink-faint">Bank:</span>
+            {synonymSuggestions.map((word) => (
+              <button
+                key={word}
+                type="button"
+                onClick={() =>
+                  updateMetadata(item.id, {
+                    keywords: mergeKeywords(item.metadata.keywords, [word], 50),
+                  })
+                }
+                className="rounded-[var(--r-xs)] border border-line px-1.5 py-0.5 text-2xs text-ink-muted hover:border-accent hover:text-accent"
+              >
+                + {word}
+              </button>
+            ))}
+          </div>
+        )}
+      </Field>
+
+      {/* Categories */}
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        <Field label="Primary category">
+          <Select
+            value={item.metadata.categories[0] ?? ''}
+            onChange={(e) => {
+              const next = [e.target.value, item.metadata.categories[1] ?? ''].filter(Boolean);
+              updateMetadata(item.id, { categories: next });
+            }}
+            options={[
+              { value: '', label: 'Select category' },
+              ...SHUTTERSTOCK_CATEGORIES.map((c) => ({ value: c, label: c })),
+            ]}
+          />
+        </Field>
+        <Field label="Secondary category">
+          <Select
+            value={item.metadata.categories[1] ?? ''}
+            onChange={(e) => {
+              const first = item.metadata.categories[0] ?? '';
+              const next = [first, e.target.value].filter(Boolean);
+              updateMetadata(item.id, { categories: next });
+            }}
+            options={[
+              { value: '', label: 'Optional' },
+              ...SHUTTERSTOCK_CATEGORIES.map((c) => ({ value: c, label: c })),
+            ]}
+          />
+        </Field>
+      </div>
+
+      {/* Submission flags */}
+      <div className="grid grid-cols-2 gap-2 rounded-[var(--r-control)] border border-line p-3 sm:grid-cols-3">
+        <Switch
+          checked={item.flags.aiGenerated}
+          onChange={(aiGenerated) => updateFlags(item.id, { aiGenerated })}
+          label="AI generated"
+        />
+        <Switch
+          checked={item.flags.illustration}
+          onChange={(illustration) => updateFlags(item.id, { illustration })}
+          label="Illustration"
+        />
+        <Switch
+          checked={item.flags.editorial}
+          onChange={(editorial) => updateFlags(item.id, { editorial })}
+          label="Editorial"
+        />
+      </div>
+
+      {item.flags.aiGenerated && (
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          <Field label="AI generator model">
+            <Input
+              value={item.flags.aiTool}
+              onChange={(e) => updateFlags(item.id, { aiTool: e.target.value })}
+              placeholder="Generator name for Freepik"
+            />
+          </Field>
+          <Field label="AI prompt (Freepik CSV)">
+            <Input
+              value={item.flags.aiPrompt ?? ''}
+              onChange={(e) => updateFlags(item.id, { aiPrompt: e.target.value })}
+              placeholder="Optional prompt"
+            />
+          </Field>
+        </div>
+      )}
+
+      {/* Releases */}
+      {releases.length > 0 && (
+        <Field label="Linked releases">
+          <div className="flex flex-wrap gap-1.5">
+            {releases.map((rel) => {
+              const linked = (item.releaseIds ?? []).includes(rel.id);
+              return (
+                <button
+                  key={rel.id}
+                  type="button"
+                  onClick={() => {
+                    const cur = item.releaseIds ?? [];
+                    setReleases(
+                      item.id,
+                      linked ? cur.filter((id) => id !== rel.id) : [...cur, rel.id],
+                    );
+                  }}
+                  className={clsx(
+                    'inline-flex items-center gap-1 rounded-[var(--r-xs)] border px-2 py-1 text-2xs font-medium',
+                    linked
+                      ? 'border-accent bg-accent-soft text-accent'
+                      : 'border-line text-ink-muted hover:text-ink',
+                  )}
+                >
+                  <GIcon name={linked ? 'check_circle' : 'add'} size={12} />
+                  {rel.name}
+                </button>
+              );
+            })}
+          </div>
+        </Field>
+      )}
+
+      {/* Live 14 marketplace readiness */}
+      <div className="space-y-2 border-t border-line pt-3">
+        <div className="text-xs font-semibold text-ink">Marketplace compliance</div>
+        <div className="flex flex-wrap gap-1.5">
+          {PLATFORM_LIST.map((p) => {
+            const issues = report[p.id] ?? [];
+            const level = worstLevel(issues);
+            const selected = activePlatform === p.id;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setActivePlatform(selected ? null : p.id)}
+                className={clsx(
+                  'inline-flex items-center gap-1.5 rounded-[var(--r-xs)] border px-2 py-1 text-2xs font-medium',
+                  selected ? 'border-accent bg-accent-soft' : 'border-line bg-surface hover:bg-surface-2',
+                )}
+              >
+                <PlatformLogo id={p.id} size={15} />
+                <span className="text-ink">{p.name}</span>
+                <GIcon
+                  name={level === 'error' ? 'cancel' : 'check_circle'}
+                  size={13}
+                  className={
+                    level === 'error'
+                      ? 'text-danger'
+                      : level === 'warn'
+                        ? 'text-ink-muted'
+                        : 'text-accent'
+                  }
+                />
+              </button>
+            );
+          })}
+        </div>
+
+        {activePlatform && (
+          <div className="rounded-[var(--r-control)] border border-line bg-surface-2/60 p-2.5 text-xs space-y-1">
+            {(report[activePlatform] ?? []).length === 0 ? (
+              <div className="flex items-center gap-1.5 font-medium text-accent">
+                <GIcon name="check_circle" size={14} />
+                Ready for upload
+              </div>
+            ) : (
+              report[activePlatform].map((iss, idx) => (
+                <div key={idx} className="flex items-start gap-1.5 text-ink-muted">
+                  <GIcon
+                    name={iss.level === 'error' ? 'cancel' : 'info'}
+                    size={14}
+                    className={clsx(
+                      'mt-0.5 shrink-0',
+                      iss.level === 'error' ? 'text-danger' : 'text-accent',
+                    )}
+                  />
+                  <span>{iss.message}</span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Remove */}
+      <div className="flex justify-end border-t border-line pt-2">
+        <Button
+          size="xs"
+          variant="ghost"
+          className="text-danger hover:text-danger"
+          icon={<GIcon name="delete" size={14} />}
+          onClick={() => {
+            removeItems([item.id]);
+            onClose?.();
+          }}
+        >
+          Remove from library
+        </Button>
+      </div>
+
+      <Modal
+        open={aiModalOpen}
+        onClose={() => setAiModalOpen(false)}
+        title="AI metadata provider"
+        size="lg"
+      >
+        <AiPanel compact onChange={setAiSettings} />
+      </Modal>
+    </div>
+  );
 }

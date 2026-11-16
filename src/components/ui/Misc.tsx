@@ -1,12 +1,34 @@
 import clsx from 'clsx';
 import { useState, type ReactNode } from 'react';
-import { Check, Copy, Inbox } from 'lucide-react';
+import { GIcon } from './GoogleIcon';
 import { Button } from './Button';
+
+export function copyText(text: string): Promise<void> {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+  }
+  fallbackCopy(text);
+  return Promise.resolve();
+}
+
+function fallbackCopy(text: string) {
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.style.position = 'fixed';
+  area.style.opacity = '0';
+  document.body.appendChild(area);
+  area.select();
+  document.execCommand('copy');
+  area.remove();
+}
 
 export function Spinner({ className, size = 4 }: { className?: string; size?: number }) {
   return (
     <span
-      className={clsx('inline-block animate-spin rounded-full border-2 border-current border-t-transparent', className)}
+      className={clsx(
+        'inline-block animate-spin rounded-full border-2 border-current border-t-transparent',
+        className,
+      )}
       style={{ width: `${size * 4}px`, height: `${size * 4}px` }}
       role="status"
       aria-label="Loading"
@@ -30,18 +52,16 @@ export function EmptyState({
   return (
     <div
       className={clsx(
-        'flex flex-col items-center justify-center gap-3 px-6 py-12 text-center sm:py-16',
+        'flex flex-col items-center justify-center gap-3 px-6 py-12 text-center sm:py-14',
         className,
       )}
     >
-      <div className="flex size-12 items-center justify-center r-control border border-line bg-surface-2 text-fg-subtle">
-        {icon ?? <Inbox className="size-6" />}
+      <div className="flex size-12 items-center justify-center r-control border border-line bg-surface-2 text-brand">
+        {icon ?? <GIcon name="inbox" size={24} />}
       </div>
       <div className="max-w-md">
         <p className="display text-[0.9375rem] font-semibold text-fg">{title}</p>
-        {description && (
-          <p className="mt-1 text-xs text-fg-muted sm:text-sm">{description}</p>
-        )}
+        {description && <p className="mt-1 text-xs text-fg-muted sm:text-sm">{description}</p>}
       </div>
       {action && <div className="mt-1 flex flex-wrap items-center justify-center gap-2">{action}</div>}
     </div>
@@ -62,16 +82,7 @@ export function CodeBlock({
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(code);
-    } catch {
-      const area = document.createElement('textarea');
-      area.value = code;
-      document.body.appendChild(area);
-      area.select();
-      document.execCommand('copy');
-      area.remove();
-    }
+    await copyText(code);
     setCopied(true);
     onCopy?.();
     setTimeout(() => setCopied(false), 1800);
@@ -79,7 +90,7 @@ export function CodeBlock({
 
   return (
     <div className="overflow-hidden r-control border border-line bg-surface-2">
-      <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-2">
+      <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-1.5">
         <span className="font-mono text-[0.6875rem] tracking-wide text-fg-subtle uppercase">
           {language}
         </span>
@@ -87,26 +98,21 @@ export function CodeBlock({
           size="xs"
           variant="ghost"
           onClick={copy}
-          icon={copied ? <Check className="size-3.5 text-ok" /> : <Copy className="size-3.5" />}
+          icon={
+            copied ? (
+              <GIcon name="check" size={14} className="text-ok" />
+            ) : (
+              <GIcon name="content_copy" size={14} />
+            )
+          }
         >
           {copied ? 'Copied' : 'Copy'}
         </Button>
       </div>
-      <pre
-        className="overflow-auto p-3 font-mono text-xs text-fg-muted"
-        style={{ maxHeight }}
-      >
+      <pre className="overflow-auto p-3 font-mono text-xs text-fg-muted" style={{ maxHeight }}>
         <code>{code}</code>
       </pre>
     </div>
-  );
-}
-
-export function KeyHint({ children }: { children: ReactNode }) {
-  return (
-    <kbd className="r-chip border border-line-strong bg-surface-2 px-1.5 py-0.5 font-mono text-[0.6875rem] text-fg-muted">
-      {children}
-    </kbd>
   );
 }
 

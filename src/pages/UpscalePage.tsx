@@ -1,340 +1,640 @@
-import { useMemo, useState } from 'react';
-import { Cpu, Download, Gauge, Library as LibraryIcon, Scale, ShieldCheck, Zap } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import clsx from 'clsx';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Card } from '@/components/ui/Card';
+import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Field, SegmentedControl, Select } from '@/components/ui/Field';
-import { Spinner } from '@/components/ui/Misc';
+import { Field } from '@/components/ui/Field';
+import { ModelTile } from '@/components/ui/ModelTile';
+import { GIcon } from '@/components/ui/GoogleIcon';
+import { FormatIcon } from '@/components/ui/FormatIcon';
+import { PlatformLogo } from '@/components/stock/PlatformLogo';
 import { useLibrary } from '@/state/library';
 import { useToast } from '@/state/ToastState';
-import { isDesktop } from '@/lib/desktop';
-import { formatBytes, UPSCALABLE_FORMATS } from '@/lib/stock/files';
-import type { StockItem } from '@/lib/stock/types';
-import { CUSTOM_MODEL_HINT, ENGINE_LICENSE_NOTE, UPSCALE_MODELS } from '@/lib/stock/upscale/models';
+import { desktop, triggerBlobDownload, type ModelProgressEvent } from '@/lib/desktop';
 import {
-  ensureRealEsrgan,
-  planScale,
-  runUpscale,
-  TARGET_PRESETS,
-  type EngineId,
-  type UpscaleResult,
-} from '@/lib/stock/upscale/engine';
+  cancelModelInstall,
+  formatBytes,
+  installModelInApp,
+  listInstalledModels,
+  onModelProgress,
+  uninstallModelInApp,
+} from '@/lib/modelStore';
+import {
+  buildUpscaleInstallSpec,
+  resolveTargetSize,
+  UPSCALE_FORMATS,
+  UPSCALE_MODELS,
+  UPSCALE_PURPOSES,
+  UPSCALE_TARGETS,
+  type UpscaleModel,
+  type UpscalePurpose,
+} from '@/lib/stock/upscale/models';
+import { runUpscale } from '@/lib/stock/upscale/engine';
 
-interface JobResult extends UpscaleResult {
+interface QueueEntry {
   id: string;
-  sourceName: string;
-  outName: string;
-  url: string;
+  name: string;
+  blob: Blob;
+  path?: string;
+  srcUrl: string;
+  width: number;
+  height: number;
+  status: 'queued' | 'running' | 'done' | 'error';
+  progress: number;
+  error?: string;
+  outBlob?: Blob;
+  outUrl?: string;
+  outName?: string;
+  outW?: number;
+  outH?: number;
+  outMP?: number;
+}
+
+async function readImageDims(blob: Blob): Promise<{ width: number; height: number }> {
+  try {
+    const bmp = await createImageBitmap(blob);
+    const d = { width: bmp.width, height: bmp.height };
+    bmp.close();
+    return d;
+  } catch {
+    return { width: 0, height: 0 };
+  }
 }
 
 export function UpscalePage() {
-  const library = useLibrary();
+  const { items: libItems, getBlob, addGeneratedBlob } = useLibrary();
   const toast = useToast();
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  const [engine, setEngine] = useState<EngineId>('classic');
-  const [modelId, setModelId] = useState(UPSCALE_MODELS[0].id);
-  const [outFormat, setOutFormat] = useState<'png' | 'jpg' | 'webp'>('png');
-  const [quality, setQuality] = useState(0.92);
-  const [presetId, setPresetId] = useState('8k');
-  const [itemId, setItemId] = useState<string>('');
-  const [engineState, setEngineState] = useState<{
-    status: 'idle' | 'checking' | 'ready' | 'error';
-    message: string;
-  }>({ status: 'idle', message: '' });
-  const [progress, setProgress] = useState<{ ratio: number; label: string } | null>(null);
-  const [results, setResults] = useState<JobResult[]>([]);
+  const [purpose, setPurpose] = useState<UpscalePurpose>('all');
+  const [modelId, setModelId] = useState<string>('lanczos-pro');
+  const [targetId, setTargetId] = useState<string>('4k');
+  const [outFormat, setOutFormat] = useState<'jpg' | 'png' | 'webp'>('jpg');
+  const [quality, setQuality] = useState(94);
 
-  const rasterItems = useMemo(
-    () => library.items.filter((item) => (UPSCALABLE_FORMATS as string[]).includes(item.format)),
-    [library.items],
+  const [installed, setInstalled] = useState<Record<string, boolean>>({});
+  const [dlProgress, setDlProgress] = useState<Record<string, ModelProgressEvent>>({});
+  const [queue, setQueue] = useState<QueueEntry[]>([]);
+  const [running, setRunning] = useState(false);
+
+  const queueRef = useRef<QueueEntry[]>([]);
+  queueRef.current = queue;
+
+  useEffect(() => {
+    void listInstalledModels().then((map) => {
+      const flags: Record<string, boolean> = {};
+      for (const id of Object.keys(map)) flags[id] = true;
+      setInstalled(flags);
+    });
+    return onModelProgress((ev) => {
+      setDlProgress((prev) => ({ ...prev, [ev.id]: ev }));
+      if (ev.phase === 'ready') {
+        setInstalled((prev) => ({ ...prev, [ev.id]: true }));
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      for (const entry of queueRef.current) {
+        URL.revokeObjectURL(entry.srcUrl);
+        if (entry.outUrl) URL.revokeObjectURL(entry.outUrl);
+      }
+    };
+  }, []);
+
+  const activeTarget = useMemo(
+    () => UPSCALE_TARGETS.find((t) => t.id === targetId) ?? UPSCALE_TARGETS[0],
+    [targetId],
   );
-  const activeItem: StockItem | undefined =
-    rasterItems.find((i) => i.id === itemId) ?? rasterItems[0];
+  const activeModel = useMemo(
+    () => UPSCALE_MODELS.find((m) => m.id === modelId) ?? UPSCALE_MODELS[0],
+    [modelId],
+  );
 
-  const preset = TARGET_PRESETS.find((p) => p.id === presetId) ?? TARGET_PRESETS[0];
-  const plan = activeItem ? planScale(activeItem, preset) : null;
+  const filteredModels = useMemo(
+    () =>
+      purpose === 'all'
+        ? UPSCALE_MODELS
+        : UPSCALE_MODELS.filter((m) => m.purposes.includes(purpose)),
+    [purpose],
+  );
 
-  const onEnsure = async () => {
-    setEngineState({ status: 'checking', message: 'Downloading Real-ESRGAN (43 MB)…' });
-    const result = await ensureRealEsrgan((label) =>
-      setEngineState({ status: 'checking', message: label }),
-    );
-    if (result.ok) {
-      const count = result.models?.length ?? 0;
-      setEngineState({
-        status: 'ready',
-        message: count
-          ? `Ready · ${count} model${count === 1 ? '' : 's'} installed`
-          : 'Installed, but no model files were found.',
-      });
-      if (!count) setEngineState({ status: 'error', message: 'Installed without models — re-install.' });
-    } else {
-      setEngineState({ status: 'error', message: result.error ?? 'Unknown error' });
+  function pickTarget(id: string) {
+    setTargetId(id);
+    const t = UPSCALE_TARGETS.find((x) => x.id === id);
+    if (!t) return;
+    if (t.recommendedFormat) setOutFormat(t.recommendedFormat);
+    if (t.requireAgencySafe && !activeModel.agencySafe) {
+      setModelId('lanczos-pro');
+      toast.info(`${t.label} preset selected`, 'Switched to agency compliant Lanczos Pro');
     }
-  };
+  }
 
-  const onRun = async () => {
-    if (!activeItem || !plan) return;
-    setProgress({ ratio: 0, label: 'Reading source…' });
+  async function handleInstallModel(model: UpscaleModel) {
+    const spec = buildUpscaleInstallSpec(model);
+    if (!spec) return;
+    const res = await installModelInApp(spec);
+    setDlProgress((prev) => {
+      const next = { ...prev };
+      delete next[model.id];
+      return next;
+    });
+    if (res.ok) {
+      setInstalled((prev) => ({ ...prev, [model.id]: true }));
+      setModelId(model.id);
+      toast.success(`${model.name} installed`);
+    } else if (!res.canceled) {
+      toast.error('Install failed', res.error);
+    }
+  }
+
+  async function handleUninstallModel(model: UpscaleModel) {
+    await uninstallModelInApp(model.id);
+    setInstalled((prev) => {
+      const next = { ...prev };
+      delete next[model.id];
+      return next;
+    });
+    if (modelId === model.id) setModelId('lanczos-pro');
+    toast.info(`${model.name} removed`);
+  }
+
+  async function addFiles(list: FileList | File[]) {
+    const entries: QueueEntry[] = [];
+    for (const file of Array.from(list)) {
+      if (!file.type.startsWith('image/')) continue;
+      const { width, height } = await readImageDims(file);
+      if (!width || !height) continue;
+      entries.push({
+        id: `up_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+        name: file.name,
+        blob: file,
+        path: (file as File & { path?: string }).path,
+        srcUrl: URL.createObjectURL(file),
+        width,
+        height,
+        status: 'queued',
+        progress: 0,
+      });
+    }
+    if (entries.length) setQueue((prev) => [...entries, ...prev]);
+  }
+
+  async function importFromLibrary() {
+    const rasters = libItems.filter((it) => it.format !== 'eps' && it.format !== 'ai' && it.format !== 'svg');
+    if (!rasters.length) {
+      toast.info('No raster images in Library yet');
+      return;
+    }
+    const added: QueueEntry[] = [];
+    for (const it of rasters.slice(0, 24)) {
+      const blob = await getBlob(it.id);
+      if (!blob) continue;
+      const dims = it.width && it.height ? { width: it.width, height: it.height } : await readImageDims(blob);
+      if (!dims.width) continue;
+      added.push({
+        id: `up_${it.id}_${Date.now().toString(36)}`,
+        name: it.name,
+        blob,
+        path: it.path,
+        srcUrl: URL.createObjectURL(blob),
+        width: dims.width,
+        height: dims.height,
+        status: 'queued',
+        progress: 0,
+      });
+    }
+    if (added.length) {
+      setQueue((prev) => [...added, ...prev]);
+      toast.success(`Added ${added.length} from Library`);
+    }
+  }
+
+  function removeEntry(id: string) {
+    setQueue((prev) => {
+      const hit = prev.find((e) => e.id === id);
+      if (hit) {
+        URL.revokeObjectURL(hit.srcUrl);
+        if (hit.outUrl) URL.revokeObjectURL(hit.outUrl);
+      }
+      return prev.filter((e) => e.id !== id);
+    });
+  }
+
+  function clearQueue() {
+    for (const e of queue) {
+      URL.revokeObjectURL(e.srcUrl);
+      if (e.outUrl) URL.revokeObjectURL(e.outUrl);
+    }
+    setQueue([]);
+  }
+
+  async function processAll() {
+    if (!queue.length || running) return;
+    setRunning(true);
+    let completed = 0;
     try {
-      const blob = await library.getItemBlob(activeItem.id);
-      const result = await runUpscale(blob, {
-        item: activeItem,
-        engine,
-        modelId,
-        passes: plan.passes,
-        tailScale: plan.tailScale,
-        outFormat,
-        quality,
-        onProgress: (ratio, label) => setProgress({ ratio, label }),
-      });
-      const base = activeItem.name.replace(/\.[^.]+$/, '');
-      const outName = `${base}-${result.width}x${result.height}.${outFormat}`;
-      setResults((prev) => [
-        {
-          ...result,
-          id: `${Date.now()}`,
-          sourceName: activeItem.name,
-          outName,
-          url: URL.createObjectURL(result.blob),
-        },
-        ...prev,
-      ]);
-      const mp = ((result.width * result.height) / 1e6).toFixed(1);
-      toast.success(
-        `${result.width}×${result.height} · ${mp} MP`,
-        `${(result.ms / 1000).toFixed(1)}s · ${engine === 'classic' ? 'resampler' : modelId}`,
-      );
-    } catch (error) {
-      toast.error('Upscale failed', error instanceof Error ? error.message : String(error));
+      for (const entry of queueRef.current) {
+        setQueue((prev) =>
+          prev.map((e) => (e.id === entry.id ? { ...e, status: 'running', progress: 0.05, error: undefined } : e)),
+        );
+        try {
+          const result = await runUpscale({
+            blob: entry.blob,
+            path: entry.path,
+            name: entry.name,
+            width: entry.width,
+            height: entry.height,
+            modelId: activeModel.id,
+            target: activeTarget,
+            outFormat,
+            quality: quality / 100,
+            onProgress: (ratio) => {
+              setQueue((prev) =>
+                prev.map((e) => (e.id === entry.id ? { ...e, progress: ratio } : e)),
+              );
+            },
+          });
+          const outUrl = URL.createObjectURL(result.blob);
+          setQueue((prev) =>
+            prev.map((e) => {
+              if (e.id !== entry.id) return e;
+              if (e.outUrl) URL.revokeObjectURL(e.outUrl);
+              return {
+                ...e,
+                status: 'done',
+                progress: 1,
+                outBlob: result.blob,
+                outUrl,
+                outName: result.filename,
+                outW: result.width,
+                outH: result.height,
+                outMP: result.megapixels,
+              };
+            }),
+          );
+          completed++;
+        } catch (error) {
+          setQueue((prev) =>
+            prev.map((e) =>
+              e.id === entry.id
+                ? {
+                    ...e,
+                    status: 'error',
+                    error: error instanceof Error ? error.message : String(error),
+                  }
+                : e,
+            ),
+          );
+        }
+      }
+      if (completed > 0) {
+        toast.success(`Upscaled ${completed} image${completed === 1 ? '' : 's'}`, activeTarget.label);
+      }
+    } finally {
+      setRunning(false);
     }
-    setProgress(null);
-  };
+  }
 
-  const engineReady = engine === 'classic' || engineState.status === 'ready';
+  const resolutionTargets = UPSCALE_TARGETS.filter((t) => t.group === 'resolution');
+  const agencyTargets = UPSCALE_TARGETS.filter((t) => t.group === 'platform');
+  const doneEntries = queue.filter((e) => e.status === 'done' && e.outBlob);
 
   return (
-    <>
-      <PageHeader title="Upscale" />
+    <div className="space-y-5">
+      <PageHeader
+        title="Image Upscaler"
+        actions={
+          <>
+            <input
+              ref={fileRef}
+              type="file"
+              multiple
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files) void addFiles(e.target.files);
+                e.target.value = '';
+              }}
+            />
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<GIcon name="photo_library" size={16} />}
+              onClick={() => void importFromLibrary()}
+            >
+              From Library
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<GIcon name="upload_file" size={16} />}
+              onClick={() => fileRef.current?.click()}
+            >
+              Add images
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              loading={running}
+              disabled={queue.length === 0}
+              icon={<GIcon name="photo_size_select_large" size={16} />}
+              onClick={() => void processAll()}
+            >
+              Upscale {queue.length > 0 ? `(${queue.length})` : ''}
+            </Button>
+          </>
+        }
+      />
 
-      <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-3">
-        <Card className="xl:col-span-2" title="Job">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Source">
-              <Select
-                value={activeItem?.id ?? ''}
-                onChange={(e) => setItemId(e.target.value)}
-                options={rasterItems.map((i) => ({
-                  value: i.id,
-                  label: `${i.name} · ${i.width ?? '?'}×${i.height ?? '?'}`,
-                }))}
-                disabled={rasterItems.length === 0}
-              />
-            </Field>
-            <Field label="Target">
-              <Select
-                value={presetId}
-                onChange={(e) => setPresetId(e.target.value)}
-                options={TARGET_PRESETS.map((p) => ({ value: p.id, label: p.label }))}
-              />
-            </Field>
-            <Field label="Engine">
-              <SegmentedControl
-                value={engine}
-                onChange={(value) => setEngine(value)}
-                options={[
-                  { value: 'classic', label: 'Resampler' },
-                  { value: 'realesrgan', label: 'AI · GPU' },
-                ]}
-              />
-            </Field>
-            <Field label="Output">
-              <SegmentedControl
-                value={outFormat}
-                onChange={(value) => setOutFormat(value)}
-                options={[
-                  { value: 'png', label: 'PNG' },
-                  { value: 'jpg', label: 'JPG' },
-                  { value: 'webp', label: 'WebP' },
-                ]}
-              />
-            </Field>
-            {engine === 'realesrgan' && (
-              <Field label="Model" className="sm:col-span-2">
-                <Select
-                  value={modelId}
-                  onChange={(e) => setModelId(e.target.value)}
-                  options={UPSCALE_MODELS.map((m) => ({ value: m.id, label: `${m.label} — ${m.bestFor}` }))}
-                />
-              </Field>
-            )}
-            {outFormat !== 'png' && (
-              <Field label={`Quality ${Math.round(quality * 100)}%`} className="sm:col-span-2">
-                <input
-                  type="range"
-                  min={0.7}
-                  max={1}
-                  step={0.01}
-                  value={quality}
-                  onChange={(e) => setQuality(Number(e.target.value))}
-                  className="w-full accent-[var(--brand)]"
-                  aria-label="Output quality"
-                />
-              </Field>
-            )}
-          </div>
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+        {/* Left controls: Target, Format & Model Catalog */}
+        <div className="space-y-4 xl:col-span-5">
+          <Card>
+            <CardHeader title="Target & Output" icon={<GIcon name="aspect_ratio" size={17} />} />
 
-          {activeItem && plan ? (
-            <div className="mt-3 r-control border border-line bg-surface-2 px-3 py-2.5">
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.75rem] text-fg-muted">
-                <Scale className="size-4 shrink-0 text-brand" />
-                <span className="nums">
-                  {activeItem.width}×{activeItem.height}
-                </span>
-                <span className="text-fg-subtle">→</span>
-                <strong className="nums text-fg">
-                  {Math.round((activeItem.width ?? 0) * plan.finalScale)}×
-                  {Math.round((activeItem.height ?? 0) * plan.finalScale)}
-                </strong>
-                <Badge tone="brand">
-                  {plan.passes.join('×')}
-                  {plan.tailScale > 1.01 ? ` + ${plan.tailScale.toFixed(2)}×` : ''}
-                </Badge>
+            <div className="space-y-3.5">
+              <div>
+                <div className="mb-1.5 text-xs font-medium text-ink-muted">Resolution</div>
+                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                  {resolutionTargets.map((t) => {
+                    const active = t.id === targetId;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => pickTarget(t.id)}
+                        className={clsx(
+                          'flex items-center gap-2 rounded-[var(--r-control)] border px-2.5 py-2 text-left text-xs transition-colors',
+                          active
+                            ? 'border-accent bg-accent-soft font-semibold text-accent'
+                            : 'border-line bg-surface text-ink hover:border-line-strong hover:bg-surface-2',
+                        )}
+                      >
+                        <GIcon name={t.icon ?? 'hd'} size={16} className="shrink-0" />
+                        <span className="min-w-0 flex-1 truncate">{t.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <p className="mt-1 text-[0.6875rem] text-fg-subtle">{preset.note}</p>
-            </div>
-          ) : (
-            <p className="mt-3 r-control border border-dashed border-line px-3 py-4 text-center text-[0.75rem] text-fg-subtle">
-              Import a raster image first
-            </p>
-          )}
 
-          {engine === 'realesrgan' && (
-            <div className="mt-3 r-control border border-line bg-surface-2 px-3 py-2.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <Cpu className="size-4 shrink-0 text-brand" />
-                <p className="min-w-0 flex-1 text-[0.75rem] text-fg-muted">
-                  {engineState.status === 'idle'
-                    ? isDesktop
-                      ? 'One 43 MB download, then runs offline on your GPU.'
-                      : 'Needs the Windows desktop build.'
-                    : engineState.message}
-                </p>
-                {isDesktop && (
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    onClick={onEnsure}
-                    loading={engineState.status === 'checking'}
-                    icon={<Download className="size-3.5" />}
-                  >
-                    {engineState.status === 'ready' ? 'Re-check' : 'Install'}
-                  </Button>
+              <div>
+                <div className="mb-1.5 text-xs font-medium text-ink-muted">Marketplace presets</div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {agencyTargets.map((t) => {
+                    const active = t.id === targetId;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => pickTarget(t.id)}
+                        className={clsx(
+                          'flex items-center gap-2 rounded-[var(--r-control)] border px-2.5 py-2 text-left text-xs transition-colors',
+                          active
+                            ? 'border-accent bg-accent-soft font-semibold text-ink'
+                            : 'border-line bg-surface text-ink hover:border-line-strong hover:bg-surface-2',
+                        )}
+                      >
+                        {t.platformId && <PlatformLogo id={t.platformId} size={18} />}
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-medium">{t.label}</div>
+                          <div className="truncate text-2xs text-ink-muted">{t.badge}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <div className="mb-1.5 text-xs font-medium text-ink-muted">Format</div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {UPSCALE_FORMATS.map((fmt) => {
+                      const active = outFormat === fmt.id;
+                      return (
+                        <button
+                          key={fmt.id}
+                          type="button"
+                          onClick={() => setOutFormat(fmt.id)}
+                          className={clsx(
+                            'flex h-9 items-center justify-center gap-1.5 rounded-[var(--r-control)] border text-xs font-semibold transition-colors',
+                            active
+                              ? 'border-accent bg-accent-soft text-accent'
+                              : 'border-line bg-surface text-ink hover:bg-surface-2',
+                          )}
+                        >
+                          <FormatIcon format={fmt.id} size={15} />
+                          <span>{fmt.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {outFormat !== 'png' && (
+                  <Field label={`Quality (${quality}%)`}>
+                    <input
+                      type="range"
+                      min={70}
+                      max={100}
+                      value={quality}
+                      onChange={(e) => setQuality(Number(e.target.value))}
+                      className="mt-2 w-full accent-[var(--accent)]"
+                    />
+                  </Field>
                 )}
               </div>
             </div>
-          )}
+          </Card>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Button
-              onClick={onRun}
-              disabled={!activeItem || progress !== null || !engineReady}
-              icon={<Zap className="size-4" />}
-              loading={progress !== null}
-            >
-              Run
-            </Button>
-            {progress && (
-              <span className="flex min-w-0 items-center gap-2 text-[0.75rem] text-fg-muted">
-                <Spinner size={3} />
-                <span className="truncate">{progress.label}</span>
-              </span>
-            )}
-            {results.length > 0 && (
-              <Badge tone="neutral" icon={<Gauge className="size-3" />}>
-                {results.length} done
-              </Badge>
-            )}
-          </div>
-        </Card>
+          <Card>
+            <CardHeader
+              title="Models"
+              icon={<GIcon name="memory" size={17} />}
+              action={<Badge tone="neutral">{filteredModels.length}</Badge>}
+            />
 
-        <Card title="Models">
-          <ul className="flex flex-col gap-1.5">
-            {UPSCALE_MODELS.map((model) => (
-              <li
-                key={model.id}
-                className="flex items-center gap-2 r-control border border-line px-2.5 py-2"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[0.75rem] font-medium text-fg">{model.label}</p>
-                  <p className="truncate text-[0.6875rem] text-fg-subtle">{model.bestFor}</p>
-                </div>
-                <Badge tone="ok" icon={<ShieldCheck className="size-3" />} className="shrink-0">
-                  {model.license}
-                </Badge>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2.5 text-[0.6875rem] leading-relaxed text-fg-subtle">{ENGINE_LICENSE_NOTE}</p>
-          <p className="mt-1.5 text-[0.6875rem] leading-relaxed text-fg-subtle">{CUSTOM_MODEL_HINT}</p>
-        </Card>
-      </div>
+            <div className="mb-3 flex flex-wrap gap-1">
+              {UPSCALE_PURPOSES.map((p) => {
+                const active = purpose === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setPurpose(p.id)}
+                    className={clsx(
+                      'inline-flex h-7 items-center gap-1 rounded-[var(--r-xs)] border px-2 text-2xs font-medium transition-colors',
+                      active
+                        ? 'border-accent bg-accent text-accent-fg'
+                        : 'border-line bg-surface text-ink-muted hover:text-ink',
+                    )}
+                  >
+                    <GIcon name={p.icon} size={13} />
+                    <span>{p.label}</span>
+                  </button>
+                );
+              })}
+            </div>
 
-      <Card className="mt-3" title="Results" flush>
-        {results.length === 0 ? (
-          <p className="px-4 py-8 text-center text-[0.8125rem] text-fg-subtle">No results yet</p>
-        ) : (
-          <ul className="divide-y divide-line">
-            {results.map((result) => (
-              <li key={result.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
-                <img
-                  src={result.url}
-                  alt={result.outName}
-                  className="h-12 w-16 shrink-0 r-chip border border-line object-cover"
+            <div className="max-h-[420px] space-y-1.5 overflow-y-auto pr-1">
+              {filteredModels.map((model) => (
+                <ModelTile
+                  key={model.id}
+                  name={model.name}
+                  icon={model.icon}
+                  badge={model.scales.map((s) => `${s}x`).join(' / ')}
+                  license={model.license}
+                  sizeMB={model.sizeMB}
+                  selected={modelId === model.id}
+                  builtin={model.family === 'builtin'}
+                  installed={Boolean(installed[model.id])}
+                  desktopOnly={model.family !== 'builtin'}
+                  isDesktop={desktop.isDesktop}
+                  progress={dlProgress[model.id]}
+                  onSelect={() => setModelId(model.id)}
+                  onInstall={() => void handleInstallModel(model)}
+                  onCancel={() => void cancelModelInstall(model.id)}
+                  onUninstall={() => void handleUninstallModel(model)}
                 />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[0.8125rem] font-medium text-fg">{result.outName}</p>
-                  <p className="nums mt-0.5 text-[0.6875rem] text-fg-muted">
-                    {result.width}×{result.height} · {formatBytes(result.blob.size)} ·{' '}
-                    {(result.ms / 1000).toFixed(1)}s
-                  </p>
-                </div>
-                <div className="flex shrink-0 gap-1.5">
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    icon={<Download className="size-3.5" />}
-                    onClick={() => {
-                      const a = document.createElement('a');
-                      a.href = result.url;
-                      a.download = result.outName;
-                      a.click();
-                    }}
-                  >
-                    Save
-                  </Button>
-                  <Button
-                    size="xs"
-                    icon={<LibraryIcon className="size-3.5" />}
-                    onClick={async () => {
-                      await library.addUpscaled(
-                        result.outName,
-                        result.blob,
-                        result.width,
-                        result.height,
-                      );
-                      toast.success('Added to library');
-                    }}
-                  >
-                    Library
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-    </>
+              ))}
+            </div>
+          </Card>
+        </div>
+
+        {/* Right: Dropzone & queue */}
+        <div className="space-y-4 xl:col-span-7">
+          <div
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (e.dataTransfer.files?.length) void addFiles(e.dataTransfer.files);
+            }}
+            onClick={() => fileRef.current?.click()}
+            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--r-card)] border border-dashed border-line-strong bg-surface px-6 py-8 text-center hover:border-accent hover:bg-accent-soft/25"
+          >
+            <span className="inline-flex size-10 items-center justify-center rounded-[var(--r-control)] bg-accent-soft text-accent">
+              <GIcon name="add_photo_alternate" size={22} />
+            </span>
+            <div className="text-sm font-semibold text-ink">Drop images or click to select</div>
+            <div className="text-xs text-ink-muted">JPG, PNG, WebP, AVIF, BMP and TIFF supported</div>
+          </div>
+
+          {queue.length > 0 && (
+            <Card>
+              <CardHeader
+                title={`Queue (${queue.length})`}
+                icon={<GIcon name="collections" size={17} />}
+                action={
+                  <div className="flex items-center gap-2">
+                    {doneEntries.length > 1 && (
+                      <Button
+                        size="xs"
+                        variant="secondary"
+                        icon={<GIcon name="download" size={14} />}
+                        onClick={() => {
+                          for (const e of doneEntries) {
+                            if (e.outBlob && e.outName) triggerBlobDownload(e.outBlob, e.outName);
+                          }
+                        }}
+                      >
+                        Download all ({doneEntries.length})
+                      </Button>
+                    )}
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      icon={<GIcon name="delete_sweep" size={14} />}
+                      onClick={clearQueue}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                }
+              />
+
+              <div className="divide-y divide-line">
+                {queue.map((entry) => {
+                  const preview = resolveTargetSize(entry.width, entry.height, activeTarget);
+                  return (
+                    <div key={entry.id} className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0">
+                      <img
+                        src={entry.outUrl ?? entry.srcUrl}
+                        alt={entry.name}
+                        className="size-13 shrink-0 rounded-[var(--r-xs)] border border-line object-cover"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-xs font-semibold text-ink">
+                          {entry.outName ?? entry.name}
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-2xs text-ink-muted tabular-nums">
+                          <span>
+                            {entry.width}x{entry.height}
+                          </span>
+                          <GIcon name="arrow_forward" size={12} />
+                          <span className="font-medium text-ink">
+                            {entry.outW ?? preview.width}x{entry.outH ?? preview.height}
+                          </span>
+                          {entry.outMP && <Badge tone="brand">{entry.outMP} MP</Badge>}
+                          {entry.outBlob && <span>({formatBytes(entry.outBlob.size)})</span>}
+                        </div>
+                        {entry.status === 'running' && (
+                          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-3">
+                            <div
+                              className="h-full rounded-full bg-accent transition-[width]"
+                              style={{ width: `${Math.max(8, Math.round(entry.progress * 100))}%` }}
+                            />
+                          </div>
+                        )}
+                        {entry.error && (
+                          <div className="mt-1 text-2xs font-medium text-danger">{entry.error}</div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        {entry.status === 'done' && entry.outBlob && entry.outName && (
+                          <>
+                            <Button
+                              size="xs"
+                              variant="secondary"
+                              icon={<GIcon name="photo_library" size={13} />}
+                              onClick={async () => {
+                                await addGeneratedBlob(entry.outName!, entry.outBlob!);
+                                toast.success('Saved to Library', entry.outName);
+                              }}
+                            >
+                              Library
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="primary"
+                              icon={<GIcon name="download" size={13} />}
+                              onClick={() => triggerBlobDownload(entry.outBlob!, entry.outName!)}
+                            >
+                              Save
+                            </Button>
+                          </>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeEntry(entry.id)}
+                          className="inline-flex size-7 items-center justify-center rounded-[var(--r-xs)] text-ink-faint hover:bg-surface-2 hover:text-danger"
+                          aria-label="Remove item"
+                        >
+                          <GIcon name="close" size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import clsx from 'clsx';
-import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
+import { GIcon, type GoogleIconName } from '@/components/ui/GoogleIcon';
 
 export type ToastKind = 'success' | 'error' | 'warning' | 'info';
 
@@ -32,18 +32,18 @@ interface ToastApi {
 
 const ToastContext = createContext<(ToastApi & { toasts: Toast[] }) | null>(null);
 
-const ICONS: Record<ToastKind, typeof Info> = {
-  success: CheckCircle2,
-  error: XCircle,
-  warning: AlertTriangle,
-  info: Info,
+const ICONS: Record<ToastKind, GoogleIconName> = {
+  success: 'check_circle',
+  error: 'cancel',
+  warning: 'info',
+  info: 'info',
 };
 
 const TONES: Record<ToastKind, { box: string; icon: string }> = {
   success: { box: 'border-ok/40', icon: 'text-ok' },
   error: { box: 'border-danger/40', icon: 'text-danger' },
-  warning: { box: 'border-warn/40', icon: 'text-warn' },
-  info: { box: 'border-brand/40', icon: 'text-brand-fg' },
+  warning: { box: 'border-brand/35', icon: 'text-brand' },
+  info: { box: 'border-brand/40', icon: 'text-brand' },
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -61,7 +61,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const push = useCallback(
-    (kind: ToastKind, title: string, description?: string, duration = 4200) => {
+    (kind: ToastKind, title: string, description?: string, duration = 3800) => {
       const id = nextId.current++;
       setToasts((prev) => [...prev.slice(-3), { id, kind, title, description, duration }]);
       if (duration > 0) {
@@ -86,8 +86,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       push,
       dismiss,
       success: (title, description) => push('success', title, description),
-      error: (title, description) => push('error', title, description, 6000),
-      warning: (title, description) => push('warning', title, description, 5200),
+      error: (title, description) => push('error', title, description, 5500),
+      warning: (title, description) => push('warning', title, description, 4500),
       info: (title, description) => push('info', title, description),
     }),
     [toasts, push, dismiss],
@@ -102,18 +102,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         aria-live="polite"
       >
         {toasts.map((toast) => {
-          const Icon = ICONS[toast.kind];
           const tone = TONES[toast.kind];
           return (
             <div
               key={toast.id}
               className={clsx(
-                'pointer-events-auto flex w-full max-w-sm items-start gap-2.5 rounded-xl border border-line bg-surface p-3 shadow-[var(--shadow-pop)]',
+                'pointer-events-auto flex w-full max-w-sm items-start gap-2.5 r-dialog border border-line bg-surface p-3 shadow-[var(--shadow-pop)]',
                 tone.box,
               )}
-              style={{ animation: 'toast-in 180ms ease-out both' }}
+              style={{ animation: 'toast-in 150ms ease-out both' }}
             >
-              <Icon className={clsx('mt-0.5 size-5 shrink-0', tone.icon)} />
+              <GIcon name={ICONS[toast.kind]} size={20} className={clsx('mt-0.5', tone.icon)} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-fg">{toast.title}</p>
                 {toast.description && (
@@ -124,9 +123,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 type="button"
                 onClick={() => dismiss(toast.id)}
                 aria-label="Dismiss notification"
-                className="r-control p-1 text-fg-subtle transition hover:bg-surface-3 hover:text-fg"
+                className="r-control p-1 text-fg-subtle hover:bg-surface-2 hover:text-fg"
               >
-                <X className="size-4" />
+                <GIcon name="close" size={16} />
               </button>
             </div>
           );
@@ -138,6 +137,6 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
 export function useToast(): ToastApi {
   const ctx = useContext(ToastContext);
-  if (!ctx) throw new Error('useToast must be used inside <ToastProvider>');
+  if (!ctx) throw new Error('useToast must be used inside ToastProvider');
   return ctx;
 }

@@ -1,155 +1,162 @@
-import { useState } from 'react';
-import { CalendarX2, FileSignature, Landmark, Plus, Trash2, UserCheck } from 'lucide-react';
+import { useState, type FormEvent } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Field, Input, Select, Textarea } from '@/components/ui/Field';
-import { DataTable, type Column } from '@/components/ui/DataTable';
+import { Field, Input, Select } from '@/components/ui/Field';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/Misc';
-import { isExpired, useReleases, type Release } from '@/state/releases';
-import { useLibrary } from '@/state/library';
+import { GIcon } from '@/components/ui/GoogleIcon';
+import { isExpired, useReleases } from '@/state/releases';
 import { useToast } from '@/state/ToastState';
 
-const EMPTY_FORM = { kind: 'model' as Release['kind'], name: '', signedAt: '', expiresAt: '', notes: '', fileName: '' };
-
 export function ReleasesPage() {
-  const { releases, addRelease, updateRelease, deleteRelease } = useReleases();
-  const library = useLibrary();
+  const { releases, addRelease, deleteRelease } = useReleases();
   const toast = useToast();
+
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<Release | null>(null);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [kind, setKind] = useState<'model' | 'property'>('model');
+  const [name, setName] = useState('');
+  const [signedAt, setSignedAt] = useState(() => new Date().toISOString().slice(0, 10));
+  const [expiresAt, setExpiresAt] = useState('');
+  const [fileName, setFileName] = useState('');
+  const [notes, setNotes] = useState('');
 
-  const linkedCount = (id: string) => library.items.filter((item) => (item.releaseIds ?? []).includes(id)).length;
-
-  const openNew = () => {
-    setEditing(null);
-    setForm(EMPTY_FORM);
-    setOpen(true);
-  };
-  const openEdit = (release: Release) => {
-    setEditing(release);
-    setForm({ kind: release.kind, name: release.name, signedAt: release.signedAt, expiresAt: release.expiresAt, notes: release.notes, fileName: release.fileName });
-    setOpen(true);
-  };
-
-  const submit = () => {
-    if (!form.name.trim()) {
-      toast.error('Name required', 'Who signed (model) or what is cleared (property)?');
-      return;
-    }
-    if (editing) updateRelease(editing.id, form);
-    else addRelease(form);
+  function handleCreate(e: FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    addRelease({
+      kind,
+      name: name.trim(),
+      signedAt,
+      expiresAt,
+      fileName: fileName.trim(),
+      notes: notes.trim(),
+    });
+    setName('');
+    setFileName('');
+    setNotes('');
+    setExpiresAt('');
     setOpen(false);
-    toast.success(editing ? 'Release updated' : 'Release added', 'Link it to items from the item editor.');
-  };
-
-  const columns: Column<Release>[] = [
-    {
-      key: 'name',
-      header: 'Name / property',
-      primary: true,
-      render: (row) => (
-        <span className="flex items-center gap-2">
-          {row.kind === 'model' ? <UserCheck className="size-4 shrink-0 text-brand" /> : <Landmark className="size-4 shrink-0 text-warn" />}
-          <span className="min-w-0">
-            <span className="block truncate font-medium text-fg">{row.name}</span>
-            {row.fileName && <span className="block truncate text-[0.625rem] text-fg-subtle">{row.fileName}</span>}
-          </span>
-        </span>
-      ),
-    },
-    { key: 'kind', header: 'Kind', hideBelow: 'sm', render: (row) => <Badge tone={row.kind === 'model' ? 'brand' : 'warn'}>{row.kind}</Badge> },
-    { key: 'signedAt', header: 'Signed', hideBelow: 'md', sortable: true, render: (row) => <span className="tabular-nums">{row.signedAt || '—'}</span> },
-    {
-      key: 'expiresAt',
-      header: 'Validity',
-      hideBelow: 'lg',
-      render: (row) =>
-        isExpired(row) ? (
-          <Badge tone="danger" icon={<CalendarX2 className="size-3" />}>expired {row.expiresAt}</Badge>
-        ) : row.expiresAt ? (
-          <Badge tone="warn">until {row.expiresAt}</Badge>
-        ) : (
-          <Badge tone="ok">no expiry</Badge>
-        ),
-    },
-    { key: 'links', header: 'Items', align: 'right', hideBelow: 'md', render: (row) => <span className="tabular-nums">{linkedCount(row.id)}</span> },
-    {
-      key: 'actions',
-      header: '',
-      align: 'right',
-      render: (row) => (
-        <span className="flex justify-end gap-1">
-          <Button size="xs" variant="ghost" onClick={() => openEdit(row)}>Edit</Button>
-          <Button size="xs" variant="ghost" icon={<Trash2 className="size-3.5" />} aria-label="Delete release" onClick={() => { deleteRelease(row.id); toast.info('Release deleted', 'Items keep working; the release warning returns.'); }} />
-        </span>
-      ),
-    },
-  ];
+    toast.success('Release saved');
+  }
 
   return (
-    <>
+    <div className="space-y-5">
       <PageHeader
-        title="Releases"
-        
-        actions={<Button size="sm" icon={<Plus className="size-4" />} onClick={openNew}>Add release</Button>}
+        title="Model & Property Releases"
+        actions={
+          <Button
+            size="sm"
+            variant="primary"
+            icon={<GIcon name="add" size={16} />}
+            onClick={() => setOpen(true)}
+          >
+            Add release
+          </Button>
+        }
       />
 
-      <Card flush>
-        {releases.length === 0 ? (
+      {releases.length === 0 ? (
+        <Card>
           <EmptyState
-            icon={<FileSignature className="size-7" />}
+            icon={<GIcon name="assignment_turned_in" size={26} />}
             title="No releases registered"
-            
-            action={<Button icon={<Plus className="size-4" />} onClick={openNew}>Add release</Button>}
+            description="Track signed model and property releases and link them to Library items and CSV exports."
+            action={
+              <Button
+                size="sm"
+                variant="primary"
+                icon={<GIcon name="add" size={15} />}
+                onClick={() => setOpen(true)}
+              >
+                Add release
+              </Button>
+            }
           />
-        ) : (
-          <DataTable rows={releases} columns={columns} rowKey={(row) => row.id} dense />
-        )}
-      </Card>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {releases.map((rel) => {
+            const expired = isExpired(rel);
+            return (
+              <Card key={rel.id} className="space-y-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-semibold text-ink">{rel.name}</div>
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <Badge tone="brand">{rel.kind === 'model' ? 'Model' : 'Property'}</Badge>
+                      {expired && <Badge tone="danger">Expired</Badge>}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => deleteRelease(rel.id)}
+                    className="inline-flex size-7 items-center justify-center rounded-[var(--r-xs)] text-ink-faint hover:text-danger"
+                    aria-label={`Delete ${rel.name}`}
+                  >
+                    <GIcon name="delete" size={15} />
+                  </button>
+                </div>
+                <div className="text-xs text-ink-muted">
+                  Signed: {rel.signedAt.replace(/-/g, ' ')}
+                  {rel.fileName ? ` · ${rel.fileName}` : ''}
+                </div>
+                {rel.notes && <div className="text-xs text-ink-muted">{rel.notes}</div>}
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
-      <Modal
-        open={open}
-        onClose={() => setOpen(false)}
-        title={editing ? 'Edit release' : 'Add release'}
-        
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={submit} icon={<FileSignature className="size-4" />}>{editing ? 'Save' : 'Add'}</Button>
-          </>
-        }
-      >
-        <div className="flex flex-col gap-3">
-          <Field label="Kind">
-            <Select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as Release['kind'] })} options={[
-              { value: 'model', label: 'Model release (person)' },
-              { value: 'property', label: 'Property release (place/thing)' },
-            ]} />
+      <Modal open={open} onClose={() => setOpen(false)} title="Add release" size="sm">
+        <form onSubmit={handleCreate} className="space-y-3.5">
+          <Field label="Type">
+            <Select
+              value={kind}
+              onChange={(e) => setKind(e.target.value as 'model' | 'property')}
+              options={[
+                { value: 'model', label: 'Model release' },
+                { value: 'property', label: 'Property release' },
+              ]}
+            />
           </Field>
-          <Field label="Name / property" required>
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Rahim Uddin (model) or Satkhira studio loft" />
+          <Field label="Subject or property name">
+            <Input
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Release identifier"
+            />
           </Field>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label="Signed on">
-              <Input type="date" value={form.signedAt} onChange={(e) => setForm({ ...form, signedAt: e.target.value })} />
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Signed date">
+              <Input type="date" value={signedAt} onChange={(e) => setSignedAt(e.target.value)} />
             </Field>
-            <Field label="Expires (optional)">
-              <Input type="date" value={form.expiresAt} onChange={(e) => setForm({ ...form, expiresAt: e.target.value })} />
+            <Field label="Expiry (optional)">
+              <Input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
             </Field>
           </div>
-          <Field label="Stored file name (reminder)">
-            <Input value={form.fileName} onChange={(e) => setForm({ ...form, fileName: e.target.value })} placeholder="rahim-shutterstock-release.pdf" />
+          <Field label="Signed PDF filename (optional)">
+            <Input
+              value={fileName}
+              onChange={(e) => setFileName(e.target.value)}
+              placeholder="release_signed.pdf"
+            />
           </Field>
-          <Field label="Notes">
-            <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Witnessed signature, ID copy attached…" />
+          <Field label="Notes (optional)">
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
           </Field>
-        </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" size="sm" variant="primary">
+              Save release
+            </Button>
+          </div>
+        </form>
       </Modal>
-    </>
+    </div>
   );
 }

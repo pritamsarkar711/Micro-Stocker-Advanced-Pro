@@ -20,12 +20,12 @@ import {
   type ConnectionReport,
 } from '@/lib/cloud/config';
 
-/* -------------------------------------------------------------------------- */
-/* Settings                                                                    */
-/* -------------------------------------------------------------------------- */
+export type ThemeSetting = 'light' | 'dark' | 'system';
+export type AccentSetting = 'blue' | 'green';
 
 export interface Settings {
-  theme: 'light' | 'dark' | 'system';
+  theme: ThemeSetting;
+  accent: AccentSetting;
   density: 'comfortable' | 'compact';
   currency: CurrencyCode;
   sidebarCollapsed: boolean;
@@ -34,19 +34,19 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'dark',
+  accent: 'blue',
   density: 'comfortable',
   currency: 'BDT',
   sidebarCollapsed: false,
   reduceMotion: false,
 };
 
-/* -------------------------------------------------------------------------- */
-/* Context value                                                               */
-/* -------------------------------------------------------------------------- */
-
 interface AppState {
   ready: boolean;
   settings: Settings;
+  isDark: boolean;
+  setThemeInstant: (theme: ThemeSetting) => void;
+  setAccentInstant: (accent: AccentSetting) => void;
   updateSettings: (patch: Partial<Settings>) => void;
   resetSettings: () => void;
 
@@ -77,18 +77,64 @@ const AppContext = createContext<AppState | null>(null);
 
 const INITIAL_REPORT: ConnectionReport = {
   state: 'local',
-  message: 'Checking…',
+  message: 'Local workspace ready',
   latencyMs: null,
   checkedAt: null,
 };
 
 function systemPrefersDark(): boolean {
-  return typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-color-scheme: dark)').matches
+  );
+}
+
+function resolveDark(theme: ThemeSetting): boolean {
+  return theme === 'dark' || (theme === 'system' && systemPrefersDark());
+}
+
+/**
+ * Synchronously switch light and dark paint in a single frame with CSS
+ * transitions temporarily paused so every surface updates immediately.
+ */
+function paintThemeDom(dark: boolean, accent: AccentSetting, theme: ThemeSetting) {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  root.classList.add('theme-switching');
+  root.classList.toggle('dark', dark);
+  root.style.colorScheme = dark ? 'dark' : 'light';
+  root.dataset.accent = accent;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', dark ? '#0f1318' : '#f5f7fa');
+  // Flush style recalculation before restoring control transitions.
+  void root.offsetHeight;
+  requestAnimationFrame(() => {
+    root.classList.remove('theme-switching');
+  });
+  void desktop.theme.set(theme);
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
-  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<Settings>(() => {
+    try {
+      const raw =
+        typeof localStorage !== 'undefined'
+          ? localStorage.getItem('msap:data:msap:settings') || localStorage.getItem('msap:data:settings')
+          : null;
+      const parsed = raw ? (JSON.parse(raw) as Partial<Settings>) : {};
+      return {
+        ...DEFAULT_SETTINGS,
+        ...parsed,
+        accent: parsed.accent === 'green' ? 'green' : 'blue',
+        theme: parsed.theme ?? (systemPrefersDark() ? 'dark' : 'light'),
+      };
+    } catch {
+      return DEFAULT_SETTINGS;
+    }
+  });
+  const [osDark, setOsDark] = useState<boolean>(() => systemPrefersDark());
   const [cloud, setCloud] = useState<CloudConfig>(EMPTY_CLOUD_CONFIG);
   const [connection, setConnection] = useState<ConnectionReport>(INITIAL_REPORT);
   const [zoom, setZoomState] = useState(1);
@@ -96,11 +142,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     platform: desktop.platform,
     isDesktop: desktop.isDesktop,
     version: APP_VERSION,
-    chrome: '—',
+    chrome: 'Unknown',
     isDev: import.meta.env.DEV,
   });
 
-  /* ---- load persisted state ---- */
+  const isDark = settings.theme === 'dark' || (settings.theme === 'system' && osDark);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -112,15 +159,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ]);
       if (cancelled) return;
 
-      const mergedSettings: Settings = { ...DEFAULT_SETTINGS, ...storedSettings };
-      // Respect the OS preference until the user explicitly chooses one.
-      if (!storedSettings.theme) {
-        mergedSettings.theme = systemPrefersDark() ? 'dark' : 'light';
-      }
-
+      const mergedSettings: Settings = {
+        ...DEFAULT_SETTINGS,
+        ...storedSettings,
+        accent: storedSettings.accent === 'green' ? 'green' : 'blue',
+        theme: storedSettings.theme ?? (systemPrefersDark() ? 'dark' : 'light'),
+      };
       const mergedCloud = mergeEnvConfig(storedCloud);
 
       setSettings(mergedSettings);
+      paintThemeDom(resolveDark(mergedSettings.theme), mergedSettings.accent, mergedSettings.theme);
       setCloud(mergedCloud);
       setZoomState(storedZoom || 1);
       setRuntime({
@@ -137,13 +185,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setReady(true);
 
       if (isConfigured(mergedCloud)) {
-        setConnection({ state: 'connecting', message: 'Connecting to Supabase…', latencyMs: null, checkedAt: null });
+        setConnection({ state: 'connecting', message: 'Connecting to cloud', latencyMs: null, checkedAt: null });
         const report = await testCloudConnection(mergedCloud);
         if (!cancelled) setConnection(report);
       } else {
         setConnection({
           state: 'local',
-          message: 'Offline mode — data is stored on this computer.',
+          message: 'Stored on this device',
           latencyMs: null,
           checkedAt: new Date().toISOString(),
         });
@@ -154,74 +202,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  /* ---- apply theme ---- */
   useEffect(() => {
+    if (typeof document === 'undefined') return;
     const root = document.documentElement;
-    const dark = settings.theme === 'dark' || (settings.theme === 'system' && systemPrefersDark());
-    root.classList.toggle('dark', dark);
-    root.style.colorScheme = dark ? 'dark' : 'light';
     root.dataset.density = settings.density;
     root.classList.toggle('reduce-motion', settings.reduceMotion);
-    void desktop.theme.set(settings.theme);
+  }, [settings.density, settings.reduceMotion]);
 
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', dark ? '#0e1216' : '#f4f6f8');
-
-    if (settings.theme !== 'system') return;
+  useEffect(() => {
+    if (settings.theme !== 'system' || typeof window === 'undefined' || !window.matchMedia) return;
     const mql = window.matchMedia('(prefers-color-scheme: dark)');
     const onChange = () => {
-      const isDark = mql.matches;
-      root.classList.toggle('dark', isDark);
-      root.style.colorScheme = isDark ? 'dark' : 'light';
+      setOsDark(mql.matches);
+      paintThemeDom(mql.matches, settings.accent, 'system');
     };
     mql.addEventListener('change', onChange);
     return () => mql.removeEventListener('change', onChange);
-  }, [settings.theme, settings.density, settings.reduceMotion]);
+  }, [settings.theme, settings.accent]);
 
-  /* ---- keyboard shortcuts (desktop-grade niceties) ---- */
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const mod = event.ctrlKey || event.metaKey;
-      if (!mod) return;
-      const key = event.key.toLowerCase();
-      if (key === '=' || key === '+') {
-        event.preventDefault();
-        nudgeZoom(0.1);
-      } else if (key === '-') {
-        event.preventDefault();
-        nudgeZoom(-0.1);
-      } else if (key === '0') {
-        event.preventDefault();
-        setZoom(1);
-      } else if (key === 'b') {
-        event.preventDefault();
-        setSettings((s) => {
-          const next = { ...s, sidebarCollapsed: !s.sidebarCollapsed };
-          void kv.set(STORAGE_KEYS.settings, next);
-          return next;
-        });
-      } else if (key === 'k') {
-        event.preventDefault();
-        document.dispatchEvent(new CustomEvent('msap:focus-search'));
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const updateSettings = useCallback((patch: Partial<Settings>) => {
+  const setThemeInstant = useCallback((theme: ThemeSetting) => {
     setSettings((prev) => {
-      const next = { ...prev, ...patch };
+      const next = { ...prev, theme };
+      paintThemeDom(resolveDark(theme), next.accent, theme);
       void kv.set(STORAGE_KEYS.settings, next);
       return next;
     });
   }, []);
 
-  const resetSettings = useCallback(() => {
-    setSettings({ ...DEFAULT_SETTINGS, theme: systemPrefersDark() ? 'dark' : 'light' });
-    void kv.set(STORAGE_KEYS.settings, {});
-    setZoom(1);
+  const setAccentInstant = useCallback((accent: AccentSetting) => {
+    setSettings((prev) => {
+      const next = { ...prev, accent };
+      paintThemeDom(resolveDark(next.theme), accent, next.theme);
+      void kv.set(STORAGE_KEYS.settings, next);
+      return next;
+    });
+  }, []);
+
+  const updateSettings = useCallback((patch: Partial<Settings>) => {
+    setSettings((prev) => {
+      const next = { ...prev, ...patch };
+      if (patch.theme !== undefined || patch.accent !== undefined) {
+        paintThemeDom(resolveDark(next.theme), next.accent, next.theme);
+      }
+      void kv.set(STORAGE_KEYS.settings, next);
+      return next;
+    });
   }, []);
 
   const setZoom = useCallback((factor: number) => {
@@ -232,17 +257,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void desktop.view.zoom(delta).then((actual) => setZoomState(actual));
   }, []);
 
+  const resetSettings = useCallback(() => {
+    const fresh: Settings = {
+      ...DEFAULT_SETTINGS,
+      theme: systemPrefersDark() ? 'dark' : 'light',
+    };
+    paintThemeDom(resolveDark(fresh.theme), fresh.accent, fresh.theme);
+    setSettings(fresh);
+    void kv.set(STORAGE_KEYS.settings, fresh);
+    setZoom(1);
+  }, [setZoom]);
+
   const recheckConnection = useCallback(async () => {
     if (!isConfigured(cloud)) {
       setConnection({
         state: 'local',
-        message: 'Offline mode — data is stored on this computer.',
+        message: 'Stored on this device',
         latencyMs: null,
         checkedAt: new Date().toISOString(),
       });
       return;
     }
-    setConnection({ state: 'connecting', message: 'Connecting to Supabase…', latencyMs: null, checkedAt: null });
+    setConnection({ state: 'connecting', message: 'Connecting to cloud', latencyMs: null, checkedAt: null });
     const report = await testCloudConnection(cloud);
     setConnection(report);
   }, [cloud]);
@@ -251,7 +287,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const next: CloudConfig = { ...config, savedAt: new Date().toISOString() };
     const ok = await kv.set(STORAGE_KEYS.cloud, next);
     setCloud(next);
-    setConnection({ state: 'connecting', message: 'Connecting to Supabase…', latencyMs: null, checkedAt: null });
+    setConnection({ state: 'connecting', message: 'Connecting to cloud', latencyMs: null, checkedAt: null });
     const report = await testCloudConnection(next);
     setConnection(report);
     return ok && report.state !== 'error';
@@ -262,7 +298,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCloud(EMPTY_CLOUD_CONFIG);
     setConnection({
       state: 'local',
-      message: 'Offline mode — data is stored on this computer.',
+      message: 'Stored on this device',
       latencyMs: null,
       checkedAt: new Date().toISOString(),
     });
@@ -272,6 +308,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => ({
       ready,
       settings,
+      isDark,
+      setThemeInstant,
+      setAccentInstant,
       updateSettings,
       resetSettings,
       cloud,
@@ -287,6 +326,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [
       ready,
       settings,
+      isDark,
+      setThemeInstant,
+      setAccentInstant,
       updateSettings,
       resetSettings,
       cloud,
@@ -306,6 +348,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
 export function useApp(): AppState {
   const ctx = useContext(AppContext);
-  if (!ctx) throw new Error('useApp must be used inside <AppProvider>');
+  if (!ctx) throw new Error('useApp must be used inside AppProvider');
   return ctx;
 }

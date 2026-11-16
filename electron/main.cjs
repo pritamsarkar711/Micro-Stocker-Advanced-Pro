@@ -1,14 +1,11 @@
 /**
- * Micro Stocker Advanced Pro - Electron main process.
+ * Micro Stocker Advanced Pro Electron main process.
  *
- * Plain CommonJS on purpose: no extra build step, so `npm run dev` and
- * `electron-builder` both work without compiling the main process.
- *
- * Security model
- *  - contextIsolation: true   (renderer cannot touch Node)
- *  - nodeIntegration:  false
- *  - sandbox:            true (preload only gets the electron IPC bridge)
- *  - every privileged action goes through an explicit ipcMain.handle channel
+ * Security model:
+ *  contextIsolation: true
+ *  nodeIntegration:  false
+ *  sandbox:          true
+ *  explicit ipcMain.handle channels only
  */
 'use strict';
 
@@ -16,6 +13,9 @@ const { app, BrowserWindow, Menu, dialog, ipcMain, shell, nativeTheme, session }
   require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
+const fsSync = require('node:fs');
+const os = require('node:os');
+const { spawn } = require('node:child_process');
 
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 const isDev = Boolean(DEV_SERVER_URL);
@@ -23,16 +23,28 @@ const isDev = Boolean(DEV_SERVER_URL);
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
 
+/** Active in app model downloads keyed by id so the user can cancel cleanly. */
+const activeDownloads = new Map();
+
 /* -------------------------------------------------------------------------- */
-/* Local key/value persistence (offline cache + settings)                     */
+/* Local key/value persistence                                                */
 /* -------------------------------------------------------------------------- */
 
 const dataDir = () => path.join(app.getPath('userData'), 'app-data');
+const modelsRoot = () => path.join(app.getPath('userData'), 'models');
+const upscalerDir = () => path.join(app.getPath('userData'), 'upscaler');
+const manifestPath = () => path.join(modelsRoot(), 'manifest.json');
 
 const safeKey = (key) => {
   const clean = String(key || '').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
   if (!clean) throw new Error('Invalid storage key');
   return `${clean}.json`;
+};
+
+const safeSegment = (value) => {
+  const clean = String(value || '').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
+  if (!clean || clean === '.' || clean === '..') throw new Error('Invalid path segment');
+  return clean;
 };
 
 const filePathFor = (key) => path.join(dataDir(), safeKey(key));
@@ -70,11 +82,155 @@ async function removeKey(key) {
 async function listKeys() {
   try {
     const entries = await fs.readdir(dataDir());
-    return { ok: true, keys: entries.filter((f) => f.endsWith('.json')).map((f) => f.replace(/\.json$/, '')) };
+    return {
+      ok: true,
+      keys: entries.filter((f) => f.endsWith('.json')).map((f) => f.replace(/\.json$/, '')),
+    };
   } catch (error) {
     if (error && error.code === 'ENOENT') return { ok: true, keys: [] };
     return { ok: false, error: String(error && error.message ? error.message : error) };
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* In app model download & install manager                                    */
+/* -------------------------------------------------------------------------- */
+
+async function readManifest() {
+  try {
+    const raw = await fs.readFile(manifestPath(), 'utf8');
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+async function writeManifest(manifest) {
+  await fs.mkdir(modelsRoot(), { recursive: true });
+  await fs.writeFile(manifestPath(), JSON.stringify(manifest, null, 2), 'utf8');
+}
+
+async function downloadToFile(url, destPath, signal, onChunk) {
+  const response = await fetch(url, { redirect: 'follow', signal });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} while downloading ${path.basename(destPath)}`);
+  }
+  const total = Number(response.headers.get('content-length') || 0);
+  await fs.mkdir(path.dirname(destPath), { recursive: true });
+
+  if (!response.body) {
+    const buf = Buffer.from(await response.arrayBuffer());
+    await fs.writeFile(destPath, buf);
+    onChunk(buf.length, buf.length);
+    return buf.length;
+  }
+
+  const handle = await fs.open(destPath, 'w');
+  let received = 0;
+  try {
+    const reader = response.body.getReader();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value && value.byteLength) {
+        await handle.write(value);
+        received += value.byteLength;
+        onChunk(received, total);
+      }
+    }
+  } finally {
+    await handle.close().catch(() => {});
+  }
+  return received;
+}
+
+async function extractZipFlattened(zipFile, destDir) {
+  const staging = await fs.mkdtemp(path.join(os.tmpdir(), 'msap-model-'));
+  try {
+    const yauzl = require('yauzl');
+    const { pipeline } = require('node:stream/promises');
+    const archive = await new Promise((resolve, reject) => {
+      yauzl.open(zipFile, { lazyEntries: true, autoClose: false }, (error, file) =>
+        error ? reject(error) : resolve(file));
+    });
+    try {
+      let totalSize = 0;
+      for (;;) {
+        const entry = await new Promise((resolve, reject) => {
+          const cleanup = () => {
+            archive.removeListener('error', onError);
+            archive.removeListener('end', onEnd);
+            archive.removeListener('entry', onEntry);
+          };
+          const onError = (error) => { cleanup(); reject(error); };
+          const onEnd = () => { cleanup(); resolve(null); };
+          const onEntry = (value) => { cleanup(); resolve(value); };
+          archive.once('error', onError);
+          archive.once('end', onEnd);
+          archive.once('entry', onEntry);
+          archive.readEntry();
+        });
+        if (!entry) break;
+        const mode = (entry.externalFileAttributes >>> 16) & 0xf000;
+        if (mode === 0xa000) throw new Error('Model archive contains a symbolic link.');
+        const name = entry.fileName.replace(/\\/g, '/');
+        if (name.startsWith('/') || /^[a-z]:/i.test(name) || name.split('/').some((part) => part === '..')) {
+          throw new Error('Model archive contains an unsafe path.');
+        }
+        totalSize += entry.uncompressedSize;
+        if (totalSize > 8 * 1024 * 1024 * 1024) throw new Error('Model archive is too large.');
+        const target = path.resolve(staging, name);
+        if (!target.startsWith(staging + path.sep)) throw new Error('Model archive contains an unsafe path.');
+        if (name.endsWith('/')) {
+          await fs.mkdir(target, { recursive: true });
+        } else {
+          await fs.mkdir(path.dirname(target), { recursive: true });
+          const stream = await new Promise((resolve, reject) => archive.openReadStream(entry, (error, data) => error ? reject(error) : resolve(data)));
+          await pipeline(stream, fsSync.createWriteStream(target, { flags: 'wx' }));
+        }
+      }
+    } finally {
+      archive.close();
+    }
+    const entries = await fs.readdir(staging, { withFileTypes: true });
+    const root =
+      entries.length === 1 && entries[0].isDirectory()
+        ? path.join(staging, entries[0].name)
+        : staging;
+    await fs.mkdir(destDir, { recursive: true });
+    await fs.cp(root, destDir, { recursive: true, force: true });
+  } finally {
+    await fs.rm(staging, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+function emitModelProgress(payload) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('model:progress', payload);
+  }
+}
+
+function spawnBinary(binaryPath, args, cwd, onLog) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(binaryPath, args, { cwd });
+    let stderr = '';
+    child.stderr.on('data', (chunk) => {
+      const text = chunk.toString();
+      stderr += text;
+      if (onLog && text.trim()) onLog(text.trim());
+    });
+    child.stdout.on('data', (chunk) => {
+      const text = chunk.toString();
+      if (onLog && text.trim()) onLog(text.trim());
+    });
+    child.on('error', reject);
+    child.on('close', (code) =>
+      code === 0
+        ? resolve(stderr)
+        : reject(new Error(`${path.basename(binaryPath)} exited ${code}: ${stderr.slice(-400)}`)),
+    );
+  });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -133,19 +289,57 @@ function registerIpc() {
   ipcMain.handle('shell:open-external', (_event, url) => {
     const value = String(url || '');
     if (!/^https?:\/\//i.test(value)) return { ok: false, error: 'Only http(s) links may be opened' };
-    return shell.openExternal(value).then(() => ({ ok: true })).catch((error) => ({ ok: false, error: String(error) }));
+    return shell
+      .openExternal(value)
+      .then(() => ({ ok: true }))
+      .catch((error) => ({ ok: false, error: String(error) }));
   });
 
-  // Export a text/CSV/JSON file with a native "Save as..." dialog.
+  /* ---------------- CORS free network proxy for AI providers -------------- */
+
+  ipcMain.handle('net:request', async (_event, payload) => {
+    try {
+      const { url, method = 'GET', headers = {}, body, timeoutMs = 60000 } = payload || {};
+      const target = String(url || '');
+      if (!/^https?:\/\//i.test(target)) {
+        return { ok: false, status: 0, error: 'Invalid URL protocol' };
+      }
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), Math.min(Math.max(Number(timeoutMs) || 60000, 1000), 180000));
+      try {
+        const res = await fetch(target, {
+          method: String(method || 'GET'),
+          headers,
+          body: body !== undefined && body !== null ? String(body) : undefined,
+          signal: controller.signal,
+          redirect: 'follow',
+        });
+        const text = await res.text();
+        return { ok: res.ok, status: res.status, text };
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        status: 0,
+        error: String(error && error.message ? error.message : error),
+      };
+    }
+  });
+
+  /* ---------------- File export & raw stock asset IO ---------------------- */
+
   ipcMain.handle('fs:export-text', async (_event, payload) => {
     try {
       const { defaultName = 'export.txt', text = '', filters } = payload || {};
       const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
         title: 'Export file',
         defaultPath: path.join(app.getPath('documents'), defaultName),
-        filters: Array.isArray(filters) && filters.length
-          ? filters
-          : [{ name: 'All files', extensions: ['*'] }],
+        filters:
+          Array.isArray(filters) && filters.length
+            ? filters
+            : [{ name: 'All files', extensions: ['*'] }],
       });
       if (canceled || !filePath) return { ok: false, canceled: true };
       await fs.writeFile(filePath, String(text), 'utf8');
@@ -155,20 +349,18 @@ function registerIpc() {
     }
   });
 
-  /* ---------------- raw file IO for the stock toolkit ---------------- */
-
-  ipcMain.handle('fs:read-base64', async (_event, path) => {
+  ipcMain.handle('fs:read-base64', async (_event, targetPath) => {
     try {
-      const buffer = await fs.readFile(String(path));
+      const buffer = await fs.readFile(String(targetPath));
       return { ok: true, base64: buffer.toString('base64'), size: buffer.length };
     } catch (error) {
       return { ok: false, error: String(error && error.message ? error.message : error) };
     }
   });
 
-  ipcMain.handle('fs:write-base64', async (_event, path, base64) => {
+  ipcMain.handle('fs:write-base64', async (_event, targetPath, base64) => {
     try {
-      await fs.writeFile(String(path), Buffer.from(String(base64), 'base64'));
+      await fs.writeFile(String(targetPath), Buffer.from(String(base64), 'base64'));
       return { ok: true };
     } catch (error) {
       return { ok: false, error: String(error && error.message ? error.message : error) };
@@ -180,18 +372,24 @@ function registerIpc() {
       title: title || 'Import stock files',
       properties: ['openFile', 'multiSelections'],
       filters: [
-        { name: 'Stock assets', extensions: ['jpg', 'jpeg', 'png', 'eps', 'ai', 'svg', 'webp'] },
+        {
+          name: 'Stock assets',
+          extensions: [
+            'jpg', 'jpeg', 'png', 'webp', 'avif', 'bmp', 'gif', 'tif', 'tiff', 'ico',
+            'eps', 'ai', 'svg', 'mp4', 'mov', 'webm', 'mkv', 'm4v',
+          ],
+        },
         { name: 'All files', extensions: ['*'] },
       ],
     });
     if (canceled) return { canceled: true, files: [] };
     const files = [];
-    for (const path of filePaths) {
+    for (const filePath of filePaths) {
       try {
-        const stat = await fs.stat(path);
-        files.push({ path, name: require('node:path').basename(path), size: stat.size });
+        const stat = await fs.stat(filePath);
+        files.push({ path: filePath, name: path.basename(filePath), size: stat.size });
       } catch {
-        /* skip unreadable entries */
+        /* skip unreadable entry */
       }
     }
     return { canceled: false, files };
@@ -206,7 +404,7 @@ function registerIpc() {
     }
   });
 
-  /* ---------------- watch folder: auto-import new stock files ---------------- */
+  /* ---------------- Watch folder ------------------------------------------ */
 
   let folderWatcher = null;
 
@@ -218,25 +416,29 @@ function registerIpc() {
     });
     if (canceled || !filePaths || !filePaths[0]) return { ok: false, error: 'canceled' };
     const dir = filePaths[0];
-    const fsSync = require('node:fs');
-    const nodePath = require('node:path');
-    const EXT = new Set(['.jpg', '.jpeg', '.png', '.eps', '.ai', '.svg', '.webp']);
+    const EXT = new Set(['.jpg', '.jpeg', '.png', '.eps', '.ai', '.svg', '.webp', '.avif', '.tif', '.tiff']);
     const pending = new Map();
     try {
       const watcher = fsSync.watch(dir, (_event, filename) => {
         if (!filename) return;
-        const ext = nodePath.extname(String(filename)).toLowerCase();
+        const ext = path.extname(String(filename)).toLowerCase();
         if (!EXT.has(ext)) return;
-        const fullPath = nodePath.join(dir, String(filename));
+        const fullPath = path.join(dir, String(filename));
         clearTimeout(pending.get(filename));
         pending.set(
           filename,
           setTimeout(async () => {
             try {
               const stat = await fs.stat(fullPath);
-              if (mainWindow) mainWindow.webContents.send('watch:file', { path: fullPath, name: String(filename), size: stat.size });
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('watch:file', {
+                  path: fullPath,
+                  name: String(filename),
+                  size: stat.size,
+                });
+              }
             } catch {
-              /* file gone again */
+              /* gone */
             }
           }, 1200),
         );
@@ -256,15 +458,182 @@ function registerIpc() {
     return { ok: true };
   });
 
-  /* ---------------- Real-ESRGAN NCNN-Vulkan (local AI upscaling) ---------------- */
+  /* ---------------- Unified in app model store ---------------------------- */
 
-  const upscalerDir = () => path.join(app.getPath('userData'), 'upscaler');
+  ipcMain.handle('model:list', async () => {
+    const manifest = await readManifest();
+    const verified = {};
+    for (const [id, entry] of Object.entries(manifest)) {
+      if (!entry || !entry.dir) continue;
+      const exists = await fs
+        .access(entry.dir)
+        .then(() => true)
+        .catch(() => false);
+      if (exists) verified[id] = entry;
+    }
+    if (Object.keys(verified).length !== Object.keys(manifest).length) {
+      await writeManifest(verified);
+    }
+    return { ok: true, items: Object.values(verified), root: modelsRoot() };
+  });
 
-  ipcMain.handle('upscaler:ensure', async (_event, { url, binary, models }) => {
+  ipcMain.handle('model:install', async (_event, spec) => {
+    const id = safeSegment(spec && spec.id);
+    if (activeDownloads.has(id)) return { ok: false, error: 'Already downloading' };
+    const controller = new AbortController();
+    activeDownloads.set(id, controller);
+    const targetDir = spec.sharedGroup
+      ? path.join(modelsRoot(), safeSegment(spec.sharedGroup))
+      : path.join(modelsRoot(), id);
+    const files = Array.isArray(spec.files) ? spec.files : [];
+
     try {
-      const dir = upscalerDir();
+      await fs.mkdir(targetDir, { recursive: true });
+      let totalBytes = 0;
+
+      for (let idx = 0; idx < files.length; idx++) {
+        const file = files[idx];
+        const url = String(file.url || '');
+        if (!/^https:\/\//i.test(url)) throw new Error('Model URL must use HTTPS');
+        const subDir = file.subDir ? path.join(targetDir, safeSegment(file.subDir)) : targetDir;
+        await fs.mkdir(subDir, { recursive: true });
+        const name = safeSegment(file.name || path.basename(new URL(url).pathname));
+        const dest = path.join(subDir, name);
+
+        if (file.skipIfExists && file.checkName) {
+          const present = await fs
+            .access(path.join(subDir, safeSegment(file.checkName)))
+            .then(() => true)
+            .catch(() => false);
+          if (present) continue;
+        }
+
+        const startedAt = Date.now();
+        const bytes = await downloadToFile(url, dest, controller.signal, (loaded, total) => {
+          const elapsed = Math.max(0.2, (Date.now() - startedAt) / 1000);
+          emitModelProgress({
+            id,
+            phase: 'downloading',
+            fileIndex: idx,
+            fileCount: files.length,
+            loadedBytes: loaded,
+            totalBytes: total,
+            speedBps: Math.round(loaded / elapsed),
+            label: file.label || name,
+          });
+        });
+        totalBytes += bytes;
+
+        if (file.extractZip) {
+          emitModelProgress({
+            id,
+            phase: 'extracting',
+            fileIndex: idx,
+            fileCount: files.length,
+            loadedBytes: bytes,
+            totalBytes: bytes,
+            speedBps: 0,
+            label: `Extracting ${name}`,
+          });
+          await extractZipFlattened(dest, subDir);
+          await fs.unlink(dest).catch(() => {});
+          if (file.executable && process.platform !== 'win32') {
+            await fs.chmod(path.join(subDir, safeSegment(file.executable)), 0o755).catch(() => {});
+          }
+        } else if (file.executable && process.platform !== 'win32') {
+          await fs.chmod(dest, 0o755).catch(() => {});
+        }
+      }
+
+      const manifest = await readManifest();
+      const record = {
+        id,
+        kind: String(spec.kind || 'model'),
+        dir: targetDir,
+        binary: spec.binary ? String(spec.binary) : undefined,
+        primaryFile: spec.primaryFile ? String(spec.primaryFile) : undefined,
+        sizeBytes: totalBytes || Number(spec.approxBytes || 0),
+        installedAt: new Date().toISOString(),
+      };
+      manifest[id] = record;
+      await writeManifest(manifest);
+      emitModelProgress({
+        id,
+        phase: 'ready',
+        fileIndex: files.length,
+        fileCount: files.length,
+        loadedBytes: record.sizeBytes,
+        totalBytes: record.sizeBytes,
+        speedBps: 0,
+        label: 'Installed',
+      });
+      return { ok: true, record };
+    } catch (error) {
+      const aborted = controller.signal.aborted || (error && error.name === 'AbortError');
+      if (!spec.sharedGroup) {
+        await fs.rm(targetDir, { recursive: true, force: true }).catch(() => {});
+      }
+      return {
+        ok: false,
+        canceled: aborted,
+        error: aborted ? 'Download canceled' : String(error && error.message ? error.message : error),
+      };
+    } finally {
+      activeDownloads.delete(id);
+    }
+  });
+
+  ipcMain.handle('model:cancel', async (_event, id) => {
+    const key = safeSegment(id);
+    const controller = activeDownloads.get(key);
+    if (controller) controller.abort();
+    return { ok: true };
+  });
+
+  ipcMain.handle('model:remove', async (_event, id) => {
+    const key = safeSegment(id);
+    const manifest = await readManifest();
+    const record = manifest[key];
+    delete manifest[key];
+    await writeManifest(manifest);
+    if (record && record.dir) {
+      const stillShared = Object.values(manifest).some((other) => other && other.dir === record.dir);
+      if (!stillShared) {
+        await fs.rm(record.dir, { recursive: true, force: true }).catch(() => {});
+      } else if (record.primaryFile) {
+        const stem = record.primaryFile.replace(/\.(bin|param|onnx)$/i, '');
+        for (const ext of ['.bin', '.param', '.onnx']) {
+          await fs.unlink(path.join(record.dir, 'models', `${stem}${ext}`)).catch(() => {});
+          await fs.unlink(path.join(record.dir, `${stem}${ext}`)).catch(() => {});
+        }
+      }
+    }
+    return { ok: true };
+  });
+
+  ipcMain.handle('model:read', async (_event, { id, fileName }) => {
+    try {
+      const key = safeSegment(id);
+      const manifest = await readManifest();
+      const record = manifest[key];
+      if (!record || !record.dir) return { ok: false, error: 'Model is not installed' };
+      const target = path.join(record.dir, safeSegment(fileName || record.primaryFile));
+      const buf = await fs.readFile(target);
+      return { ok: true, base64: buf.toString('base64'), size: buf.length };
+    } catch (error) {
+      return { ok: false, error: String(error && error.message ? error.message : error) };
+    }
+  });
+
+  /* ---------------- NCNN Vulkan image & frame upscaling ------------------- */
+
+  ipcMain.handle('upscaler:ensure', async (_event, { url, binary, models, engineGroup }) => {
+    try {
+      const dir = engineGroup
+        ? path.join(modelsRoot(), safeSegment(engineGroup))
+        : upscalerDir();
       await fs.mkdir(dir, { recursive: true });
-      const binaryPath = path.join(dir, binary);
+      const binaryPath = path.join(dir, safeSegment(binary));
       const modelsDir = path.join(dir, 'models');
 
       const exists = await fs
@@ -273,33 +642,24 @@ function registerIpc() {
         .catch(() => false);
 
       if (!exists) {
-        mainWindow?.webContents.send('upscaler:log', `Downloading Real-ESRGAN from ${url} …`);
-        const response = await fetch(url, { redirect: 'follow' });
-        if (!response.ok) throw new Error(`Download failed: HTTP ${response.status}`);
-        const buffer = Buffer.from(await response.arrayBuffer());
-        const zipPath = path.join(dir, 'realesrgan-ncnn-vulkan.zip');
-
-        // The release zip nests everything under
-        // `realesrgan-ncnn-vulkan-<date>/`, so extract into a staging folder
-        // and then flatten it into <userData>/upscaler. Extracting straight
-        // into `dir` leaves the binary at a path the runner never looks at.
-        const staging = await fs.mkdtemp(path.join(require('node:os').tmpdir(), 'msap-rz-'));
-        await fs.writeFile(zipPath, buffer);
-        const extractZip = require('extract-zip');
-        await extractZip(zipPath, { dir: staging });
-        await fs.unlink(zipPath).catch(() => {});
-
-        const entries = await fs.readdir(staging, { withFileTypes: true });
-        const root =
-          entries.length === 1 && entries[0].isDirectory()
-            ? path.join(staging, entries[0].name)
-            : staging;
-        await fs.cp(root, dir, { recursive: true, force: true });
-        await fs.rm(staging, { recursive: true, force: true }).catch(() => {});
-
-        await fs.access(binaryPath).catch(() => {
-          throw new Error(`Real-ESRGAN downloaded but ${binary} was not found in the archive.`);
+        const zipPath = path.join(dir, 'engine.zip');
+        const startedAt = Date.now();
+        await downloadToFile(url, zipPath, undefined, (loaded, total) => {
+          const elapsed = Math.max(0.2, (Date.now() - startedAt) / 1000);
+          emitModelProgress({
+            id: engineGroup || 'realesrgan',
+            phase: 'downloading',
+            fileIndex: 0,
+            fileCount: 1,
+            loadedBytes: loaded,
+            totalBytes: total,
+            speedBps: Math.round(loaded / elapsed),
+            label: binary,
+          });
         });
+        await extractZipFlattened(zipPath, dir);
+        await fs.unlink(zipPath).catch(() => {});
+        await fs.access(binaryPath);
         if (process.platform !== 'win32') {
           await fs.chmod(binaryPath, 0o755).catch(() => {});
         }
@@ -307,11 +667,17 @@ function registerIpc() {
 
       const found = [];
       for (const model of models || []) {
-        const ok = await fs
-          .access(path.join(modelsDir, `${model}-x4.bin`))
-          .then(() => true)
-          .catch(() => false);
-        if (ok) found.push(model);
+        const candidates = [`${model}.bin`, `${model}-x4.bin`, `${model}.param`];
+        for (const c of candidates) {
+          const ok = await fs
+            .access(path.join(modelsDir, c))
+            .then(() => true)
+            .catch(() => false);
+          if (ok) {
+            found.push(model);
+            break;
+          }
+        }
       }
       return { ok: true, path: binaryPath, models: found };
     } catch (error) {
@@ -320,62 +686,79 @@ function registerIpc() {
   });
 
   ipcMain.handle('upscaler:run', async (_event, args) => {
-    const { spawn } = require('node:child_process');
-    const os = require('node:os');
+    const workDir = await fs.mkdtemp(path.join(os.tmpdir(), 'msap-up-'));
     try {
-      const dir = upscalerDir();
-      const binaryPath = path.join(dir, args.binary);
-      const modelsDir = path.join(dir, 'models');
-      const workDir = await fs.mkdtemp(path.join(os.tmpdir(), 'msap-up-'));
+      const dir = args.engineGroup
+        ? path.join(modelsRoot(), safeSegment(args.engineGroup))
+        : upscalerDir();
+      const binaryPath = path.join(dir, safeSegment(args.binary));
+      const modelsSub = args.modelsSubDir ? safeSegment(args.modelsSubDir) : 'models';
+      const modelsDir = path.join(dir, modelsSub);
+      const family = String(args.engineFamily || 'realesrgan');
+      const outFmt = String(args.outFormat || 'png');
 
       let inputPath = args.inPath;
       if (!inputPath) {
-        inputPath = path.join(workDir, `input.${args.outFormat === 'jpg' ? 'jpg' : args.outFormat}`);
+        inputPath = path.join(workDir, `input.${outFmt === 'jpg' ? 'jpg' : outFmt}`);
         await fs.writeFile(inputPath, Buffer.from(String(args.inBase64), 'base64'));
       }
 
-      // The NCNN build resolves weights as <models>/<model>-x<scale>.param, so
-      // `-s` MUST match the scale in the file name. All shipped models are 4x,
-      // and any residual difference is handled by the renderer as a final
-      // high-quality resize. Passing -s 2 here would abort the process.
-      const runPass = (scale, inFile, outFile) =>
-        new Promise((resolve, reject) => {
-          const child = spawn(
-            binaryPath,
-            [
-              '-i', inFile,
-              '-o', outFile,
-              '-s', String(scale),
-              '-n', String(args.modelId),
-              '-m', modelsDir,
-              '-f', String(args.outFormat),
-              // Keep big 8K outputs inside VRAM; 0 lets ncnn pick.
-              '-t', String(args.tileSize || 0),
-            ],
-            { cwd: dir },
-          );
-          let stderr = '';
-          child.stderr.on('data', (d) => {
-            stderr += d.toString();
-            mainWindow?.webContents.send('upscaler:log', d.toString().trim());
-          });
-          child.on('error', reject);
-          child.on('close', (code) => (code === 0 ? resolve(outFile) : reject(new Error(`realesrgan exited ${code}: ${stderr.slice(-400)}`))));
-        });
+      const buildCliArgs = (scale, inFile, outFile) => {
+        if (family === 'waifu2x' || family === 'srmd' || family === 'realcugan') {
+          const list = [
+            '-i', inFile,
+            '-o', outFile,
+            '-s', String(scale),
+            '-n', String(args.noiseLevel ?? 1),
+            '-m', modelsDir,
+            '-f', outFmt,
+          ];
+          if (args.tileSize) list.push('-t', String(args.tileSize));
+          return list;
+        }
+        if (family === 'realsr') {
+          const list = ['-i', inFile, '-o', outFile, '-s', String(scale), '-m', modelsDir, '-f', outFmt];
+          if (args.tileSize) list.push('-t', String(args.tileSize));
+          return list;
+        }
+        return [
+          '-i', inFile,
+          '-o', outFile,
+          '-s', String(scale),
+          '-n', String(args.modelId),
+          '-m', modelsDir,
+          '-f', outFmt,
+          '-t', String(args.tileSize || 0),
+        ];
+      };
 
       let current = inputPath;
       const passes = Array.isArray(args.passes) && args.passes.length ? args.passes : [4];
       for (let i = 0; i < passes.length; i++) {
-        const out = path.join(workDir, `pass${i}.${args.outFormat}`);
-        mainWindow?.webContents.send('upscaler:log', `Pass ${i + 1}/${passes.length} at ${passes[i]}×`);
-        current = await runPass(passes[i], current, out);
+        const out = path.join(workDir, `pass${i}.${outFmt}`);
+        await spawnBinary(binaryPath, buildCliArgs(passes[i], current, out), dir, (line) => {
+          mainWindow?.webContents.send('upscaler:log', line);
+        });
+        current = out;
       }
 
       const outBuffer = await fs.readFile(current);
-      await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
       return { ok: true, base64: outBuffer.toString('base64') };
     } catch (error) {
       return { ok: false, error: String(error && error.message ? error.message : error) };
+    } finally {
+      await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  /* ---------------- Native FFmpeg probe for Video Upscaler ---------------- */
+
+  ipcMain.handle('video:probe-ffmpeg', async () => {
+    try {
+      await spawnBinary(process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg', ['-version'], os.tmpdir());
+      return { ok: true, available: true };
+    } catch {
+      return { ok: true, available: false };
     }
   });
 
@@ -401,14 +784,12 @@ function registerIpc() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    // Responsive-friendly minimums: the UI stays usable down to a small window.
     width: 1440,
     height: 900,
     minWidth: 360,
     minHeight: 560,
     show: false,
-    // Matches --bg in src/index.css so the window never flashes a foreign colour.
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0e1216' : '#f4f6f8',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0f1318' : '#f5f7fa',
     autoHideMenuBar: !isDev,
     title: 'Micro Stocker Advanced Pro',
     webPreferences: {
@@ -432,7 +813,6 @@ function createWindow() {
     mainWindow = null;
   });
 
-  // Open external links in the real browser, never inside the app window.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);
     return { action: 'deny' };
@@ -448,7 +828,6 @@ function createWindow() {
 
 function buildMenu() {
   const isMac = process.platform === 'darwin';
-  /** @type {Electron.MenuItemConstructorOptions[]} */
   const template = [
     ...(isMac ? [{ role: 'appMenu' }] : []),
     { role: 'fileMenu' },
@@ -472,14 +851,20 @@ function buildMenu() {
       role: 'help',
       submenu: [
         {
+          label: 'Contact on Telegram',
+          click: () => shell.openExternal('https://t.me/joegoldberg2025'),
+        },
+        {
+          label: 'Report an issue',
+          click: () => {
+            if (mainWindow) mainWindow.webContents.send('app:navigate', '/report');
+          },
+        },
+        {
           label: 'About Micro Stocker Advanced Pro',
           click: () => {
             if (mainWindow) mainWindow.webContents.send('app:navigate', '/about');
           },
-        },
-        {
-          label: 'Project on GitHub',
-          click: () => shell.openExternal('https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro'),
         },
       ],
     },
@@ -487,7 +872,6 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-/* Single-instance lock: a second launch focuses the existing window. */
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
@@ -500,14 +884,10 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
-    // Deny permission prompts (camera/mic/geolocation) unless we add features
-    // that genuinely need them.
     session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
-
     registerIpc();
     buildMenu();
     createWindow();
-
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });

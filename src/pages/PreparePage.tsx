@@ -1,347 +1,392 @@
 import { useMemo, useState } from 'react';
-import { EyeOff, MapPin, ShieldCheck, Stethoscope } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Card } from '@/components/ui/Card';
+import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Field, Select, Switch } from '@/components/ui/Field';
-import { DataTable, type Column } from '@/components/ui/DataTable';
+import { Tabs } from '@/components/ui/Tabs';
+import { EmptyState } from '@/components/ui/Misc';
+import { GIcon } from '@/components/ui/GoogleIcon';
 import { useLibrary } from '@/state/library';
 import { useToast } from '@/state/ToastState';
-import { formatBytes } from '@/lib/stock/files';
-import { megapixels, type StockItem } from '@/lib/stock/types';
-import { inspectJpeg, reencodeRaster, stripJpegMetadata, type JpegReport } from '@/lib/stock/filedoctor';
-import { analyzeEps, analyzeSvg, sanitizeSvg, type EpsReport, type SvgReport } from '@/lib/stock/vectorcheck';
+import { desktop, triggerBlobDownload } from '@/lib/desktop';
+import { formatBytes } from '@/lib/modelStore';
+import {
+  doctorSummary,
+  inspectJpeg,
+  reencodeRaster,
+  stripJpegMetadata,
+  type JpegReport,
+} from '@/lib/stock/filedoctor';
 import { sizeCapOptions } from '@/lib/stock/sizecaps';
+import { analyzeEps, analyzeSvg, sanitizeSvg } from '@/lib/stock/vectorcheck';
 
-interface Row {
-  item: StockItem;
-  report: JpegReport | null;
-  raster: boolean;
-}
-
-const SIZE_TARGETS = [
-  { value: '0', label: 'No size cap' },
-  ...sizeCapOptions(),
-  { value: 'custom', label: 'Custom…' },
-];
+type PrepareTab = 'privacy' | 'resize' | 'vectors' | 'duplicates';
 
 export function PreparePage() {
-  const library = useLibrary();
+  const { items, getBlob, removeItems } = useLibrary();
   const toast = useToast();
-  const [stripPhotoshop, setStripPhotoshop] = useState(true);
-  const [reencode, setReencode] = useState(true);
-  const [format, setFormat] = useState<'keep' | 'jpg' | 'png' | 'webp'>('keep');
-  const [quality, setQuality] = useState(0.95);
-  const [sizeTarget, setSizeTarget] = useState('45');
-  const [customMB, setCustomMB] = useState(30);
-  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
-  const [vectorReports, setVectorReports] = useState<Record<string, { svg?: SvgReport; eps?: EpsReport }>>({});
 
+  const [tab, setTab] = useState<PrepareTab>('privacy');
+  const [stripIrb, setStripIrb] = useState(false);
   const [reports, setReports] = useState<Record<string, JpegReport>>({});
+  const [vectorNotes, setVectorNotes] = useState<Record<string, string[]>>({});
+  const [maxMB, setMaxMB] = useState('45');
+  const [quality, setQuality] = useState(92);
+  const [busy, setBusy] = useState(false);
 
-  const rows: Row[] = useMemo(
-    () =>
-      library.items.map((item) => {
-        const raster = ['jpg', 'png', 'webp'].includes(item.format);
-        return { item, report: item.format === 'jpg' ? reports[item.id] ?? null : null, raster };
-      }),
-    [library.items, reports],
+  const jpegs = useMemo(() => items.filter((i) => i.format === 'jpg'), [items]);
+  const rasters = useMemo(
+    () => items.filter((i) => i.format === 'jpg' || i.format === 'png' || i.format === 'webp'),
+    [items],
+  );
+  const vectors = useMemo(
+    () => items.filter((i) => i.format === 'svg' || i.format === 'eps'),
+    [items],
   );
 
-  /* JPEG inspection needs the raw bytes, so it runs on demand (Scan button)
-     and after every clean. */
-  const refreshReports = async () => {
-    const next: Record<string, JpegReport> = { ...reports };
-    for (const item of library.items) {
-      if (item.format !== 'jpg') continue;
-      try {
-        const bytes = await library.getItemBytes(item.id);
-        next[item.id] = inspectJpeg(bytes);
-      } catch {
-        next[item.id] = { isJpeg: true, hasExif: false, hasGps: false, hasIcc: false, hasXmp: false, hasPhotoshop: false, segments: 0 };
-      }
+  const dupGroups = useMemo(() => {
+    const bySig = new Map<string, typeof items>();
+    for (const it of items) {
+      const key = `${it.format}:${it.sizeBytes}:${it.width ?? 0}x${it.height ?? 0}`;
+      const list = bySig.get(key) ?? [];
+      list.push(it);
+      bySig.set(key, list);
     }
-    setReports(next);
-    toast.info('Scanned', `${Object.values(next).filter((r) => r.hasExif || r.hasGps).length} with EXIF/GPS`);
-  };
+    return Array.from(bySig.values()).filter((g) => g.length > 1);
+  }, [items]);
 
-  const maxMB = sizeTarget === 'custom' ? customMB : Number(sizeTarget) || 0;
-
-  const vectorItems = library.items.filter((item) => ['svg', 'eps', 'ai'].includes(item.format));
-
-  const scanVectors = async () => {
-    const next: Record<string, { svg?: SvgReport; eps?: EpsReport }> = {};
-    for (const item of vectorItems) {
-      try {
-        const bytes = await library.getItemBytes(item.id);
-        const text = new TextDecoder().decode(bytes.subarray(0, 400_000));
-        next[item.id] = item.format === 'svg' ? { svg: analyzeSvg(text) } : { eps: analyzeEps(text) };
-      } catch {
-        next[item.id] = {};
-      }
-    }
-    setVectorReports(next);
-    toast.info('Scanned', `${Object.keys(next).length} vectors`);
-  };
-
-  const sanitizeOne = async (item: (typeof vectorItems)[number]) => {
+  async function scanJpegs() {
+    setBusy(true);
     try {
-      const bytes = await library.getItemBytes(item.id);
-      const result = sanitizeSvg(new TextDecoder().decode(bytes));
-      if (result.removed.length === 0) {
-        toast.info('Already clean', item.name);
-        return;
+      const next: Record<string, JpegReport> = {};
+      for (const it of jpegs) {
+        const blob = await getBlob(it.id);
+        if (!blob) continue;
+        next[it.id] = inspectJpeg(new Uint8Array(await blob.arrayBuffer()));
       }
-      const ok = await library.replaceBytes(item.id, new TextEncoder().encode(result.text), { backup: true });
-      if (ok) {
-        setVectorReports((prev) => {
-          const copy = { ...prev };
-          delete copy[item.id];
-          return copy;
-        });
-        toast.success('Sanitized', result.removed.join(', '));
-      }
-    } catch (error) {
-      toast.error('Sanitize failed', error instanceof Error ? error.message : String(error));
+      setReports(next);
+      toast.success(`Scanned ${Object.keys(next).length} JPG files`);
+    } finally {
+      setBusy(false);
     }
-  };
+  }
 
-  const cleanOne = async (row: Row) => {
-    setBusyIds((prev) => new Set(prev).add(row.item.id));
+  async function cleanJpegs() {
+    setBusy(true);
+    let cleaned = 0;
     try {
-      let bytes = await library.getItemBytes(row.item.id);
-      const notes: string[] = [];
-
-      if (row.item.format === 'jpg') {
-        const stripped = stripJpegMetadata(bytes, { photoshop: stripPhotoshop });
-        if (stripped.removed.length) {
-          notes.push(`removed ${stripped.removed.join(' + ')}`);
-          bytes = stripped.bytes;
+      for (const it of jpegs) {
+        const blob = await getBlob(it.id);
+        if (!blob) continue;
+        const src = new Uint8Array(await blob.arrayBuffer());
+        const { bytes, removed } = stripJpegMetadata(src, { photoshop: stripIrb });
+        if (!removed.length) continue;
+        const copy = new Uint8Array(bytes.byteLength);
+        copy.set(bytes);
+        if (it.path && desktop.isDesktop) {
+          await desktop.fs.writeBytes(it.path, copy);
+        } else {
+          triggerBlobDownload(new Blob([copy], { type: 'image/jpeg' }), it.name);
         }
+        cleaned++;
       }
-
-      if (reencode && row.raster) {
-        const outFormat = format === 'keep' ? (row.item.format as 'jpg' | 'png' | 'webp') : format;
-        const result = await reencodeRaster(new Blob([bytes as unknown as BlobPart]), {
-          format: outFormat,
-          quality,
-          maxMB: maxMB || undefined,
-        });
-        notes.push(`sRGB re-encode q${Math.round(result.quality * 100)}${result.scale < 1 ? ` @${Math.round(result.scale * 100)}%` : ''} in ${result.iterations} pass(es)`);
-        bytes = new Uint8Array(await result.blob.arrayBuffer());
-        if (outFormat !== row.item.format) {
-          const newName = row.item.name.replace(/\.[^.]+$/, `.${outFormat}`);
-          await library.renameItem(row.item.id, newName);
-        }
-      }
-
-      const ok = await library.replaceBytes(row.item.id, bytes, { backup: true });
-      if (ok) {
-        setReports((prev) => {
-          const next = { ...prev };
-          delete next[row.item.id];
-          return next;
-        });
-        toast.success('Cleaned', notes.join(' · ') || row.item.name);
-      }
-    } catch (error) {
-      toast.error('Clean failed', error instanceof Error ? error.message : String(error));
+      toast.success(
+        cleaned > 0 ? `Stripped camera EXIF from ${cleaned} files` : 'No camera EXIF or GPS found',
+      );
+    } finally {
+      setBusy(false);
     }
-    setBusyIds((prev) => {
-      const next = new Set(prev);
-      next.delete(row.item.id);
-      return next;
-    });
-  };
+  }
 
-  const cleanAll = async () => {
-    const targets = rows.filter((row) => row.raster);
-    for (const row of targets) await cleanOne(row);
-  };
+  async function fitToSizeCap() {
+    setBusy(true);
+    let saved = 0;
+    try {
+      const cap = Number(maxMB) || 45;
+      for (const it of rasters) {
+        const blob = await getBlob(it.id);
+        if (!blob) continue;
+        const res = await reencodeRaster(blob, {
+          format: it.format as 'jpg' | 'png' | 'webp',
+          quality: quality / 100,
+          maxMB: cap,
+          maxEdge: 10000,
+        });
+        triggerBlobDownload(res.blob, it.name);
+        saved++;
+      }
+      if (saved > 0) toast.success(`Processed ${saved} files under ${cap} MB`);
+    } finally {
+      setBusy(false);
+    }
+  }
 
-  const columns: Column<Row>[] = [
-    {
-      key: 'name',
-      header: 'File',
-      primary: true,
-      render: (row) => (
-        <span className="flex items-center gap-2">
-          {row.item.thumbUrl ? <img src={row.item.thumbUrl} alt="" className="size-8 r-chip border border-line object-cover" /> : <span className="size-8 r-chip border border-line bg-surface-2" />}
-          <span className="min-w-0">
-            <span className="block truncate font-medium text-fg">{row.item.name}</span>
-            <span className="block text-[0.6875rem] text-fg-subtle tabular-nums">
-              {row.item.width ?? '?'}×{row.item.height ?? '?'} · {formatBytes(row.item.sizeBytes)}
-            </span>
-          </span>
-        </span>
-      ),
-    },
-    {
-      key: 'privacy',
-      header: 'Privacy / tech',
-      hideBelow: 'md',
-      render: (row) => {
-        if (!row.raster) return <Badge tone="neutral">vector — untouched</Badge>;
-        const report = row.report;
-        if (!report) return <Badge tone="outline">scan…</Badge>;
-        return (
-          <span className="flex flex-wrap gap-1">
-            {report.hasGps && <Badge tone="danger" icon={<MapPin className="size-3" />}>GPS</Badge>}
-            {report.hasExif && <Badge tone="warn" icon={<EyeOff className="size-3" />}>EXIF</Badge>}
-            {report.hasPhotoshop && <Badge tone="neutral">IRB</Badge>}
-            {report.hasIcc && <Badge tone="ok">ICC</Badge>}
-            {report.hasXmp && <Badge tone="brand">XMP</Badge>}
-            {!report.hasExif && !report.hasGps && !report.hasPhotoshop && <Badge tone="ok" dot>clean</Badge>}
-          </span>
-        );
-      },
-    },
-    {
-      key: 'mp',
-      header: 'MP',
-      align: 'right',
-      hideBelow: 'lg',
-      sortValue: (row) => megapixels(row.item) ?? 0,
-      sortable: true,
-      render: (row) => <span className="tabular-nums">{(megapixels(row.item) ?? 0).toFixed(1)}</span>,
-    },
-    {
-      key: 'action',
-      header: '',
-      align: 'right',
-      render: (row) =>
-        row.raster ? (
-          <Button size="xs" variant="outline" loading={busyIds.has(row.item.id)} icon={<Stethoscope className="size-3.5" />} onClick={() => cleanOne(row)}>
-            Clean
-          </Button>
-        ) : (
-          <span className="text-[0.6875rem] text-fg-subtle">n/a</span>
-        ),
-    },
-  ];
-
-  return (
-    <>
-      <PageHeader
-        title="Prepare"
-        actions={
-          <>
-            <Button size="sm" variant="outline" onClick={refreshReports}>Scan</Button>
-            <Button size="sm" onClick={cleanAll} icon={<ShieldCheck className="size-4" />}>Clean all</Button>
-          </>
+  async function inspectVectors() {
+    setBusy(true);
+    try {
+      const notes: Record<string, string[]> = {};
+      for (const it of vectors) {
+        const blob = await getBlob(it.id);
+        if (!blob) continue;
+        const text = await blob.text();
+        if (it.format === 'svg') {
+          const rep = analyzeSvg(text);
+          const list: string[] = [];
+          if (rep.hasScript) list.push('Contains script tags');
+          if (rep.eventHandlers > 0) list.push('Contains inline event attributes');
+          if (rep.externalRefs.length > 0) list.push('Contains external links');
+          if (rep.editorJunk.length > 0) list.push(`Editor metadata: ${rep.editorJunk.join(', ')}`);
+          if (rep.embeddedRasters > 0) list.push('Contains embedded raster tags');
+          notes[it.id] = list.length ? list : ['Clean submission SVG'];
+        } else {
+          const rep = analyzeEps(text);
+          notes[it.id] = rep.notes.length ? rep.notes : ['Clean EPS structure'];
         }
-      />
+      }
+      setVectorNotes(notes);
+      toast.success(`Checked ${Object.keys(notes).length} vector files`);
+    } finally {
+      setBusy(false);
+    }
+  }
 
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-        <Card className="xl:col-span-2" title="Files" flush>
-          <DataTable
-            rows={rows}
-            columns={columns}
-            rowKey={(row) => row.item.id}
-            dense
-            emptyTitle="No files"
+  async function cleanSvgItem(id: string, name: string) {
+    const blob = await getBlob(id);
+    if (!blob) return;
+    const { text, removed } = sanitizeSvg(await blob.text());
+    triggerBlobDownload(new Blob([text], { type: 'image/svg+xml' }), name);
+    toast.success(removed.length ? 'Cleaned SVG downloaded' : 'SVG verified clean');
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="space-y-5">
+        <PageHeader title="Prepare" />
+        <Card>
+          <EmptyState
+            icon={<GIcon name="tune" size={26} />}
+            title="No files in Library"
+            description="Import images or vectors first to inspect EXIF, file size and vector structure."
+            action={
+              <Link to="/library">
+                <Button size="sm" variant="primary" icon={<GIcon name="photo_library" size={15} />}>
+                  Open Library
+                </Button>
+              </Link>
+            }
           />
         </Card>
-
-        <Card title="Recipe">
-          <div className="flex flex-col gap-3">
-            <Switch checked={stripPhotoshop} onChange={setStripPhotoshop} label="Strip Photoshop data" />
-            <Switch checked={reencode} onChange={setReencode} label="Re-encode to sRGB" />
-
-            {reencode && (
-              <>
-                <Field label="Output format">
-                  <Select value={format} onChange={(e) => setFormat(e.target.value as typeof format)} options={[
-                    { value: 'keep', label: 'Keep format' },
-                    { value: 'jpg', label: 'JPEG' },
-                    { value: 'png', label: 'PNG' },
-                    { value: 'webp', label: 'WebP' },
-                  ]} />
-                </Field>
-                <Field label={`Quality ${Math.round(quality * 100)}%`}>
-                  <input type="range" min={0.6} max={1} step={0.01} value={quality} onChange={(e) => setQuality(Number(e.target.value))} className="w-full accent-[var(--brand)]" />
-                </Field>
-                <Field label="Size cap">
-                  <Select value={sizeTarget} onChange={(e) => setSizeTarget(e.target.value)} options={SIZE_TARGETS} />
-                </Field>
-                {sizeTarget === 'custom' && (
-                  <Field label="Custom cap (MB)">
-                    <input
-                      type="number"
-                      min={1}
-                      max={500}
-                      value={customMB}
-                      onChange={(e) => setCustomMB(Number(e.target.value))}
-                      className="h-9 w-28 r-control border border-line bg-surface px-3 text-[0.8125rem] text-fg transition-colors hover:border-line-strong focus:border-brand focus:ring-[3px] focus:ring-brand/15 focus:outline-none"
-                    />
-                  </Field>
-                )}
-              </>
-            )}
-
-            <p className="text-[0.6875rem] text-fg-subtle">Originals backed up beside each file.</p>
-          </div>
-        </Card>
       </div>
-      <Card
-        className="mt-3"
-        title="Vectors"
-        action={<Button size="xs" variant="outline" onClick={scanVectors}>Scan</Button>}
-        flush
-      >
-        {vectorItems.length === 0 ? (
-          <p className="px-3 py-6 text-center text-[0.8125rem] text-fg-subtle">No vector files</p>
-        ) : (
-          <ul className="divide-y divide-line">
-            {vectorItems.map((item) => {
-              const report = vectorReports[item.id];
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader title="Prepare" />
+
+      <Tabs
+        value={tab}
+        onChange={setTab}
+        items={[
+          { id: 'privacy', label: 'EXIF & GPS', icon: <GIcon name="camera" size={14} />, count: jpegs.length },
+          { id: 'resize', label: 'Size Cap', icon: <GIcon name="compress" size={14} />, count: rasters.length },
+          { id: 'vectors', label: 'Vectors', icon: <GIcon name="polyline" size={14} />, count: vectors.length },
+          { id: 'duplicates', label: 'Duplicates', icon: <GIcon name="content_copy" size={14} />, count: dupGroups.length },
+        ]}
+      />
+
+      {tab === 'privacy' && (
+        <Card>
+          <CardHeader
+            title="EXIF & GPS Cleanup"
+            icon={<GIcon name="camera" size={17} />}
+            action={
+              <div className="flex items-center gap-2">
+                <Button
+                  size="xs"
+                  variant="secondary"
+                  loading={busy}
+                  disabled={jpegs.length === 0}
+                  icon={<GIcon name="search" size={14} />}
+                  onClick={() => void scanJpegs()}
+                >
+                  Scan JPGs
+                </Button>
+                <Button
+                  size="xs"
+                  variant="primary"
+                  loading={busy}
+                  disabled={jpegs.length === 0}
+                  icon={<GIcon name="cleaning_services" size={14} />}
+                  onClick={() => void cleanJpegs()}
+                >
+                  Strip EXIF & GPS
+                </Button>
+              </div>
+            }
+          />
+          <div className="mb-3">
+            <Switch
+              checked={stripIrb}
+              onChange={setStripIrb}
+              label="Also remove Photoshop IRB blocks (keeps XMP and sRGB ICC)"
+            />
+          </div>
+          <div className="divide-y divide-line">
+            {jpegs.map((it) => {
+              const rep = reports[it.id];
+              const tags = rep ? doctorSummary(rep) : [];
               return (
-                <li key={item.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-fg">{item.name}</p>
-                    {!report ? (
-                      <p className="text-[0.6875rem] text-fg-subtle">Unscanned</p>
-                    ) : report.svg ? (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {report.svg.hasScript && <Badge tone="danger">script!</Badge>}
-                        {report.svg.eventHandlers > 0 && <Badge tone="danger">{report.svg.eventHandlers} handler</Badge>}
-                        {report.svg.externalRefs.length > 0 && <Badge tone="warn">{report.svg.externalRefs.length} ext ref</Badge>}
-                        {report.svg.embeddedRasters > 0 && <Badge tone="warn">{report.svg.embeddedRasters} raster</Badge>}
-                        {report.svg.fonts.length > 0 && <Badge tone="neutral">fonts: {report.svg.fonts.slice(0, 3).join(', ')}</Badge>}
-                        {report.svg.hasImportCss && <Badge tone="danger">@import CSS</Badge>}
-                        {report.svg.editorJunk.length > 0 && <Badge tone="warn">{report.svg.editorJunk.join(', ')} junk</Badge>}
-                        {!report.svg.hasViewBox && <Badge tone="warn">no viewBox</Badge>}
-                        {!report.svg.hasMetadata && <Badge tone="neutral">no meta</Badge>}
-                        {report.svg.ok && <Badge tone="ok" dot>clean</Badge>}
-                      </div>
-                    ) : report.eps ? (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {report.eps.creator && <Badge tone="neutral">{report.eps.creator.slice(0, 40)}</Badge>}
-                        {report.eps.usesCmyk && <Badge tone="warn">CMYK</Badge>}
-                        {report.eps.hasEmbeddedRaster && <Badge tone="warn">raster</Badge>}
-                        {report.eps.documentFonts.length > 0 && <Badge tone="warn">live fonts</Badge>}
-                        {!report.eps.hasXmp && <Badge tone="neutral">no XMP</Badge>}
-                        {report.eps.ok && <Badge tone="ok" dot>ready</Badge>}
-                      </div>
-                    ) : null}
-                    {report?.eps && report.eps.notes.length > 0 && (
-                      <ul className="mt-1.5 flex flex-col gap-1">
-                        {report.eps.notes.map((note, index) => (
-                          <li key={index} className="text-[0.6875rem] text-fg-muted">• {note}</li>
-                        ))}
-                      </ul>
+                <div key={it.id} className="flex items-center justify-between gap-2 py-2.5 text-xs">
+                  <span className="truncate font-medium text-ink">{it.name}</span>
+                  <div className="flex items-center gap-1">
+                    {rep ? (
+                      tags.length ? (
+                        tags.map((t) => (
+                          <Badge key={t} tone={t.startsWith('GPS') ? 'danger' : 'neutral'}>
+                            {t.replace('!', '')}
+                          </Badge>
+                        ))
+                      ) : (
+                        <Badge tone="brand">Clean</Badge>
+                      )
+                    ) : (
+                      <span className="text-2xs text-ink-faint">{formatBytes(it.sizeBytes)}</span>
                     )}
                   </div>
-                  {item.format === 'svg' && (
-                    <Button size="xs" variant="outline" onClick={() => sanitizeOne(item)}>Sanitize SVG</Button>
-                  )}
-                </li>
+                </div>
               );
             })}
-          </ul>
-        )}
-      </Card>
-    </>
+          </div>
+        </Card>
+      )}
+
+      {tab === 'resize' && (
+        <Card>
+          <CardHeader
+            title="Marketplace File Size Fit"
+            icon={<GIcon name="compress" size={17} />}
+            action={
+              <Button
+                size="sm"
+                variant="primary"
+                loading={busy}
+                disabled={rasters.length === 0}
+                icon={<GIcon name="download" size={15} />}
+                onClick={() => void fitToSizeCap()}
+              >
+                Export fitted files ({rasters.length})
+              </Button>
+            }
+          />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Target budget">
+              <Select
+                value={maxMB}
+                onChange={(e) => setMaxMB(e.target.value)}
+                options={sizeCapOptions(100)}
+              />
+            </Field>
+            <Field label={`Starting quality (${quality}%)`}>
+              <input
+                type="range"
+                min={65}
+                max={98}
+                value={quality}
+                onChange={(e) => setQuality(Number(e.target.value))}
+                className="mt-2 w-full accent-[var(--accent)]"
+              />
+            </Field>
+          </div>
+        </Card>
+      )}
+
+      {tab === 'vectors' && (
+        <Card>
+          <CardHeader
+            title="SVG & EPS Inspector"
+            icon={<GIcon name="polyline" size={17} />}
+            action={
+              <Button
+                size="xs"
+                variant="primary"
+                loading={busy}
+                disabled={vectors.length === 0}
+                icon={<GIcon name="fact_check" size={14} />}
+                onClick={() => void inspectVectors()}
+              >
+                Inspect vectors
+              </Button>
+            }
+          />
+          {vectors.length === 0 ? (
+            <div className="py-6 text-center text-xs text-ink-muted">No SVG or EPS files in Library.</div>
+          ) : (
+            <div className="divide-y divide-line">
+              {vectors.map((it) => (
+                <div key={it.id} className="flex flex-wrap items-start justify-between gap-2 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-xs font-semibold text-ink">{it.name}</div>
+                    {(vectorNotes[it.id] ?? []).map((n, i) => (
+                      <div key={i} className="mt-0.5 text-2xs text-ink-muted">
+                        {n}
+                      </div>
+                    ))}
+                  </div>
+                  {it.format === 'svg' && (
+                    <Button
+                      size="xs"
+                      variant="secondary"
+                      icon={<GIcon name="cleaning_services" size={13} />}
+                      onClick={() => void cleanSvgItem(it.id, it.name)}
+                    >
+                      Clean SVG
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {tab === 'duplicates' && (
+        <Card>
+          <CardHeader title="Duplicate Check" icon={<GIcon name="content_copy" size={17} />} />
+          {dupGroups.length === 0 ? (
+            <div className="py-6 text-center text-xs text-ink-muted">No duplicate files found.</div>
+          ) : (
+            <div className="space-y-3">
+              {dupGroups.map((group, idx) => (
+                <div key={idx} className="rounded-[var(--r-control)] border border-line p-3">
+                  <div className="mb-2 text-xs font-semibold text-ink">
+                    Matching set ({group.length} files)
+                  </div>
+                  <div className="space-y-1.5">
+                    {group.map((it, i) => (
+                      <div key={it.id} className="flex items-center justify-between text-xs">
+                        <span className="truncate text-ink">{it.name}</span>
+                        {i > 0 && (
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            className="text-danger"
+                            onClick={() => removeItems([it.id])}
+                          >
+                            Remove copy
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+    </div>
   );
 }

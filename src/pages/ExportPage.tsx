@@ -1,238 +1,322 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Copy, Download, FileSpreadsheet, PenLine, Send, TriangleAlert } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import clsx from 'clsx';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Card } from '@/components/ui/Card';
+import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { CodeBlock } from '@/components/ui/Misc';
-import { useLibrary } from '@/state/library';
-import { useToast } from '@/state/ToastState';
-import { desktop, isDesktop } from '@/lib/desktop';
-import { buildPlatformCsv, withBom } from '@/lib/stock/csv';
+import { EmptyState } from '@/components/ui/Misc';
+import { GIcon } from '@/components/ui/GoogleIcon';
 import { PlatformLogo } from '@/components/stock/PlatformLogo';
-import { PLATFORM_LIST } from '@/lib/stock/platforms';
+import { useLibrary } from '@/state/library';
+import { useReleases } from '@/state/releases';
+import { useToast } from '@/state/ToastState';
+import { desktop } from '@/lib/desktop';
+import { generateCsv, generateUniversalCsv } from '@/lib/stock/csv';
+import { PLATFORM_LIST, PLATFORMS } from '@/lib/stock/platforms';
+import { buildValidationIndex, validateItem, worstLevel } from '@/lib/stock/validate';
+import { buildXmpPacket, sidecarFilename } from '@/lib/stock/xmp';
 import type { PlatformId } from '@/lib/stock/types';
-import { sanitizeFilename } from '@/lib/stock/validate';
-import { validateItem } from '@/lib/stock/validate';
-import { loadSubmissions, saveSubmissions, setStatus } from '@/lib/stock/submissions';
+
+const CSV_PLATFORMS = PLATFORM_LIST.filter((p) => p.csv !== null);
 
 export function ExportPage() {
-  const library = useLibrary();
+  const { items, selected, embedInto, renameSafe } = useLibrary();
+  const { releases } = useReleases();
   const toast = useToast();
-  const [enabled, setEnabled] = useState<Set<PlatformId>>(new Set(['shutterstock', 'adobe', 'freepik']));
-  const [scope, setScope] = useState<'selection' | 'all'>('selection');
-  const [busy, setBusy] = useState(false);
 
-  /* selection handed over from the Library bulk bar */
-  useEffect(() => {
-    const raw = sessionStorage.getItem('msap:export-selection');
-    if (raw) {
-      try {
-        library.setSelection(JSON.parse(raw) as string[]);
-        setScope('selection');
-      } catch {
-        /* ignore */
-      }
-      sessionStorage.removeItem('msap:export-selection');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const [platformId, setPlatformId] = useState<PlatformId>('shutterstock');
+  const [embedding, setEmbedding] = useState(false);
 
-  const rows = useMemo(() => {
-    if (scope === 'selection' && library.selection.size > 0) {
-      return library.items.filter((item) => library.selection.has(item.id));
-    }
-    return library.items;
-  }, [scope, library.items, library.selection]);
-
-  const exports = useMemo(
-    () =>
-      PLATFORM_LIST.filter((p) => enabled.has(p.id)).map((platform) => ({
-        platform,
-        result: buildPlatformCsv(rows, platform.id),
-        blocking: rows.flatMap((row) => validateItem(row, platform.id, library.items).filter((i) => i.level === 'error')),
-      })),
-    [enabled, rows, library.items],
+  const scope = useMemo(
+    () => (selected.size > 0 ? items.filter((i) => selected.has(i.id)) : items),
+    [items, selected],
   );
 
-  const toggle = (id: PlatformId) => {
-    setEnabled((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  const platform = PLATFORMS[platformId];
 
-  const download = async (filename: string, content: string) => {
-    if (isDesktop) {
-      const result = await desktop.fs.exportText({
-        defaultName: filename,
-        text: withBom(content),
+  const releasesFor = useMemo(
+    () => (it: (typeof items)[number]) =>
+      (it.releaseIds ?? [])
+        .map((id) => releases.find((r) => r.id === id)?.name ?? '')
+        .filter(Boolean),
+    [releases],
+  );
+
+  const generated = useMemo(() => {
+    if (!platform.csv || !scope.length) return null;
+    try {
+      return generateCsv(platformId, scope, releasesFor);
+    } catch {
+      return null;
+    }
+  }, [platform.csv, platformId, releasesFor, scope]);
+
+  const checkSummary = useMemo(() => {
+    const idx = buildValidationIndex(items);
+    let ready = 0;
+    let errors = 0;
+    const perItem = scope.map((it) => {
+      const issues = validateItem(it, platformId, items, idx);
+      const lvl = worstLevel(issues);
+      if (lvl === 'error') errors++;
+      else ready++;
+      return { item: it, issues, level: lvl };
+    });
+    return { ready, errors, perItem };
+  }, [items, platformId, scope]);
+
+  async function savePlatformCsv() {
+    if (!generated || generated.rowCount === 0) {
+      toast.error('No eligible rows to export');
+      return;
+    }
+    for (const chunk of generated.chunks) {
+      await desktop.fs.exportText({
+        defaultName: chunk.filename,
+        text: chunk.content,
         filters: [{ name: 'CSV', extensions: ['csv'] }],
       });
-      if (result.ok) toast.success('CSV saved', result.filePath ? String(result.filePath) : undefined);
-      else if (!result.canceled) toast.error('Save failed', result.error);
-    } else {
-      const url = URL.createObjectURL(new Blob([withBom(content)], { type: 'text/csv;charset=utf-8' }));
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1500);
-      toast.success('CSV downloaded', filename);
     }
-  };
+    toast.success(`Exported ${platform.name} CSV`, `${generated.rowCount} rows`);
+  }
 
-  const onEmbedAll = async () => {
-    setBusy(true);
-    const result = await library.embedFor(rows.map((r) => r.id), { backup: true });
-    setBusy(false);
-    if (result.done) toast.success(`Embedded ${result.done} file${result.done === 1 ? '' : 's'}`, 'Upload-ready: portals will pre-fill from IPTC/XMP.');
-    if (result.failed.length) toast.error(`${result.failed.length} failed`, result.failed.slice(0, 3).join(' · '));
-  };
-
-  const onMarkQueued = async () => {
-    const map = await loadSubmissions();
-    let next = map;
-    for (const row of rows) for (const platformId of Array.from(enabled)) next = setStatus(next, row.id, platformId, 'queued');
-    await saveSubmissions(next);
-    toast.success(`Queued ${rows.length} file(s)`, `Marked queued on ${enabled.size} platform(s) — track them in the Submission planner.`);
-  };
-
-  const onRenameAll = async () => {
-    setBusy(true);
-    let changed = 0;
-    for (const row of rows) {
-      const safe = sanitizeFilename(row.name);
-      if (safe.changed && (await library.renameItem(row.id, safe.name))) changed++;
+  async function copyCsv() {
+    if (!generated) return;
+    try {
+      await navigator.clipboard.writeText(generated.content);
+      toast.success('CSV copied to clipboard');
+    } catch {
+      toast.error('Clipboard unavailable');
     }
-    setBusy(false);
-    toast.success(`Renamed ${changed} file${changed === 1 ? '' : 's'}`, 'CSV filename matching is case- and character-sensitive on every platform.');
-  };
+  }
+
+  async function saveUniversalCsv() {
+    const out = generateUniversalCsv(scope);
+    await desktop.fs.exportText({
+      defaultName: out.filename,
+      text: out.content,
+      filters: [{ name: 'CSV', extensions: ['csv'] }],
+    });
+    toast.success(`Saved ${out.filename}`, `${out.rowCount} rows`);
+  }
+
+  async function handleEmbedAll() {
+    setEmbedding(true);
+    try {
+      const res = await embedInto(
+        scope.map((i) => i.id),
+        { downloadInBrowser: !desktop.isDesktop },
+      );
+      if (res.ok > 0) {
+        toast.success(`IPTC & XMP embedded in ${res.ok} file${res.ok === 1 ? '' : 's'}`);
+      }
+    } finally {
+      setEmbedding(false);
+    }
+  }
+
+  async function handleRename() {
+    const count = await renameSafe(
+      scope.map((i) => i.id),
+      platformId,
+    );
+    toast.info(count > 0 ? `Cleaned ${count} filename${count === 1 ? '' : 's'}` : 'All filenames are already clean');
+  }
+
+  async function exportSidecars() {
+    for (const item of scope) {
+      const packet = buildXmpPacket(item.metadata, { aiGenerated: item.flags.aiGenerated });
+      await desktop.fs.exportText({
+        defaultName: sidecarFilename(item.name),
+        text: packet,
+        filters: [{ name: 'XMP', extensions: ['xmp'] }],
+      });
+    }
+    toast.success(`Saved ${scope.length} XMP file${scope.length === 1 ? '' : 's'}`);
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="space-y-5">
+        <PageHeader title="Export & CSV" />
+        <Card>
+          <EmptyState
+            icon={<GIcon name="upload_file" size={26} />}
+            title="No files to export yet"
+            description="Import images or vectors in Library and generate metadata first."
+            action={
+              <Link to="/library">
+                <Button size="sm" variant="primary" icon={<GIcon name="photo_library" size={15} />}>
+                  Open Library
+                </Button>
+              </Link>
+            }
+          />
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <>
+    <div className="space-y-5">
       <PageHeader
-        title="Export"
+        title="Export & CSV"
         actions={
           <>
-            <Button size="sm" variant="outline" loading={busy} icon={<PenLine className="size-4" />} onClick={onEmbedAll} disabled={rows.length === 0}>
-              Embed all
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={embedding}
+              icon={<GIcon name="file_download" size={15} />}
+              onClick={() => void handleEmbedAll()}
+            >
+              Embed IPTC & XMP ({scope.length})
             </Button>
-            <Button size="sm" variant="outline" loading={busy} icon={<FileSpreadsheet className="size-4" />} onClick={onRenameAll} disabled={rows.length === 0}>
-              Rename safe
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<GIcon name="table_chart" size={15} />}
+              onClick={() => void saveUniversalCsv()}
+            >
+              Universal CSV
             </Button>
-            <Button size="sm" variant="ghost" loading={busy} icon={<Send className="size-4" />} onClick={onMarkQueued} disabled={rows.length === 0 || enabled.size === 0}>
-              Mark queued
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={!generated || generated.rowCount === 0}
+              icon={<GIcon name="download" size={15} />}
+              onClick={() => void savePlatformCsv()}
+            >
+              Download {platform.name} CSV
             </Button>
           </>
         }
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge tone="brand" dot>{rows.length} row{rows.length === 1 ? '' : 's'}</Badge>
-          <Button size="xs" variant={scope === 'selection' ? 'primary' : 'outline'} onClick={() => setScope('selection')} disabled={library.selection.size === 0}>
-            Selection ({library.selection.size})
-          </Button>
-          <Button size="xs" variant={scope === 'all' ? 'primary' : 'outline'} onClick={() => setScope('all')}>
-            Whole library ({library.items.length})
-          </Button>
-        </div>
-      </PageHeader>
+      />
 
-      <Card title="Targets" flush>
-        <div className="flex flex-wrap gap-2 p-4">
-          {PLATFORM_LIST.map((platform) => (
-            <button
-              key={platform.id}
-              type="button"
-              onClick={() => toggle(platform.id)}
-              className={
-                enabled.has(platform.id)
-                  ? 'inline-flex items-center gap-2 r-control border border-brand bg-brand-soft px-3 py-1.5 text-[0.75rem] font-semibold text-brand-fg transition-colors'
-                  : 'inline-flex items-center gap-2 r-control border border-line bg-surface px-3 py-1.5 text-[0.75rem] font-medium text-fg-muted transition-colors hover:border-line-strong hover:text-fg'
-              }
-            >
-              <PlatformLogo id={platform.id} size={18} />
-              {platform.name}
-              {platform.csv ? null : <Badge tone="neutral">sheet</Badge>}
-            </button>
-          ))}
+      {/* Marketplace selector with HD official logos */}
+      <Card>
+        <CardHeader title="Marketplace" icon={<GIcon name="storefront" size={17} />} />
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          {CSV_PLATFORMS.map((p) => {
+            const active = p.id === platformId;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setPlatformId(p.id)}
+                className={clsx(
+                  'flex items-center gap-2.5 rounded-[var(--r-control)] border px-3 py-2.5 text-left transition-colors',
+                  active
+                    ? 'border-accent bg-accent-soft'
+                    : 'border-line bg-surface hover:border-line-strong hover:bg-surface-2/60',
+                )}
+              >
+                <PlatformLogo id={p.id} size={24} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs font-semibold text-ink">{p.name}</div>
+                  <div className="truncate text-2xs text-ink-muted">
+                    {p.keywords.min} to {p.keywords.max} tags
+                  </div>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </Card>
 
-      {rows.length === 0 ? (
-        <Card className="mt-3">
-          <p className="p-6 text-center text-sm text-fg-muted">Import files first</p>
-        </Card>
-      ) : (
-        <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-2">
-          {exports.map(({ platform, result, blocking }) => (
-            <Card
-              key={platform.id}
-              title={
-                <span className="flex items-center gap-2">
-                  <PlatformLogo id={platform.id} size={20} />
-                  {platform.name}
-                </span>
-              }
-              description={platform.csv ? platform.csv.notes : 'No CSV importer — copy-paste sheet'}
-              action={
-                <span className="flex items-center gap-1.5">
-                  <Badge tone="neutral">{platform.csv ? `${platform.csv.delimiter === ';' ? 'semicolon' : 'comma'} CSV` : 'copy sheet'}</Badge>
-                  {blocking.length > 0 && <Badge tone="danger" dot>{blocking.length} blocking</Badge>}
-                </span>
-              }
-            >
-              <div className="flex flex-wrap items-center gap-2">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+        {/* CSV output & actions */}
+        <Card className="xl:col-span-7">
+          <CardHeader
+            title={`${platform.name} CSV`}
+            icon={<PlatformLogo id={platformId} size={22} />}
+            action={
+              <div className="flex items-center gap-1.5">
                 <Button
-                  size="sm"
-                  icon={<Download className="size-4" />}
-                  onClick={() => download(result.filename, result.content)}
-                  title={result.filename}
-                >
-                  Download
-                </Button>
-                <Button
-                  size="sm"
+                  size="xs"
                   variant="ghost"
-                  icon={<Copy className="size-4" />}
-                  onClick={async () => {
-                    await navigator.clipboard.writeText(result.content);
-                    toast.success('CSV copied to clipboard');
-                  }}
+                  icon={<GIcon name="drive_file_rename_outline" size={14} />}
+                  onClick={() => void handleRename()}
                 >
-                  Copy
+                  Clean filenames
                 </Button>
-                <span className="nums min-w-0 truncate font-mono text-[0.6875rem] text-fg-subtle" title={result.filename}>
-                  {result.filename}
-                </span>
-                <span className="nums ml-auto shrink-0 text-[0.6875rem] text-fg-subtle">
-                  {result.rows} rows · {(result.bytes / 1024).toFixed(1)} KB
-                </span>
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  icon={<GIcon name="code" size={14} />}
+                  onClick={() => void exportSidecars()}
+                >
+                  XMP sidecars
+                </Button>
+                <Button
+                  size="xs"
+                  variant="secondary"
+                  icon={<GIcon name="content_copy" size={13} />}
+                  onClick={() => void copyCsv()}
+                >
+                  Copy CSV
+                </Button>
+              </div>
+            }
+          />
+
+          {generated && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+                <Badge tone="brand">{generated.rowCount} rows</Badge>
+                {generated.skipped.length > 0 && (
+                  <Badge tone="danger">{generated.skipped.length} excluded by policy</Badge>
+                )}
+                <span>Columns: {platform.csv?.columns.join(', ')}</span>
               </div>
 
-              {result.warnings.length > 0 && (
-                <ul className="mt-3 flex flex-col gap-1">
-                  {result.warnings.map((warning, index) => (
-                    <li key={index} className="flex items-start gap-1.5 r-chip bg-warn-soft px-2 py-1.5 text-[0.6875rem] text-warn">
-                      <TriangleAlert className="mt-0.5 size-3.5 shrink-0" /> {warning}
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <pre className="max-h-72 overflow-auto rounded-[var(--r-control)] border border-line bg-surface-2/70 p-3 font-mono text-2xs leading-relaxed text-ink">
+                {generated.content.replace(/^\uFEFF/, '').slice(0, 4000)}
+              </pre>
+            </div>
+          )}
+        </Card>
 
-              <div className="mt-3">
-                <CodeBlock code={result.content.split('\r\n').slice(0, 5).join('\n') || '(empty)'} language="csv" maxHeight="10rem" />
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
+        {/* Compliance check */}
+        <Card className="xl:col-span-5">
+          <CardHeader
+            title="Validation"
+            icon={<GIcon name="fact_check" size={17} />}
+            action={
+              <Badge tone={checkSummary.errors === 0 ? 'brand' : 'danger'}>
+                {checkSummary.ready}/{scope.length} ready
+              </Badge>
+            }
+          />
 
-      <p className="mt-3 text-[0.75rem] leading-relaxed text-fg-subtle">
-        UTF-8 with BOM — Excel opens accents correctly. Filename matching is case-sensitive everywhere.
-      </p>
-    </>
+          <div className="max-h-80 divide-y divide-line overflow-y-auto">
+            {checkSummary.perItem.map(({ item, issues, level }) => {
+              const blocking = issues.filter((i) => i.level === 'error');
+              return (
+                <div key={item.id} className="flex items-start justify-between gap-2 py-2.5 first:pt-0 last:pb-0">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-xs font-medium text-ink">{item.name}</div>
+                    {blocking[0] ? (
+                      <div className="mt-0.5 text-2xs text-danger">{blocking[0].message}</div>
+                    ) : (
+                      <div className="mt-0.5 text-2xs text-ink-muted">
+                        {item.metadata.keywords.length} keywords
+                        {item.embeddedAt ? ' · IPTC & XMP embedded' : ''}
+                      </div>
+                    )}
+                  </div>
+                  <GIcon
+                    name={level === 'error' ? 'cancel' : 'check_circle'}
+                    size={16}
+                    className={level === 'error' ? 'shrink-0 text-danger' : 'shrink-0 text-accent'}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      </div>
+    </div>
   );
 }

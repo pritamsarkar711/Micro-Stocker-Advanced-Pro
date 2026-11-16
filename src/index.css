@@ -1,7 +1,7 @@
 @import 'tailwindcss';
 
 /* ==================================================================== */
-/*  Fonts — self-hosted variable woff2, OFL 1.1                         */
+/*  Self hosted variable fonts (OFL 1.1)                                */
 /* ==================================================================== */
 @font-face {
   font-family: 'InterVar';
@@ -18,102 +18,137 @@
   font-display: swap;
 }
 
-/* Dark mode = class strategy (we toggle `.dark` on <html>). */
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ==================================================================== */
-/*  Design tokens — Material-inspired, single primary, elevation scale   */
+/*  Material Design 3 monochrome + single primary colour system         */
 /* ==================================================================== */
 :root {
   color-scheme: light;
 
-  /* Surfaces (Material 3 style tonal steps) */
-  --bg: #f4f6f8;
+  /* Neutral surfaces */
+  --bg: #f5f7fa;
   --bg-elevated: #ffffff;
   --surface: #ffffff;
-  --surface-2: #f8fafb;
-  --surface-3: #eef1f4;
-  --surface-inverse: #1c252e;
+  --surface-2: #f1f4f8;
+  --surface-3: #e6ebf1;
+  --surface-inverse: #141a21;
 
-  /* Hairlines */
-  --line: #e3e8ee;
-  --line-strong: #c4cdd5;
+  /* Borders */
+  --line: #dfe5ec;
+  --line-strong: #c2cbd6;
 
-  /* Type */
-  --fg: #161c24;
-  --fg-muted: #5a6875;
-  --fg-subtle: #8a96a3;
+  /* Typography */
+  --fg: #141a21;
+  --fg-muted: #52606d;
+  --fg-subtle: #7b8794;
 
-  /* Primary — single accent */
-  --brand: #1c64f2;
-  --brand-hover: #175cd3;
-  --brand-soft: #eef4ff;
-  --brand-fg: #1652c9;
+  /* Primary: Material Blue 800 */
+  --brand: #1565c0;
+  --brand-hover: #0d47a1;
+  --brand-soft: #e8f1fc;
+  --brand-fg: #0d47a1;
+  --on-brand: #ffffff;
 
-  /* Semantic, used only for status */
-  --ok: #118d57;
-  --ok-soft: #eafaf1;
-  --warn: #b76e00;
-  --warn-soft: #fff8e6;
-  --danger: #c11106;
-  --danger-soft: #fff1ef;
+  /* Minimal status tokens aligned to Blue and Deep Green (no extra hues) */
+  --ok: #1b5e20;
+  --ok-soft: #e8f3e9;
+  --warn: #475569;
+  --warn-soft: #edf1f5;
+  --danger: #b42318;
+  --danger-soft: #fbeeed;
 
-  /* Elevation — 1px hairline + soft ambient, Material-like */
+  /* Material Design 3 elevation */
   --elev-0: none;
-  --elev-1: 0 0 0 1px rgb(16 24 40 / 0.05), 0 1px 2px 0 rgb(16 24 40 / 0.06);
-  --elev-2: 0 0 0 1px rgb(16 24 40 / 0.05), 0 4px 10px -2px rgb(16 24 40 / 0.08);
-  --elev-3: 0 0 0 1px rgb(16 24 40 / 0.05), 0 12px 28px -6px rgb(16 24 40 / 0.14);
-  --elev-4: 0 0 0 1px rgb(16 24 40 / 0.06), 0 24px 56px -12px rgb(16 24 40 / 0.2);
+  --elev-1: 0 1px 2px rgb(15 23 42 / 0.05), 0 1px 3px rgb(15 23 42 / 0.06);
+  --elev-2: 0 2px 6px rgb(15 23 42 / 0.08), 0 1px 2px rgb(15 23 42 / 0.05);
+  --elev-3: 0 8px 24px -4px rgb(15 23 42 / 0.14), 0 2px 6px rgb(15 23 42 / 0.06);
+  --elev-4: 0 20px 44px -10px rgb(15 23 42 / 0.22);
 
-  /* Shape — Material 8px base */
-  --r-xs: 4px;
-  --r-sm: 6px;
-  --r-md: 8px;
-  --r-lg: 12px;
-  --r-xl: 16px;
-  --r-card: 12px;
-  --r-control: 8px;
+  /* Slightly reduced, crisp geometry */
+  --r-xs: 3px;
+  --r-sm: 4px;
+  --r-chip: 4px;
+  --r-md: 6px;
+  --r-lg: 8px;
+  --r-xl: 10px;
+  --r-card: 8px;
+  --r-control: 6px;
+
+  /* Unified primary alias */
+  --accent: var(--brand);
+  --accent-hover: var(--brand-hover);
+  --accent-soft: var(--brand-soft);
+  --accent-fg: var(--brand-fg);
 
   /* Motion */
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-emphasized: cubic-bezier(0.3, 0, 0, 1);
-  --dur-fast: 120ms;
-  --dur-base: 200ms;
-  --dur-slow: 300ms;
+  --dur-fast: 100ms;
+  --dur-base: 160ms;
+}
+
+/* Deep Green primary option */
+:root[data-accent='green'] {
+  --brand: #1b5e20;
+  --brand-hover: #134617;
+  --brand-soft: #e7f2e8;
+  --brand-fg: #144d18;
+  --on-brand: #ffffff;
 }
 
 .dark {
   color-scheme: dark;
 
-  --bg: #0e1216;
-  --bg-elevated: #141a20;
-  --surface: #161d24;
-  --surface-2: #1a222a;
-  --surface-3: #222b34;
-  --surface-inverse: #eef1f4;
-  --line: #26303a;
-  --line-strong: #38434f;
+  --bg: #0f1318;
+  --bg-elevated: #151a21;
+  --surface: #171d25;
+  --surface-2: #1d2530;
+  --surface-3: #252f3d;
+  --surface-inverse: #f1f4f8;
 
-  --fg: #eef2f6;
-  --fg-muted: #a2aebb;
-  --fg-subtle: #71808f;
+  --line: #26303d;
+  --line-strong: #374556;
 
-  --brand: #4d8dff;
-  --brand-hover: #6ba1ff;
-  --brand-soft: #14233d;
-  --brand-fg: #9dc0ff;
+  --fg: #edf1f5;
+  --fg-muted: #9fb0c2;
+  --fg-subtle: #6f8194;
 
-  --ok: #3ccb7f;
-  --ok-soft: #10231a;
-  --warn: #e0a828;
-  --warn-soft: #241d10;
-  --danger: #f56b62;
-  --danger-soft: #2a1513;
+  /* Primary: Material Blue in dark mode with crisp contrast */
+  --brand: #1e88e5;
+  --brand-hover: #1976d2;
+  --brand-soft: #132842;
+  --brand-fg: #90caf9;
+  --on-brand: #ffffff;
 
-  --elev-1: 0 0 0 1px rgb(255 255 255 / 0.05), 0 1px 2px 0 rgb(0 0 0 / 0.4);
-  --elev-2: 0 0 0 1px rgb(255 255 255 / 0.06), 0 4px 12px -2px rgb(0 0 0 / 0.5);
-  --elev-3: 0 0 0 1px rgb(255 255 255 / 0.07), 0 14px 32px -8px rgb(0 0 0 / 0.6);
-  --elev-4: 0 0 0 1px rgb(255 255 255 / 0.08), 0 28px 60px -14px rgb(0 0 0 / 0.7);
+  --ok: #4caf50;
+  --ok-soft: #132617;
+  --warn: #9fb0c2;
+  --warn-soft: #202935;
+  --danger: #e57373;
+  --danger-soft: #2b1718;
+
+  --elev-1: 0 1px 3px rgb(0 0 0 / 0.36);
+  --elev-2: 0 3px 10px rgb(0 0 0 / 0.45);
+  --elev-3: 0 12px 28px -6px rgb(0 0 0 / 0.6);
+  --elev-4: 0 24px 52px -12px rgb(0 0 0 / 0.72);
+}
+
+.dark[data-accent='green'] {
+  --brand: #2e7d32;
+  --brand-hover: #256829;
+  --brand-soft: #132917;
+  --brand-fg: #81c784;
+  --on-brand: #ffffff;
+}
+
+/* Instant zero delay theme switching */
+html.theme-switching,
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition: none !important;
+  animation: none !important;
 }
 
 @theme inline {
@@ -127,10 +162,18 @@
   --color-fg: var(--fg);
   --color-fg-muted: var(--fg-muted);
   --color-fg-subtle: var(--fg-subtle);
+  --color-ink: var(--fg);
+  --color-ink-muted: var(--fg-muted);
+  --color-ink-faint: var(--fg-subtle);
   --color-brand: var(--brand);
   --color-brand-hover: var(--brand-hover);
   --color-brand-soft: var(--brand-soft);
   --color-brand-fg: var(--brand-fg);
+  --color-on-brand: var(--on-brand);
+  --color-accent: var(--brand);
+  --color-accent-hover: var(--brand-hover);
+  --color-accent-soft: var(--brand-soft);
+  --color-accent-fg: var(--brand-fg);
   --color-ok: var(--ok);
   --color-ok-soft: var(--ok-soft);
   --color-warn: var(--warn);
@@ -138,9 +181,12 @@
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
 
-  --font-sans: 'InterVar', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+
+  --font-sans: 'InterVar', 'Roboto', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-display: 'ManropeVar', 'InterVar', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, Consolas, monospace;
+  --font-mono: ui-monospace, 'SFMono-Regular', 'Roboto Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
 
   --radius-card: var(--r-card);
   --radius-control: var(--r-control);
@@ -158,8 +204,7 @@
   }
 
   html {
-    /* Root size drives both fluid type and the user UI-scale. */
-    font-size: clamp(14px, 0.4vw + 12.9px, 16px);
+    font-size: clamp(14px, 0.35vw + 13px, 15.5px);
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
     scrollbar-gutter: stable;
@@ -170,7 +215,6 @@
     background-color: var(--bg);
     color: var(--fg);
     font-family: var(--font-sans);
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'ss01', 'tnum' 0;
     font-optical-sizing: auto;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -188,7 +232,7 @@
   h4 {
     font-family: var(--font-display);
     text-wrap: balance;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.015em;
     font-weight: 700;
   }
 
@@ -196,7 +240,6 @@
     text-wrap: pretty;
   }
 
-  /* Material-style focus ring: 2px, offset, only for keyboard users. */
   :focus-visible {
     outline: 2px solid var(--brand);
     outline-offset: 2px;
@@ -207,22 +250,21 @@
     background: color-mix(in oklab, var(--brand) 22%, transparent);
   }
 
-  /* Scrollbars: thin, neutral, appear on hover of the pane. */
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 9px;
+    height: 9px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: color-mix(in oklab, var(--fg-subtle) 38%, transparent);
+    background: color-mix(in oklab, var(--fg-subtle) 35%, transparent);
     border-radius: 999px;
-    border: 3px solid transparent;
+    border: 2px solid transparent;
     background-clip: content-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in oklab, var(--fg-subtle) 65%, transparent);
+    background: color-mix(in oklab, var(--fg-subtle) 60%, transparent);
     background-clip: content-box;
   }
 
@@ -230,7 +272,10 @@
     accent-color: var(--brand);
   }
 
-  /* Touch targets stay comfortable on coarse pointers. */
+  html[data-density='compact'] .card {
+    --density-pad: 0.75rem;
+  }
+
   @media (pointer: coarse) {
     button,
     [role='button'],
@@ -244,7 +289,6 @@
 /*  Utilities                                                           */
 /* ==================================================================== */
 @layer utilities {
-  /* Elevated surface (Material "card"): hairline + elevation-1. */
   .card {
     background-color: var(--surface);
     border: 1px solid var(--line);
@@ -252,21 +296,22 @@
     box-shadow: var(--elev-1);
   }
 
-  /* Flat surface: hairline only, no shadow. */
   .panel {
     background-color: var(--surface);
     border: 1px solid var(--line);
     border-radius: var(--r-card);
   }
 
-  /* Control shape: buttons, inputs, nav rows. */
   .r-control {
     border-radius: var(--r-control);
   }
 
-  /* Chip / pill shape. */
   .r-chip {
     border-radius: var(--r-xs);
+  }
+
+  .r-dialog {
+    border-radius: var(--r-lg);
   }
 
   .elev-1 {
@@ -300,12 +345,23 @@
 
   .grid-auto-fit {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14.5rem), 1fr));
   }
 
   .grid-auto-fill {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 14.5rem), 1fr));
+  }
+
+  .checkerboard {
+    background-color: var(--surface-2);
+    background-image:
+      linear-gradient(45deg, var(--line) 25%, transparent 25%),
+      linear-gradient(-45deg, var(--line) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, var(--line) 75%),
+      linear-gradient(-45deg, transparent 75%, var(--line) 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
   }
 
   .safe-bottom {
@@ -321,7 +377,6 @@
     app-region: no-drag;
   }
 
-  /* Material emphasized-decelerate entrance */
   .animate-in-fast {
     animation: fade-slide-in var(--dur-base) var(--ease-emphasized) both;
   }
@@ -330,7 +385,7 @@
 @keyframes fade-slide-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
@@ -341,7 +396,7 @@
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(12px) scale(0.98);
+    transform: translateY(8px) scale(0.99);
   }
   to {
     opacity: 1;
@@ -349,15 +404,6 @@
   }
 }
 
-@keyframes shimmer {
-  100% {
-    transform: translateX(100%);
-  }
-}
-
-/* ==================================================================== */
-/*  Print                                                               */
-/* ==================================================================== */
 @media print {
   .no-print {
     display: none !important;
@@ -377,6 +423,15 @@
     margin: 0 !important;
     padding: 0 !important;
   }
+}
+
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

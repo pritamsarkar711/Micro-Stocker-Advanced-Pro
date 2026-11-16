@@ -4,10 +4,10 @@ import type { HTMLAttributes, ReactNode } from 'react';
 export type BadgeTone = 'neutral' | 'brand' | 'ok' | 'warn' | 'danger' | 'outline';
 
 const TONES: Record<BadgeTone, string> = {
-  neutral: 'bg-surface-3 text-fg-muted',
+  neutral: 'bg-surface-2 text-fg-muted border border-line',
   brand: 'bg-brand-soft text-brand-fg',
   ok: 'bg-ok-soft text-ok',
-  warn: 'bg-warn-soft text-warn',
+  warn: 'bg-surface-3 text-fg-muted',
   danger: 'bg-danger-soft text-danger',
   outline: 'border border-line-strong bg-surface text-fg-muted',
 };
@@ -31,15 +31,14 @@ export function Badge({
   return (
     <span
       className={clsx(
-        'inline-flex items-center gap-1.5 font-medium whitespace-nowrap',
-        'r-chip',
-        size === 'sm' ? 'px-1.5 py-[0.125rem] text-[0.6875rem]' : 'px-2 py-0.5 text-xs',
+        'inline-flex items-center gap-1.5 font-medium whitespace-nowrap r-chip',
+        size === 'sm' ? 'px-2 py-0.5 text-[0.6875rem]' : 'px-2.5 py-0.5 text-xs',
         TONES[tone],
         className,
       )}
       {...rest}
     >
-      {dot && <span className="size-1.5 rounded-full bg-current opacity-80" />}
+      {dot && <span className="size-1.5 rounded-full bg-current opacity-85" />}
       {icon}
       {children}
     </span>
@@ -57,9 +56,9 @@ export function StatusDot({
     state === 'online'
       ? 'bg-ok'
       : state === 'connecting'
-        ? 'bg-warn animate-pulse'
+        ? 'bg-brand animate-pulse'
         : state === 'error'
           ? 'bg-danger'
           : 'bg-fg-subtle';
-  return <span className={clsx('inline-block size-1.5 rounded-full', color, className)} />;
+  return <span className={clsx('inline-block size-2 rounded-full', color, className)} />;
 }

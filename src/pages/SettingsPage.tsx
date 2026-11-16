@@ -1,302 +1,279 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  BrainCircuit,
-  DatabaseBackup,
-  Download,
-  Eraser,
-  FolderUp,
-  HardDrive,
-  Monitor,
-  Moon,
-  RotateCcw,
-  Sun,
-} from 'lucide-react';
+import { useMemo } from 'react';
+import clsx from 'clsx';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Card } from '@/components/ui/Card';
+import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
-import { Field, SegmentedControl, Select, Switch } from '@/components/ui/Field';
-import { Modal } from '@/components/ui/Modal';
+import { Field, Switch } from '@/components/ui/Field';
+import { RichSelect, type RichSelectOption } from '@/components/ui/RichSelect';
+import { ThemeSwitch } from '@/components/ui/ThemeSwitch';
+import { CircleFlag } from '@/components/ui/CircleFlag';
+import { GIcon } from '@/components/ui/GoogleIcon';
 import { AiPanel } from '@/components/settings/AiPanel';
 import { useApp } from '@/state/AppState';
+import { useAuth } from '@/state/AuthState';
 import { useLibrary } from '@/state/library';
 import { useToast } from '@/state/ToastState';
-import { kv } from '@/lib/kv';
-import { desktop, isDesktop } from '@/lib/desktop';
-import type { CurrencyCode } from '@/lib/format';
-
-const SHORTCUTS: [string, string][] = [
-  ['Ctrl K', 'Search'],
-  ['Ctrl B', 'Sidebar'],
-  ['Ctrl +', 'Zoom in'],
-  ['Ctrl −', 'Zoom out'],
-  ['Ctrl 0', 'Reset zoom'],
-  ['Esc', 'Close'],
-];
+import { CURRENCIES, type CurrencyCode } from '@/lib/format';
+import { desktop } from '@/lib/desktop';
 
 export function SettingsPage() {
-  const { settings, updateSettings, resetSettings, zoom, setZoom, cloud, runtime } = useApp();
-  const { aiConfig, aiReady, setAiConfig } = useLibrary();
+  const {
+    settings,
+    setAccentInstant,
+    updateSettings,
+    resetSettings,
+    zoom,
+    setZoom,
+    nudgeZoom,
+  } = useApp();
+  const { user, openAuth, logout } = useAuth();
+  const { items, replaceAll, clearLibrary } = useLibrary();
   const toast = useToast();
-  const [keys, setKeys] = useState<string[]>([]);
-  const [confirmClear, setConfirmClear] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const restoreRef = useRef<HTMLInputElement>(null);
 
-  const refreshKeys = useCallback(async () => setKeys(await kv.keys()), []);
-  useEffect(() => {
-    void refreshKeys();
-  }, [refreshKeys]);
+  const currencyOptions = useMemo<RichSelectOption[]>(
+    () =>
+      CURRENCIES.map((c) => ({
+        value: c.code,
+        label: `${c.code} (${c.symbol})`,
+        sublabel: c.name,
+        icon: <CircleFlag code={c.flag} size={18} />,
+      })),
+    [],
+  );
 
-  const onExport = async () => {
-    const result = await desktop.fs.exportText({
-      defaultName: `micro-stocker-settings-${new Date().toISOString().slice(0, 10)}.json`,
-      text: JSON.stringify({ settings, uiScale: zoom, runtime }, null, 2),
+  async function backupLibrary() {
+    const payload = JSON.stringify(
+      { version: 2, exportedAt: new Date().toISOString(), items },
+      null,
+      2,
+    );
+    await desktop.fs.exportText({
+      defaultName: `microstocker_backup_${new Date().toISOString().slice(0, 10)}.json`,
+      text: payload,
       filters: [{ name: 'JSON', extensions: ['json'] }],
     });
-    if (result.ok) toast.success('Exported');
-    else if (!result.canceled) toast.error('Export failed', result.error);
-  };
+    toast.success('Backup exported');
+  }
 
-  const onBackup = async () => {
-    setBusy(true);
-    const all = await kv.keys();
-    const data: Record<string, unknown> = {};
-    for (const key of all) data[key] = await kv.get<unknown>(key, null);
-    const result = await desktop.fs.exportText({
-      defaultName: `micro-stocker-backup-${new Date().toISOString().slice(0, 10)}.json`,
-      text: JSON.stringify(
-        {
-          app: 'micro-stocker-advanced-pro',
-          backupVersion: 1,
-          exportedAt: new Date().toISOString(),
-          keyCount: all.length,
-          data,
-        },
-        null,
-        2,
-      ),
-      filters: [{ name: 'JSON', extensions: ['json'] }],
-    });
-    setBusy(false);
-    if (result.ok) toast.success('Backed up', `${all.length} keys`);
-    else if (!result.canceled) toast.error('Backup failed', result.error);
-  };
-
-  const onRestoreFile = async (file: File) => {
-    setBusy(true);
-    try {
-      const parsed = JSON.parse(await file.text()) as { data?: Record<string, unknown> };
-      if (!parsed?.data) {
-        toast.error('Invalid backup');
-        setBusy(false);
-        return;
-      }
-      let count = 0;
-      for (const [key, value] of Object.entries(parsed.data)) {
-        await kv.set(key, value);
-        count += 1;
-      }
-      await refreshKeys();
-      toast.success(`Restored ${count} keys`);
-      setTimeout(() => window.location.reload(), 800);
-    } catch (error) {
-      setBusy(false);
-      toast.error('Restore failed', error instanceof Error ? error.message : String(error));
+  async function restoreLibrary() {
+    const res = await desktop.fs.openJson<{ items?: typeof items }>();
+    if (!res.ok || res.canceled) return;
+    if (!Array.isArray(res.value?.items)) {
+      toast.error('Invalid backup file');
+      return;
     }
-  };
-
-  const onClear = async () => {
-    setBusy(true);
-    for (const key of await kv.keys()) await kv.del(key);
-    await refreshKeys();
-    setBusy(false);
-    setConfirmClear(false);
-    resetSettings();
-    toast.success('Data cleared');
-  };
+    replaceAll(res.value.items);
+    toast.success(`Restored ${res.value.items.length} assets`);
+  }
 
   return (
-    <>
+    <div className="space-y-5">
       <PageHeader
         title="Settings"
         actions={
-          <>
-            <Button size="sm" variant="ghost" icon={<RotateCcw className="size-3.5" />} onClick={() => { resetSettings(); toast.info('Reset'); }}>
-              Reset
-            </Button>
-            <Button size="sm" variant="outline" icon={<Download className="size-3.5" />} onClick={onExport}>
-              Export
-            </Button>
-          </>
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={<GIcon name="restart_alt" size={16} />}
+            onClick={() => {
+              resetSettings();
+              toast.info('Defaults restored');
+            }}
+          >
+            Reset defaults
+          </Button>
         }
       />
 
-      <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-12">
-        <div className="flex flex-col gap-3 xl:col-span-7">
-          <Card title="AI metadata" icon={<BrainCircuit className="size-4" />}>
-            <AiPanel settings={aiConfig} onSave={setAiConfig} />
-          </Card>
+      {/* AI providers */}
+      <Card>
+        <CardHeader title="AI Metadata Providers" icon={<GIcon name="smart_toy" size={17} />} />
+        <AiPanel />
+      </Card>
 
-          <Card title="Storage" icon={<HardDrive className="size-4" />}>
-            <div className="flex items-center gap-2">
-              <p className="min-w-0 flex-1 truncate text-[0.75rem] text-fg-muted">
-                {isDesktop ? (runtime.userDataPath ?? 'User data') : 'Local storage'}
-              </p>
-              <Badge tone={cloud.url ? 'ok' : 'neutral'} dot>
-                {cloud.url ? 'Cloud' : 'Local'}
-              </Badge>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        {/* Appearance & Region */}
+        <Card>
+          <CardHeader title="Appearance & Currency" icon={<GIcon name="palette" size={17} />} />
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-medium text-ink">Theme</span>
+              <ThemeSwitch />
             </div>
 
-            <input
-              ref={restoreRef}
-              type="file"
-              accept=".json,application/json"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void onRestoreFile(file);
-                event.target.value = '';
-              }}
-            />
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-medium text-ink">Primary color</span>
+              <div className="grid grid-cols-2 gap-1.5">
+                {(
+                  [
+                    { id: 'blue', label: 'Material Blue', swatch: '#1565c0' },
+                    { id: 'green', label: 'Deep Green', swatch: '#1b5e20' },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setAccentInstant(opt.id)}
+                    className={clsx(
+                      'inline-flex h-8 items-center gap-2 rounded-[var(--r-control)] border px-3 text-xs font-medium',
+                      settings.accent === opt.id
+                        ? 'border-accent bg-accent-soft font-semibold text-accent'
+                        : 'border-line bg-surface text-ink-muted hover:text-ink',
+                    )}
+                  >
+                    <span
+                      className="size-3.5 rounded-full"
+                      style={{ backgroundColor: opt.swatch }}
+                    />
+                    <span>{opt.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
 
-            <div className="mt-2.5 flex flex-wrap gap-1.5">
-              <Button size="sm" icon={<DatabaseBackup className="size-3.5" />} loading={busy} onClick={onBackup}>
-                Backup
-              </Button>
-              <Button size="sm" variant="outline" icon={<FolderUp className="size-3.5" />} disabled={busy} onClick={() => restoreRef.current?.click()}>
-                Restore
-              </Button>
-              <Button size="sm" variant="danger" icon={<Eraser className="size-3.5" />} onClick={() => setConfirmClear(true)}>
-                Clear
-              </Button>
-              <span className="ml-auto self-center text-[0.6875rem] text-fg-subtle">
-                {keys.length} keys
+            <Field label="Currency">
+              <RichSelect
+                value={settings.currency}
+                options={currencyOptions}
+                onChange={(code) => updateSettings({ currency: code as CurrencyCode })}
+                ariaLabel="Currency"
+              />
+            </Field>
+
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-medium text-ink">Density</span>
+              <div className="grid grid-cols-2 gap-1 rounded-[var(--r-control)] border border-line bg-surface-2 p-0.5">
+                {(['comfortable', 'compact'] as const).map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => updateSettings({ density: d })}
+                    className={clsx(
+                      'h-7 rounded-[5px] px-3 text-xs font-medium capitalize',
+                      settings.density === d
+                        ? 'bg-accent text-accent-fg'
+                        : 'text-ink-muted hover:text-ink',
+                    )}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-medium text-ink">
+                Scale ({Math.round(zoom * 100)}%)
               </span>
-            </div>
-          </Card>
-        </div>
-
-        <div className="flex flex-col gap-3 xl:col-span-5">
-          <Card title="Appearance">
-            <div className="flex flex-col gap-3.5">
-              <Field label="Theme">
-                <SegmentedControl
-                  value={settings.theme}
-                  onChange={(theme) => updateSettings({ theme })}
-                  options={[
-                    { value: 'light', label: 'Light', icon: <Sun className="size-3" /> },
-                    { value: 'dark', label: 'Dark', icon: <Moon className="size-3" /> },
-                    { value: 'system', label: 'Auto', icon: <Monitor className="size-3" /> },
-                  ]}
-                />
-              </Field>
-
-              <Switch
-                id="density"
-                checked={settings.density === 'compact'}
-                onChange={(value) => updateSettings({ density: value ? 'compact' : 'comfortable' })}
-                label="Compact rows"
-              />
-              <Switch
-                id="reduce-motion"
-                checked={settings.reduceMotion}
-                onChange={(value) => updateSettings({ reduceMotion: value })}
-                label="Reduce motion"
-              />
-
-              <Field label="Currency">
-                <Select
-                  value={settings.currency}
-                  onChange={(event) => updateSettings({ currency: event.target.value as CurrencyCode })}
-                  options={[
-                    { value: 'USD', label: 'USD $' },
-                    { value: 'EUR', label: 'EUR €' },
-                    { value: 'GBP', label: 'GBP £' },
-                    { value: 'INR', label: 'INR ₹' },
-                    { value: 'BDT', label: 'BDT ৳' },
-                  ]}
-                />
-              </Field>
-            </div>
-          </Card>
-
-          <Card title="Scale">
-            <div className="flex items-center gap-2">
-              <span className="nums display text-xl font-semibold text-fg">{Math.round(zoom * 100)}%</span>
-              <Badge tone={isDesktop ? 'brand' : 'neutral'}>{isDesktop ? 'Native' : 'Preview'}</Badge>
-              <Button size="xs" variant="ghost" className="ml-auto" onClick={() => setZoom(1)}>
-                Reset
-              </Button>
-            </div>
-            <input
-              type="range"
-              min={0.6}
-              max={2}
-              step={0.05}
-              value={zoom}
-              onChange={(event) => setZoom(Number(event.target.value))}
-              className="mt-3 w-full accent-[var(--brand)]"
-              aria-label="UI scale"
-            />
-            <div className="mt-3 flex flex-wrap gap-1">
-              {[0.8, 0.9, 1, 1.1, 1.25, 1.5].map((value) => (
-                <Button
-                  key={value}
-                  size="xs"
-                  variant={Math.abs(zoom - value) < 0.01 ? 'primary' : 'outline'}
-                  onClick={() => setZoom(value)}
-                >
-                  {Math.round(value * 100)}
+              <div className="flex items-center gap-1">
+                <Button size="xs" variant="secondary" onClick={() => nudgeZoom(-0.1)}>
+                  <GIcon name="zoom_out" size={15} />
                 </Button>
-              ))}
+                <Button size="xs" variant="ghost" onClick={() => setZoom(1)}>
+                  100%
+                </Button>
+                <Button size="xs" variant="secondary" onClick={() => nudgeZoom(0.1)}>
+                  <GIcon name="zoom_in" size={15} />
+                </Button>
+              </div>
             </div>
 
-            <dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-1 border-t border-line pt-2.5 sm:grid-cols-2">
-              {SHORTCUTS.map(([combo, action]) => (
-                <div key={combo} className="flex items-center justify-between gap-2 text-[0.6875rem]">
-                  <dt className="text-fg-subtle">{action}</dt>
-                  <dd>
-                    <kbd className="r-chip border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[0.625rem] text-fg-muted">
-                      {combo}
-                    </kbd>
-                  </dd>
+            <Switch
+              checked={settings.reduceMotion}
+              onChange={(reduceMotion) => updateSettings({ reduceMotion })}
+              label="Reduce motion"
+            />
+          </div>
+        </Card>
+
+        {/* Account & Workspace Backup */}
+        <div className="space-y-5">
+          <Card>
+            <CardHeader title="Account" icon={<GIcon name="account_circle" size={17} />} />
+            {user ? (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold text-ink">{user.displayName}</div>
+                  <div className="truncate text-xs text-ink-muted">{user.email}</div>
                 </div>
-              ))}
-            </dl>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<GIcon name="person" size={15} />}
+                    onClick={() => openAuth('account')}
+                  >
+                    Manage
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon={<GIcon name="logout" size={15} />}
+                    onClick={() => void logout()}
+                  >
+                    Sign out
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon={<GIcon name="person_add" size={15} />}
+                  onClick={() => openAuth('register')}
+                >
+                  Create account
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon={<GIcon name="login" size={15} />}
+                  onClick={() => openAuth('login')}
+                >
+                  Sign in
+                </Button>
+              </div>
+            )}
           </Card>
 
-          <Card title="AI status">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[0.75rem] text-fg-muted">Generator</span>
-              <Badge tone={aiReady ? 'brand' : 'neutral'} dot>
-                {aiReady ? 'AI connected' : 'Built-in'}
-              </Badge>
+          <Card>
+            <CardHeader title="Workspace Data" icon={<GIcon name="storage" size={17} />} />
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<GIcon name="download" size={15} />}
+                onClick={() => void backupLibrary()}
+              >
+                Export JSON
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<GIcon name="upload" size={15} />}
+                onClick={() => void restoreLibrary()}
+              >
+                Import JSON
+              </Button>
+              {items.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-danger hover:text-danger"
+                  icon={<GIcon name="delete_sweep" size={15} />}
+                  onClick={() => {
+                    clearLibrary();
+                    toast.info('Library cleared');
+                  }}
+                >
+                  Clear library
+                </Button>
+              )}
             </div>
           </Card>
         </div>
       </div>
-
-      <Modal
-        open={confirmClear}
-        onClose={() => setConfirmClear(false)}
-        title="Clear local data?"
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setConfirmClear(false)}>
-              Cancel
-            </Button>
-            <Button variant="danger" loading={busy} icon={<Eraser className="size-4" />} onClick={onClear}>
-              Clear
-            </Button>
-          </>
-        }
-      >
-        <p className="text-[0.8125rem] text-fg-muted">
-          Removes settings, cache and cloud credentials from this computer. Supabase data is untouched.
-        </p>
-      </Modal>
-    </>
+    </div>
   );
 }

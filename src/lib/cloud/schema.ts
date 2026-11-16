@@ -1,91 +1,70 @@
 /**
- * SQL to run once in Supabase → SQL Editor.
- *
- * These two tables are the generic foundation (settings + offline-sync queue +
- * a key/value cache). They will be extended with the real domain tables as soon
- * as the feature spec is confirmed.
+ * Supabase schema for workspace sync, instant email accounts and issue reports.
+ * Paste into the Supabase SQL editor once to provision all tables.
  */
-export const SUPABASE_SQL = `-- ============================================================
---  Micro Stocker Advanced Pro - base schema
---  Run this once in Supabase Studio -> SQL Editor -> Run.
--- ============================================================
+export const SCHEMA_SQL = `-- Micro Stocker Advanced Pro Cloud Schema (v2.0)
 
-create table if not exists public.app_meta (
-  id          uuid primary key default gen_random_uuid(),
-  app         text not null default 'micro-stocker-advanced-pro',
-  schema_version int not null default 1,
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
-);
-
-insert into public.app_meta (app, schema_version)
-select 'micro-stocker-advanced-pro', 1
-where not exists (select 1 from public.app_meta);
-
--- Generic settings/state per device+user
 create table if not exists public.kv_store (
-  key         text not null,
-  device_id   text not null default 'default',
-  value       jsonb not null default '{}'::jsonb,
+  key         text        not null,
+  device_id   text        not null default 'default',
+  value       jsonb       not null default '{}'::jsonb,
   updated_at  timestamptz not null default now(),
   primary key (key, device_id)
 );
 
--- Offline-first write queue: rows are pushed here while offline and
--- replayed when the connection returns.
-create table if not exists public.sync_queue (
-  id          bigint generated always as identity primary key,
-  entity      text not null,
-  entity_id   text not null,
-  operation   text not null check (operation in ('insert','update','delete')),
-  payload     jsonb not null default '{}'::jsonb,
-  created_at  timestamptz not null default now(),
-  applied_at  timestamptz
+create table if not exists public.user_accounts (
+  id             uuid        primary key,
+  email          text        not null unique,
+  display_name   text        not null default '',
+  password_hash  text        not null,
+  password_salt  text        not null,
+  created_at     timestamptz not null default now(),
+  last_login_at  timestamptz not null default now()
 );
 
-create index if not exists sync_queue_pending_idx
-  on public.sync_queue (created_at) where applied_at is null;
+create table if not exists public.issue_reports (
+  id          uuid        primary key,
+  category    text        not null,
+  area        text        not null default 'general',
+  subject     text        not null,
+  details     text        not null,
+  contact     text        not null default '',
+  user_email  text        not null default '',
+  app_version text        not null default '',
+  platform    text        not null default '',
+  status      text        not null default 'submitted',
+  created_at  timestamptz not null default now()
+);
 
--- updated_at trigger helper
-create or replace function public.touch_updated_at()
-returns trigger language plpgsql as $$
-begin
-  new.updated_at = now();
-  return new;
-end $$;
+create table if not exists public.app_meta (
+  id              int         primary key default 1 check (id = 1),
+  schema_version  text        not null default '2.0.0',
+  installed_at    timestamptz not null default now()
+);
 
-drop trigger if exists app_meta_touch on public.app_meta;
-create trigger app_meta_touch before update on public.app_meta
-  for each row execute function public.touch_updated_at();
+insert into public.app_meta (id, schema_version)
+  values (1, '2.0.0')
+  on conflict (id) do update set schema_version = excluded.schema_version;
 
--- ------------------------------------------------------------
---  Row Level Security
---  For a single-user desktop app the anon key is enough.
---  Tighten this (e.g. to auth.uid()) when multi-user login is added.
--- ------------------------------------------------------------
-alter table public.app_meta   enable row level security;
-alter table public.kv_store   enable row level security;
-alter table public.sync_queue enable row level security;
+alter table public.kv_store      enable row level security;
+alter table public.user_accounts enable row level security;
+alter table public.issue_reports enable row level security;
+alter table public.app_meta      enable row level security;
 
-drop policy if exists "app_meta read" on public.app_meta;
-create policy "app_meta read" on public.app_meta
-  for select using (true);
+drop policy if exists "msap_kv_all"       on public.kv_store;
+drop policy if exists "msap_accounts_all" on public.user_accounts;
+drop policy if exists "msap_reports_all"  on public.issue_reports;
+drop policy if exists "msap_meta_read"    on public.app_meta;
 
-drop policy if exists "kv read" on public.kv_store;
-create policy "kv read" on public.kv_store for select using (true);
+create policy "msap_kv_all" on public.kv_store
+  for all to anon, authenticated using (true) with check (true);
 
-drop policy if exists "kv write" on public.kv_store;
-create policy "kv write" on public.kv_store for insert with check (true);
+create policy "msap_accounts_all" on public.user_accounts
+  for all to anon, authenticated using (true) with check (true);
 
-drop policy if exists "kv update" on public.kv_store;
-create policy "kv update" on public.kv_store for update using (true);
+create policy "msap_reports_all" on public.issue_reports
+  for all to anon, authenticated using (true) with check (true);
 
-drop policy if exists "sync read" on public.sync_queue;
-create policy "sync read" on public.sync_queue for select using (true);
-
-drop policy if exists "sync insert" on public.sync_queue;
-create policy "sync insert" on public.sync_queue for insert with check (true);
-
-drop policy if exists "sync update" on public.sync_queue;
-create policy "sync update" on public.sync_queue for update using (true);
+create policy "msap_meta_read" on public.app_meta
+  for select to anon, authenticated using (true);
 `;

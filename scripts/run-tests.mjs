@@ -9,6 +9,7 @@ import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outfile = path.join(root, 'node_modules', '.cache', 'msap-tests.mjs');
@@ -30,7 +31,29 @@ if (!globalThis.localStorage) {
 }
 `;
 
+const urlStubPlugin = {
+  name: 'url-stub',
+  setup(build) {
+    build.onResolve({ filter: /\?url$/ }, (args) => {
+      const clean = args.path.replace(/\?url$/, '');
+      let resolved = clean;
+      try {
+        const req = createRequire(import.meta.url);
+        resolved = req.resolve(clean, { paths: [root] });
+      } catch {
+        resolved = clean;
+      }
+      return { path: resolved, namespace: 'url-stub' };
+    });
+    build.onLoad({ filter: /.*/, namespace: 'url-stub' }, (args) => {
+      const fileUrl = 'file://' + args.path;
+      return { contents: `export default ${JSON.stringify(fileUrl)};`, loader: 'js' };
+    });
+  },
+};
+
 await build({
+  plugins: [urlStubPlugin],
   entryPoints: [path.join(root, 'tests', 'logic.test.ts')],
   outfile,
   bundle: true,
@@ -38,6 +61,7 @@ await build({
   format: 'esm',
   target: 'node20',
   alias: { '@': path.join(root, 'src') },
+  external: ['onnxruntime-web'],
   define: {
     'import.meta.env.DEV': 'false',
     FIXTURE_DIR: JSON.stringify(path.join(root, 'tests', 'fixtures')),
