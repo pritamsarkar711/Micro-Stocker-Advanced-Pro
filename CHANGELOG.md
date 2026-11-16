@@ -3,6 +3,19 @@
 All notable changes to Micro Stocker Advanced Pro are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+- **Prepare → Size cap listed duplicate options.** Six marketplaces share a
+  50 MB budget and the dropdown keyed its `<option>`s by the numeric cap, so
+  React warned about duplicate keys and the list could render unreliably.
+  Caps are now grouped (`src/lib/stock/sizecaps.ts`) and each label names the
+  portals that share it. Regression-tested.
+- **The browser preview reported the wrong version.** About showed `v0.2.0`
+  (the preload placeholder was `0.1.0`) because the renderer had no bridge to
+  read `package.json`. Both now fall back to a single `APP_VERSION` constant
+  (`src/lib/version.ts`) that a test keeps in sync with `package.json`.
+
 ## [1.2.0] - 2026-11-15
 
 ### Added

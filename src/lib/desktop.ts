@@ -10,6 +10,8 @@
  * That is what makes the UI testable before an installer exists.
  */
 
+import { APP_VERSION } from './version';
+
 export interface AppInfo {
   name: string;
   version: string;
@@ -128,7 +130,7 @@ const LS_PREFIX = 'msap:data:';
 
 const browserInfo = (): AppInfo => ({
   name: 'Micro Stocker Advanced Pro',
-  version: '0.2.0',
+  version: APP_VERSION,
   chrome: navigator.userAgent.match(/Chrome\/([\d.]+)/)?.[1] ?? 'unknown',
   platform: 'browser',
   isDev: import.meta.env.DEV,

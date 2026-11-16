@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { desktop } from '@/lib/desktop';
 import { kv, STORAGE_KEYS } from '@/lib/kv';
+import { APP_VERSION } from '@/lib/version';
 import type { CurrencyCode } from '@/lib/format';
 import {
   EMPTY_CLOUD_CONFIG,
@@ -94,7 +95,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [runtime, setRuntime] = useState<AppState['runtime']>({
     platform: desktop.platform,
     isDesktop: desktop.isDesktop,
-    version: '0.1.0',
+    version: APP_VERSION,
     chrome: '—',
     isDev: import.meta.env.DEV,
   });

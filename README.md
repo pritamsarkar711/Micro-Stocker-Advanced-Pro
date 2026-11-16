@@ -11,7 +11,7 @@ upscaling to 8K, validation, submission tracking and earnings analytics for
 
 [![latest](https://img.shields.io/github/v/release/pritamsarkar711/Micro-Stocker-Advanced-Pro?style=for-the-badge&label=release&color=1d4ed8)](https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro/releases)
 [![platforms](https://img.shields.io/badge/marketplaces-14-1d4ed8?style=for-the-badge)](#-supported-marketplaces)
-[![tests](https://img.shields.io/badge/tests-57%20passing-15803d?style=for-the-badge)](#testing)
+[![tests](https://img.shields.io/badge/tests-73%20passing-15803d?style=for-the-badge)](#testing)
 [![licence](https://img.shields.io/badge/licence-source--available-575e6b?style=for-the-badge)](LICENSE)
 
 [Download](#-download) · [Marketplaces](#-supported-marketplaces) · [Features](#-whats-inside) · [Build](#-build-from-source) · [Support](#-support)
@@ -85,7 +85,7 @@ npm install
 
 npm run dev        # Electron window + hot reload
 npm run dev:web    # browser-only preview
-npm run verify     # typecheck + 57 tests + production build
+npm run verify     # typecheck + 73 tests + production build
 npm run dist:win   # Windows installer + portable exe into ./release
 ```
 
@@ -98,7 +98,7 @@ and `npm run dist:mac`; a macOS `.dmg` needs to be produced on macOS.
 npm test
 ```
 
-The suite bundles the pure domain layer with esbuild and runs **57 assertions**
+The suite bundles the pure domain layer with esbuild and runs **73 assertions**
 on Node: every CSV dialect, validators, the metadata engine, binary IPTC/XMP
 round-trips through real PNG/JPEG/SVG/EPS fixtures, SVG/EPS analysis, sales
 parsing, planner maths, and a completeness check that all 14 marketplaces carry

@@ -12,7 +12,7 @@ import { formatBytes } from '@/lib/stock/files';
 import { megapixels, type StockItem } from '@/lib/stock/types';
 import { inspectJpeg, reencodeRaster, stripJpegMetadata, type JpegReport } from '@/lib/stock/filedoctor';
 import { analyzeEps, analyzeSvg, sanitizeSvg, type EpsReport, type SvgReport } from '@/lib/stock/vectorcheck';
-import { PLATFORM_LIST } from '@/lib/stock/platforms';
+import { sizeCapOptions } from '@/lib/stock/sizecaps';
 
 interface Row {
   item: StockItem;
@@ -22,7 +22,7 @@ interface Row {
 
 const SIZE_TARGETS = [
   { value: '0', label: 'No size cap' },
-  ...PLATFORM_LIST.filter((p) => p.maxFileMB <= 60).map((p) => ({ value: String(p.maxFileMB), label: `${p.name} cap (${p.maxFileMB} MB)` })),
+  ...sizeCapOptions(),
   { value: 'custom', label: 'Custom…' },
 ];
 
