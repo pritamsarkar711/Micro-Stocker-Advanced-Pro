@@ -15,6 +15,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (the preload placeholder was `0.1.0`) because the renderer had no bridge to
   read `package.json`. Both now fall back to a single `APP_VERSION` constant
   (`src/lib/version.ts`) that a test keeps in sync with `package.json`.
+- **Docs claimed installers that do not exist.** Every GitHub release
+  (v1.0.0–v1.2.0) ships zero assets, so the README no longer points at a
+  download that isn't there; it now says how to build locally and how to
+  activate `docs/ci/build-desktop-installers.yml` to publish them. The Linux
+  package description also said "10 microstock marketplaces" — it is 14.
 
 ## [1.2.0] - 2026-11-15
 

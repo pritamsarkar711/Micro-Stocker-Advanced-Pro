@@ -22,19 +22,24 @@ upscaling to 8K, validation, submission tracking and earnings analytics for
 
 ## 📥 Download
 
-Installers are published on the **[Releases page](https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro/releases)**.
+**No installers are published yet** — the
+**[Releases page](https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro/releases)**
+currently carries tags only, with no binaries attached. To run the app today,
+build it from source (below). To start publishing installers, activate
+`docs/ci/build-desktop-installers.yml` as `.github/workflows/build.yml` and push
+a `v*.*.*` tag; it produces the artifacts below on GitHub's runners.
 
-| Platform | File |
+| Platform | Artifact name (when built) |
 | --- | --- |
-| Windows 10/11 (x64) | `Micro-Stocker-Advanced-Pro-Setup-<version>.exe` |
-| Windows (no install) | `Micro-Stocker-Advanced-Pro-<version>.exe` (portable) |
+| Windows 10/11 (x64) | `Micro-Stocker-Advanced-Pro-Setup-<version>-win-x64.exe` |
+| Windows (no install) | `Micro-Stocker-Advanced-Pro-<version>-portable-win-x64.exe` |
 | macOS (Apple silicon + Intel) | `.dmg` |
-| Linux (x64) | `.AppImage` |
+| Linux (x64) | `.AppImage`, `.deb` |
 
-No account, no subscription, no telemetry, and **no paid AI required**. Download
-once and the app runs fully offline; the only connections it ever makes are the
-ones you start — the optional one-time Real-ESRGAN download, the optional
-Supabase sync, and the AI provider you pick (none by default).
+No account, no subscription, no telemetry, and **no paid AI required**. The app
+runs fully offline; the only connections it ever makes are the ones you start —
+the optional one-time Real-ESRGAN download, the optional Supabase sync, and the
+AI provider you pick (none by default).
 
 ## 🌍 Supported marketplaces
 
