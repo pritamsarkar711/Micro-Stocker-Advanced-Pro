@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarClock, CheckCircle2, CircleDashed, ListChecks, Send, TriangleAlert, XCircle } from 'lucide-react';
+import { CalendarClock, CheckCircle2, CircleDashed, ListChecks, Send, XCircle } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { GIcon } from '@/components/ui/GoogleIcon';
 import { Select } from '@/components/ui/Field';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/Misc';
@@ -65,15 +66,15 @@ export function SubmissionsPage() {
   const firstBatchIssue =
     cap?.firstBatch && submittedCount === 0 && library.items.length > 0
       ? library.items.length < cap.firstBatch[0]
-        ? `First ${spec.name} submission needs ${cap.firstBatch[0]}-${cap.firstBatch[1]} files of ONE format — you have ${library.items.length}. Keep producing until you reach the window; the submit button stays disabled below it.`
+        ? `First ${spec.name} submission needs ${cap.firstBatch[0]}-${cap.firstBatch[1]} files of one format. You have ${library.items.length}. Keep producing until you reach the window; the submit button stays disabled below it.`
         : library.items.length > cap.firstBatch[1]
-          ? `First batch cap is ${cap.firstBatch[1]} files — select exactly ${cap.firstBatch[1]} (same format) and queue them, leave the rest for next month.`
+          ? `First batch cap is ${cap.firstBatch[1]} files. Select exactly ${cap.firstBatch[1]} (same format) and queue them, leave the rest for next month.`
           : `You are inside the first-batch window (${cap.firstBatch[0]}-${cap.firstBatch[1]}). Queue all ${library.items.length} files of one format and submit together.`
       : null;
 
   const monthlyIssue =
     cap?.monthly && submittedCount > cap.monthly
-      ? `Monthly cap exceeded: ${submittedCount}/${cap.monthly} submitted this cycle — the portal will refuse extras until reset.`
+      ? `Monthly cap exceeded: ${submittedCount}/${cap.monthly} submitted this cycle. The portal will refuse extras until reset.`
       : cap?.monthly
         ? `${submittedCount}/${cap.monthly} of the monthly quota used on ${spec.name}.`
         : null;
@@ -99,7 +100,7 @@ export function SubmissionsPage() {
       hideBelow: 'md',
       render: (row) =>
         row.errors ? (
-          <Badge tone="danger" icon={<TriangleAlert className="size-3" />}>{row.errors} blocker{row.errors === 1 ? '' : 's'}</Badge>
+          <Badge tone="danger" icon={<GIcon name="info" size={13} />}>{row.errors} blocker{row.errors === 1 ? '' : 's'}</Badge>
         ) : (
           <Badge tone="ok" dot>eligible</Badge>
         ),
@@ -172,7 +173,7 @@ export function SubmissionsPage() {
           {cap && <p className="text-xs text-fg-muted">{cap.note}</p>}
           {firstBatchIssue && (
             <p className="mt-2 flex items-start gap-2 r-control bg-warn-soft px-3 py-2 text-[0.75rem] leading-relaxed text-warn">
-              <TriangleAlert className="mt-0.5 size-4 shrink-0" /> {firstBatchIssue}
+              <GIcon name="info" size={16} className="mt-0.5 shrink-0" /> {firstBatchIssue}
             </p>
           )}
           {monthlyIssue && (

@@ -384,9 +384,9 @@ export function ConvertPage() {
             <span className="inline-flex size-10 items-center justify-center rounded-[var(--r-control)] bg-accent-soft text-accent">
               <GIcon name="swap_horiz" size={22} />
             </span>
-            <div className="text-sm font-semibold text-ink">Drop images to convert</div>
+            <div className="text-sm font-semibold text-ink">Drop images</div>
             <div className="text-xs text-ink-muted">
-              Supports common images and selected HEIC, RAW, PSD, PDF and specialist formats. Some files may not decode.
+              JPG, PNG, WebP, AVIF, HEIC, RAW, PSD, PDF
             </div>
           </div>
 
@@ -414,7 +414,7 @@ export function ConvertPage() {
                     <Button
                       size="xs"
                       variant="ghost"
-                      icon={<GIcon name="delete_sweep" size={14} />}
+                      icon={<GIcon name="delete" size={14} />}
                       onClick={clearAll}
                     >
                       Clear

@@ -11,6 +11,7 @@ import { ThemeSwitch } from '@/components/ui/ThemeSwitch';
 import { CircleFlag } from '@/components/ui/CircleFlag';
 import { GIcon } from '@/components/ui/GoogleIcon';
 import { AiPanel } from '@/components/settings/AiPanel';
+import { SecurityPanel } from '@/components/auth/SecurityPanel';
 import { useApp } from '@/state/AppState';
 import { useAuth } from '@/state/AuthState';
 import { useLibrary } from '@/state/library';
@@ -209,6 +210,11 @@ export function SettingsPage() {
           </Card>
 
           <Card>
+            <CardHeader title="Security" icon={<GIcon name="lock" size={17} />} />
+            <SecurityPanel />
+          </Card>
+
+          <Card>
             <CardHeader title="Workspace Data" icon={<GIcon name="storage" size={17} />} />
             <div className="flex flex-wrap items-center gap-2">
               <Button
@@ -232,7 +238,7 @@ export function SettingsPage() {
                   size="sm"
                   variant="ghost"
                   className="text-danger hover:text-danger"
-                  icon={<GIcon name="delete_sweep" size={15} />}
+                  icon={<GIcon name="delete" size={15} />}
                   onClick={() => {
                     clearLibrary();
                     toast.info('Library cleared');

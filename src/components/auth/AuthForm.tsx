@@ -6,11 +6,20 @@ import { GIcon } from '@/components/ui/GoogleIcon';
 import { useAuth } from '@/state/AuthState';
 import { useToast } from '@/state/ToastState';
 
-type View = 'signin' | 'create' | 'verify' | 'forgot' | 'reset';
+export type AuthView = 'signin' | 'create' | 'verify' | 'forgot' | 'reset' | 'mfa';
+type View = AuthView;
 
 const inputLeading = (name: 'mail' | 'lock' | 'person') => <GIcon name={name} size={18} />;
 
-export function AuthForm({ compact = false, onDone }: { compact?: boolean; onDone?: () => void }) {
+export function AuthForm({
+  compact = false,
+  onDone,
+  onViewChange,
+}: {
+  compact?: boolean;
+  onDone?: () => void;
+  onViewChange?: (view: AuthView) => void;
+}) {
   const {
     user,
     pendingEmail,
@@ -18,6 +27,9 @@ export function AuthForm({ compact = false, onDone }: { compact?: boolean; onDon
     recovery,
     register,
     login,
+    logout,
+    mfaRequired,
+    verifyMfaCode,
     verifyEmailOtp,
     resendVerification,
     requestPasswordReset,
@@ -56,6 +68,18 @@ export function AuthForm({ compact = false, onDone }: { compact?: boolean; onDon
     }
   }, [recovery]);
 
+  useEffect(() => {
+    onViewChange?.(view);
+  }, [onViewChange, view]);
+
+  useEffect(() => {
+    if (mfaRequired) {
+      setView('mfa');
+      setError(null);
+      setInfo(null);
+    }
+  }, [mfaRequired]);
+
   function switchView(next: View) {
     setError(null);
     setInfo(null);
@@ -73,8 +97,31 @@ export function AuthForm({ compact = false, onDone }: { compact?: boolean; onDon
         setError(result.error ?? 'Unable to sign in.');
         return;
       }
-      toast.success('Signed in', result.user?.email);
       setPassword('');
+      if (result.mfaRequired) {
+        setOtp('');
+        setView('mfa');
+        return;
+      }
+      toast.success('Signed in', result.user?.email);
+      onDone?.();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleMfa(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const result = await verifyMfaCode(otp);
+      if (!result.ok) {
+        setError(result.error ?? 'That code is not valid.');
+        return;
+      }
+      setOtp('');
+      toast.success('Two step verification passed');
       onDone?.();
     } finally {
       setBusy(false);
@@ -184,7 +231,7 @@ export function AuthForm({ compact = false, onDone }: { compact?: boolean; onDon
       )}
     >
       <GIcon
-        name={notice.tone === 'error' ? 'error' : notice.tone === 'ok' ? 'check_circle' : 'info'}
+        name={notice.tone === 'error' ? 'cancel' : notice.tone === 'ok' ? 'check_circle' : 'info'}
         size={17}
         className="mt-0.5"
       />
@@ -197,7 +244,7 @@ export function AuthForm({ compact = false, onDone }: { compact?: boolean; onDon
 
   const errorBox = error && (
     <div role="alert" className="flex items-start gap-2.5 rounded-[var(--r-control)] border border-danger/30 bg-danger-soft px-3 py-2.5 text-[0.8125rem] font-medium text-danger">
-      <GIcon name="error" size={17} className="mt-0.5" />
+      <GIcon name="cancel" size={17} className="mt-0.5" />
       <span className="min-w-0 flex-1">{error}</span>
     </div>
   );
@@ -229,6 +276,7 @@ export function AuthForm({ compact = false, onDone }: { compact?: boolean; onDon
           <Field label="6-digit code" hint="The code is in the confirmation email. It can take a minute to arrive.">
             <Input
               ref={otpRef}
+              aria-label="6-digit code"
               value={otp}
               onChange={(e) => setOtp(e.target.value.replace(/[^\d]/g, '').slice(0, 10))}
               inputMode="numeric"
@@ -260,9 +308,46 @@ export function AuthForm({ compact = false, onDone }: { compact?: boolean; onDon
             Back to sign in
           </button>
         </div>
-        <p className="text-[0.75rem] leading-relaxed text-ink-faint">
-          Opened the link on another device? That is fine — it confirms the same account.
-        </p>
+      </div>
+    );
+  }
+
+  if (view === 'mfa') {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-[1.0625rem] font-bold text-ink">Two step verification</h2>
+          <p className="mt-0.5 text-[0.8125rem] text-ink-muted">Enter the 6 digit code from your authenticator app.</p>
+        </div>
+        <form onSubmit={handleMfa} className="space-y-3.5">
+          <Field label="Code">
+            <Input
+              value={otp}
+              aria-label="Code"
+              onChange={(event) => setOtp(event.target.value)}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              placeholder="000000"
+              leading={<GIcon name="verified" size={18} />}
+              autoFocus
+            />
+          </Field>
+          {errorBox}
+          <Button type="submit" block size="lg" loading={busy}>
+            Verify
+          </Button>
+        </form>
+        <button
+          type="button"
+          onClick={() => {
+            void logout();
+            switchView('signin');
+          }}
+          className="text-[0.8125rem] text-ink-muted hover:text-ink"
+        >
+          Back to sign in
+        </button>
       </div>
     );
   }
@@ -280,6 +365,7 @@ export function AuthForm({ compact = false, onDone }: { compact?: boolean; onDon
               type="email"
               required
               autoComplete="email"
+              aria-label="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
@@ -311,6 +397,7 @@ export function AuthForm({ compact = false, onDone }: { compact?: boolean; onDon
               required
               minLength={8}
               autoComplete="new-password"
+              aria-label="New password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               placeholder="Enter a new password"
@@ -358,10 +445,11 @@ export function AuthForm({ compact = false, onDone }: { compact?: boolean; onDon
 
       <form onSubmit={view === 'create' ? handleCreate : handleSignIn} className="space-y-3.5">
         {view === 'create' && (
-          <Field label="Name" hint="Optional — shown in the app.">
+          <Field label="Name" hint="Optional">
             <Input
               type="text"
               autoComplete="name"
+              aria-label="Name"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder="Studio or contributor name"
@@ -375,6 +463,7 @@ export function AuthForm({ compact = false, onDone }: { compact?: boolean; onDon
             type="email"
             required
             autoComplete="email"
+            aria-label="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
@@ -385,6 +474,7 @@ export function AuthForm({ compact = false, onDone }: { compact?: boolean; onDon
         <Field label="Password" hint={view === 'create' ? 'Minimum 8 characters.' : undefined}>
           <Input
             type={showPassword ? 'text' : 'password'}
+            aria-label="Password"
             required
             minLength={view === 'create' ? 8 : undefined}
             autoComplete={view === 'create' ? 'new-password' : 'current-password'}

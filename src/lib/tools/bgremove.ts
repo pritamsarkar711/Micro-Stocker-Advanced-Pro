@@ -154,7 +154,7 @@ export const BG_MODELS: BgModel[] = [
     kind: 'onnx',
     purpose: 'portrait',
     purposes: ['portrait', 'precision'],
-    icon: 'auto_fix_high',
+    icon: 'brush',
     license: 'Check model terms',
     inputSize: 512,
     sizeMB: 168,

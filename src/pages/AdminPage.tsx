@@ -351,7 +351,7 @@ export function AdminPage() {
 
       {error ? (
         <div role="alert" className="flex items-start gap-2.5 rounded-[var(--r-control)] border border-danger/30 bg-danger-soft px-3.5 py-3 text-[0.8125rem] font-medium text-danger">
-          <GIcon name="error" size={18} className="mt-0.5" />
+          <GIcon name="cancel" size={18} className="mt-0.5" />
           <span className="flex-1">{error}</span>
           <button type="button" onClick={() => setError('')} aria-label="Dismiss error">
             <GIcon name="close" size={17} />
@@ -368,7 +368,7 @@ export function AdminPage() {
                 <GIcon name={card.icon} size={18} />
               </span>
             </div>
-            <div className="nums mt-2 text-[1.5rem] leading-none font-bold text-ink">{loading ? '—' : card.value}</div>
+            <div className="nums mt-2 text-[1.5rem] leading-none font-bold text-ink">{loading ? '·' : card.value}</div>
           </div>
         ))}
       </div>
@@ -456,7 +456,7 @@ export function AdminPage() {
               <Card className="border-ok/40">
                 <CardHeader
                   title="New codes"
-                  subtitle="Copy now — codes are stored hashed and cannot be shown again."
+                  subtitle="Copy now. Codes are stored hashed and cannot be shown again."
                   icon={<GIcon name="check_circle" size={18} />}
                   action={
                     <div className="flex gap-1.5">
@@ -551,7 +551,7 @@ export function AdminPage() {
                             </Button>
                           ) : (
                             <span className="text-[0.75rem] text-ink-faint">
-                              {row.redeemed_at ? date(row.redeemed_at) : '—'}
+                              {row.redeemed_at ? date(row.redeemed_at) : ''}
                             </span>
                           )}
                         </td>
@@ -637,12 +637,12 @@ export function AdminPage() {
                     return (
                       <tr key={row.user_id} className="border-t border-line align-middle">
                         <td className="py-2.5 pr-3">
-                          <div className="max-w-[16rem] truncate font-medium text-ink">{row.email || '—'}</div>
+                          <div className="max-w-[16rem] truncate font-medium text-ink">{row.email || 'Not set'}</div>
                           <div className="font-mono text-[0.6875rem] text-ink-faint">{row.user_id.slice(0, 8)}</div>
                         </td>
                         <td className="py-2.5 pr-3 whitespace-nowrap text-ink-muted">{date(row.created_at)}</td>
                         <td className="py-2.5 pr-3 whitespace-nowrap text-ink-muted">
-                          {row.expires_at ? dateTime(row.expires_at) : '—'}
+                          {row.expires_at ? dateTime(row.expires_at) : 'Not set'}
                         </td>
                         <td className="py-2.5 pr-3">
                           <Badge tone={state.tone}>{state.label}</Badge>

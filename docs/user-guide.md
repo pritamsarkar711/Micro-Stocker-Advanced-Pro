@@ -68,9 +68,15 @@ minute, precise enough to clean up a real SVG.
   opacity, rotation, corner radius, and text size, weight, tracking and
   alignment. X/Y/W/H fields give exact numbers, and the align row snaps objects
   to the canvas or to each other. Group, ungroup, duplicate, reorder and lock.
-- **Elements** — 80+ ready shapes, marketplace icons, arrows, frames and
-  commerce marks. They insert centred and stay fully editable, and every new
-  insert steps across the canvas so it never hides behind the last one.
+- **Elements** — 150 ready shapes, marketplace marks, arrows, frames, interface
+  icons, nature and people glyphs across eight categories. Search by name,
+  insert with one click, and every insert steps across the canvas so it never
+  hides behind the last one.
+- **Layers** — search the object list, rename in place (double click), drag rows
+  to restack, Shift+click for several objects, mute or lock without leaving the
+  panel.
+- **Transform extras** — flip horizontally or vertically, centre on the canvas,
+  duplicate, plus copy and paste with ⌘/Ctrl+C and ⌘/Ctrl+V.
 - **Import** — `Open SVG` replaces the canvas with a real, editable document;
   dropping a file (or `Open SVG` while another artwork is open) places it as a
   group that you can move, scale and restyle.
@@ -95,8 +101,11 @@ Drop JPG, PNG, WebP, AVIF, SVG, EPS or AI files before uploading them.
 - Vector checks answer "is it really editable?": flattened raster exports,
   embedded HTML (`foreignObject`), live text without fonts, missing `viewBox`,
   white background plates, filter dependencies and auto-trace complexity.
-- Raster checks: resolution against each agency's minimum, sharpness, blown
-  highlights, file weight and near-duplicates already in your library.
+- Raster checks: resolution against each agency's minimum, sharpness, detail
+  density, split highlight and shadow clipping, colour cast, over-saturation,
+  grain, compression level, transparency in a JPEG, file weight and
+  near-duplicates already in your library.
+- Vector checks also flag hairline strokes that vanish when printed large.
 - Every issue carries a one-line fix, and each agency is marked pass or fail with
   the reason. **Report** downloads the whole run as JSON.
 
@@ -107,8 +116,10 @@ Drop JPG, PNG, WebP, AVIF, SVG, EPS or AI files before uploading them.
   explicit quality.
 - Optional long-edge resize only ever shrinks, and camera metadata can be
   stripped.
-- Files that cannot be made smaller keep their original bytes — the optimizer
-  never returns a heavier file.
+- When a byte target cannot be met at the quality floor, the optimizer shaves
+  the long edge in small steps instead of crushing the quality slider.
+- Files that cannot be made smaller keep their original bytes, and a second
+  lower-quality pass runs before the original is returned.
 
 ## 7. Upscale studio
 
@@ -182,6 +193,22 @@ across with the dropdown.
 - **Settings → Back up** — exports every stored key (library, releases,
   planner, bank, sales, settings) as one JSON file. **Restore** on any machine
   and the app reloads with your workspace. Artwork bytes always stay on disk.
+
+## 13. Account security
+
+Open **Settings → Security**.
+
+- **Password** — change it with the current password as confirmation, or send
+  yourself a reset link. The sign-in screen also has a **Forgot password?**
+  link that emails a recovery link.
+- **Two step verification** — add an authenticator app (Google Authenticator,
+  Authy, 1Password, Microsoft Authenticator). Scan the QR code or copy the key,
+  then enter the 6 digit code to switch it on. From then on every sign-in asks
+  for a code as well as the password. **Turn off** removes the factor after a
+  confirmation.
+- **Sign out everywhere** closes every session for the account, including other
+  devices.
+- Administrators use the same panel; there is no separate admin override.
 
 ## Keyboard shortcuts
 

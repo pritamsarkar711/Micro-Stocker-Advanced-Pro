@@ -389,7 +389,7 @@ export function AiPanel({ compact = false, onChange }: AiPanelProps) {
           </Button>
           {testResult && (
             <Badge tone={testResult.ok ? 'brand' : 'danger'}>
-              <GIcon name={testResult.ok ? 'check_circle' : 'error'} size={13} />
+              <GIcon name={testResult.ok ? 'check_circle' : 'cancel'} size={13} />
               <span className="max-w-[340px] truncate">{testResult.text}</span>
             </Badge>
           )}

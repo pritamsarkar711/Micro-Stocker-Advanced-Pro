@@ -16,6 +16,8 @@ export interface RasterLike {
 }
 
 export interface OptimizeOptions {
+  /** Allow a small dimension reduction when the byte target cannot be met at the quality floor. */
+  allowResize?: boolean;
   format: OptimizeFormat;
   /** Fixed quality (0.1 … 1). Ignored when `targetKB` is set. */
   quality?: number;
@@ -112,39 +114,60 @@ export async function optimizeRaster(
   }
 
   const targetBytes = Math.max(1024, options.targetKB * 1024);
-  const floor = clampQuality(options.qualityFloor ?? 0.4, undefined);
-  let low = floor;
-  let high = 1;
-  let best: { bytes: Uint8Array; quality: number } | null = null;
+  const floor = clampQuality(options.qualityFloor ?? 0.45, undefined);
   let attempts = 0;
+  let working = target;
 
-  for (let i = 0; i < 7; i += 1) {
-    const quality = (low + high) / 2;
-    const bytes = await encode(target, quality);
-    attempts += 1;
-    if (bytes.byteLength <= targetBytes) {
-      best = { bytes, quality };
-      low = quality;
-    } else {
-      high = quality;
+  // Search quality first, then fall back to a gentle size reduction. Dropping
+  // the quality slider to 0.1 is what makes "optimised" files look mushy, so we
+  // keep the floor and shave 12% of the long edge per pass instead.
+  for (let pass = 0; pass < 5; pass += 1) {
+    let low = floor;
+    let high = 1;
+    let best: { bytes: Uint8Array; quality: number } | null = null;
+
+    for (let i = 0; i < 9; i += 1) {
+      const quality = (low + high) / 2;
+      const bytes = await encode(working, quality);
+      attempts += 1;
+      if (bytes.byteLength <= targetBytes) {
+        best = { bytes, quality };
+        low = quality;
+      } else {
+        high = quality;
+      }
+      if (high - low < 0.005) break;
     }
-    if (high - low < 0.012) break;
+
+    if (best) {
+      return {
+        bytes: best.bytes,
+        width: working.width,
+        height: working.height,
+        quality: best.quality,
+        attempts,
+        resized: resized || working.width !== target.width,
+      };
+    }
+
+    if (options.allowResize === false) break;
+    const longEdge = Math.max(working.width, working.height);
+    const nextEdge = Math.round(longEdge * 0.88);
+    if (nextEdge < 320) break;
+    working = downscaleRaster(working, nextEdge);
   }
 
-  if (!best) {
-    // Even the floor is too big: keep the smallest attempt we produced.
-    const bytes = await encode(target, floor);
-    attempts += 1;
-    best = { bytes, quality: floor };
-  }
-
+  // Nothing fitted: hand back the best-guess encode at the floor so the caller
+  // still gets a valid file and can tell the user the target was unrealistic.
+  const bytes = await encode(working, floor);
+  attempts += 1;
   return {
-    bytes: best.bytes,
-    width: target.width,
-    height: target.height,
-    quality: best.quality,
+    bytes,
+    width: working.width,
+    height: working.height,
+    quality: floor,
     attempts,
-    resized,
+    resized: resized || working.width !== target.width,
   };
 }
 

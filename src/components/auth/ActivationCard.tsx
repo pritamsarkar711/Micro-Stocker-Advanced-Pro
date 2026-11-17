@@ -71,7 +71,7 @@ export function ActivationCard({ onActivated }: { onActivated?: () => void }) {
 
       {error && (
         <div role="alert" className="flex items-start gap-2 rounded-[var(--r-control)] border border-danger/30 bg-danger-soft px-3 py-2 text-[0.8125rem] font-medium text-danger">
-          <GIcon name="error" size={17} className="mt-0.5" />
+          <GIcon name="cancel" size={17} className="mt-0.5" />
           <span>{error}</span>
         </div>
       )}

@@ -111,10 +111,13 @@ ok('text tool', textContent === 'Editable type', textContent);
 
 /* 6 — element library inserts two shapes */
 await page.getByRole('button', { name: 'Elements', exact: true }).click();
-await page.getByRole('button', { name: 'Add Star' }).first().click();
+await page.getByLabel('Search library').fill('star');
+await page.waitForTimeout(200);
+await page.getByTestId('elements-panel').getByRole('button', { name: 'Star', exact: true }).first().click();
 await page.waitForTimeout(250);
-await page.getByRole('button', { name: 'Add Burst' }).first().click();
+await page.getByTestId('elements-panel').getByRole('button', { name: 'Six point star', exact: true }).first().click();
 await page.waitForTimeout(250);
+await page.getByLabel('Search library').fill('');
 const groups = (await children()).filter((tag) => tag === 'g').length;
 ok('element library', groups === 2, `groups=${groups}`);
 

@@ -199,7 +199,7 @@ export function LibraryPage() {
               variant="primary"
               loading={Boolean(draftProgress)}
               disabled={targetIds.length === 0}
-              icon={<GIcon name="auto_fix_high" size={15} />}
+              icon={<GIcon name="brush" size={15} />}
               onClick={() => void handleBatchGenerate()}
             >
               {draftProgress
@@ -304,9 +304,9 @@ export function LibraryPage() {
           <span className="inline-flex size-12 items-center justify-center rounded-[var(--r-control)] bg-accent-soft text-accent">
             <GIcon name="add_photo_alternate" size={26} />
           </span>
-          <div className="text-sm font-semibold text-ink">Drop stock images or vectors here</div>
+          <div className="text-sm font-semibold text-ink">Drop files</div>
           <div className="text-xs text-ink-muted">
-            Supports JPG, PNG, WebP, TIFF, AVIF, SVG, EPS and AI files
+            JPG, PNG, WebP, TIFF, AVIF, SVG, EPS, AI
           </div>
           <Button size="sm" variant="primary" icon={<GIcon name="upload_file" size={15} />}>
             Browse files

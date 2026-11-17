@@ -22,14 +22,14 @@ below. Their licences continue to govern those components.
 
 | Asset | Licence | Use |
 | --- | --- | --- |
-| Plus Jakarta Sans Variable (upright + italic, latin and latin-ext subsets) | SIL Open Font License 1.1 | Entire UI, self-hosted in `src/assets/fonts/` |
-| Noto Sans Bengali (subset) + Noto Sans Latin Ext (subset) | SIL Open Font License 1.1 | Fallback glyphs only: `৳` and `₹`, which Plus Jakarta Sans does not contain |
+| IBM Plex Sans (400, 500, 600, 700; latin and latin-ext subsets) | SIL Open Font License 1.1 | Entire UI, self-hosted in `src/assets/fonts/` |
+| Noto Sans Bengali (subset) + Noto Sans (subset) | SIL Open Font License 1.1 | Fallback glyphs only: `৳` and `₹`, which IBM Plex Sans does not contain in the shipped subsets |
 
-The Plus Jakarta Sans files are unmodified WOFF2 cuts from
-`@fontsource-variable/plus-jakarta-sans@5.3.0` (variable weight 200-800). The two
-Noto subsets are generated with `fontTools` and restricted by `unicode-range` to
-the single currency glyph each provides, so they never affect Latin text. No font
-is fetched from a third-party server at runtime.
+The IBM Plex Sans files are unmodified WOFF2 cuts from
+`@fontsource/ibm-plex-sans@5.3.0`. The two Noto subsets are generated with
+`fontTools` and restricted by `unicode-range` to the single currency glyph each
+provides, so they never affect Latin text. No font is fetched from a third-party
+server at runtime.
 
 ## Bundled upscaling engine (downloaded on request)
 
