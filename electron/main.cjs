@@ -789,9 +789,13 @@ function createWindow() {
     minWidth: 360,
     minHeight: 560,
     show: false,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0f1318' : '#f5f7fa',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#101114' : '#f5f6f8',
     autoHideMenuBar: !isDev,
     title: 'Micro Stocker Advanced Pro',
+    // The product draws its own window chrome so the name never appears twice
+    // and the title bar matches the application exactly.
+    titleBarStyle: 'hidden',
+    ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 16, y: 18 } } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

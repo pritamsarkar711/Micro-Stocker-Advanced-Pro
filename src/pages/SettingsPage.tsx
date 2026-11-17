@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
 import clsx from 'clsx';
+import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
+import { SECONDARY_NAV } from '@/lib/nav';
 import { Button } from '@/components/ui/Button';
 import { Field, Switch } from '@/components/ui/Field';
 import { RichSelect, type RichSelectOption } from '@/components/ui/RichSelect';
@@ -19,7 +21,6 @@ import { desktop } from '@/lib/desktop';
 export function SettingsPage() {
   const {
     settings,
-    setAccentInstant,
     updateSettings,
     resetSettings,
     zoom,
@@ -99,37 +100,6 @@ export function SettingsPage() {
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs font-medium text-ink">Theme</span>
               <ThemeSwitch />
-            </div>
-
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-xs font-medium text-ink">Primary color</span>
-              <div className="flex flex-wrap gap-1.5">
-                {(
-                  [
-                    { id: 'crimson', label: 'Crimson', swatch: '#b3294e' },
-                    { id: 'indigo', label: 'Indigo', swatch: '#4829b2' },
-                    { id: 'emerald', label: 'Emerald', swatch: '#146c46' },
-                  ] as const
-                ).map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setAccentInstant(opt.id)}
-                    className={clsx(
-                      'inline-flex h-8 items-center gap-2 rounded-[var(--r-control)] border px-3 text-xs font-medium',
-                      settings.accent === opt.id
-                        ? 'border-accent bg-accent-soft font-semibold text-accent'
-                        : 'border-line bg-surface text-ink-muted hover:text-ink',
-                    )}
-                  >
-                    <span
-                      className="size-3.5 rounded-full"
-                      style={{ backgroundColor: opt.swatch }}
-                    />
-                    <span>{opt.label}</span>
-                  </button>
-                ))}
-              </div>
             </div>
 
             <Field label="Currency">
@@ -271,6 +241,23 @@ export function SettingsPage() {
                   Clear library
                 </Button>
               )}
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader title="More" icon={<GIcon name="apps" size={17} />} />
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              {SECONDARY_NAV.map((entry) => (
+                <Link
+                  key={entry.to}
+                  to={entry.to}
+                  className="flex items-center gap-2.5 rounded-[var(--r-control)] border border-line px-2.5 py-2 text-[0.8125rem] font-medium text-ink-muted transition-colors hover:border-brand hover:text-ink"
+                >
+                  <GIcon name={entry.icon} size={17} className="text-ink-faint" />
+                  <span className="flex-1 truncate">{entry.label}</span>
+                  <GIcon name="chevron_right" size={16} className="text-ink-faint" />
+                </Link>
+              ))}
             </div>
           </Card>
         </div>

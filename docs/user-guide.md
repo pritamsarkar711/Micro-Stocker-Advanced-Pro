@@ -47,10 +47,48 @@ Open any card. Tabs:
   fits the target platform's size budget. Vectors are never re-encoded.
 - **Vector check** — SVG sanitizer (scripts, inline handlers, `@import`,
   editor namespaces) and an EPS/AI report: Illustrator version (CS6 needed for
-  Freepik FTP, Illustrator 8 for 123RF), CMYK usage, live fonts, embedded
+  Magnific FTP, Illustrator 8 for 123RF), CMYK usage, live fonts, embedded
   rasters and missing `%%BoundingBox`.
 
-## 4. Upscale studio
+## 4. Vector Studio
+
+The beginner path to a submission-ready vector.
+
+- **Create** — pick a canvas preset (2000², 4000×3000, 3840×2160, 3000×4000)
+  and draw with the rectangle, ellipse, star, line and text tools.
+- **Open** — drop an SVG in. Everything stays editable because the app keeps the
+  real SVG document, not a picture of it.
+- **Edit** — click any object to select it, drag to move, use the arrow keys to
+  nudge, and change fill, stroke width and opacity from the inspector. Undo and
+  redo cover every change.
+- **Export** — clean SVG (scripts and editor junk removed), a 2× PNG preview for
+  the portal thumbnail, or a **vector EPS** built from PostScript paths. Live text
+  is listed as skipped in the EPS export because agencies require outlines.
+
+## 5. Quality Checker
+
+Drop JPG, PNG, WebP, AVIF, SVG, EPS or AI files before uploading them.
+
+- Each file gets a 0–100 score and a verdict (**Ready**, **Review**, **At risk**).
+- Vector checks answer "is it really editable?": flattened raster exports,
+  embedded HTML (`foreignObject`), live text without fonts, missing `viewBox`,
+  white background plates, filter dependencies and auto-trace complexity.
+- Raster checks: resolution against each agency's minimum, sharpness, blown
+  highlights, file weight and near-duplicates already in your library.
+- Every issue carries a one-line fix, and each agency is marked pass or fail with
+  the reason. **Report** downloads the whole run as JSON.
+
+## 6. Image Optimizer
+
+- Choose the output format (keep, JPEG, WebP, AVIF, PNG), then **Auto** (the
+  format's visually-lossless sweet spot), **Target KB** (binary-searched) or an
+  explicit quality.
+- Optional long-edge resize only ever shrinks, and camera metadata can be
+  stripped.
+- Files that cannot be made smaller keep their original bytes — the optimizer
+  never returns a heavier file.
+
+## 7. Upscale studio
 
 Three fields: **source**, **target**, **engine**.
 
@@ -60,14 +98,14 @@ Three fields: **source**, **target**, **engine**.
   build (BSD-3-Clause weights, commercial output allowed), then 4× passes on
   your GPU. Pick a model: general photos, conservative (RealESRNet), flat
   colour/line art, or the fast anime-video model.
-- **Targets** — 8K UHD, 4K UHD, Adobe 24 MP, Alamy 6 MP, Freepik 4000 px, or
+- **Targets** — 8K UHD, 4K UHD, Adobe 24 MP, Alamy 6 MP, Magnific 4000 px, or
   "clear every minimum". The plan shows the exact pixels before you run.
   Real-ESRGAN only ships 4× weights, so a fractional gap is closed with one
   final resize rather than a made-up model scale.
 - Large images use tiled passes so 8K output does not exhaust VRAM. Results
   land back in the library as new items.
 
-## 5. Metadata generation — free, three routes
+## 8. Metadata generation — free, three routes
 
 Open **Settings → AI metadata**. Nothing here is required; the built-in
 generator (filename + your keyword bank) always works, offline.
@@ -87,7 +125,7 @@ generator (filename + your keyword bank) always works, offline.
 - If a provider call fails mid-batch the batch still completes on the built-in
   generator, and the toast tells you why.
 
-## 6. Export centre
+## 9. Export centre
 
 1. Tick the target platforms (each chip shows its brand mark).
 2. Choose *selection* or *whole library*.
@@ -97,14 +135,14 @@ generator (filename + your keyword bank) always works, offline.
 
 Blocking validation errors are listed per platform; warnings are advisory.
 
-## 7. Submission planner
+## 10. Submission planner
 
 Per platform: todo → queued → submitted → accepted/rejected, with counts and
-cap advisories (Freepik: first batch 150-200 files of the same format, then
+cap advisories (Magnific: first batch 150-200 files of the same format, then
 200 per month). Queue from validation-passing files only, or move anything
 across with the dropdown.
 
-## 8. Releases, Earnings, Keyword bank
+## 11. Releases, Earnings, Keyword bank
 
 - **Releases** — register model/property releases, expiry dates and the files
   they cover; the validator warns on commercial files showing recognisable
@@ -115,7 +153,7 @@ across with the dropdown.
 - **Keyword bank** — your synonyms and category banks feed every generation;
   the mini dictionary appends ES/DE/FR keywords from the item editor.
 
-## 9. Cloud & backup
+## 12. Cloud & backup
 
 - **Cloud connection** — paste a Supabase URL + anon key, run the shown SQL,
   then Push/Pull library descriptors. Last-write-wins per item.

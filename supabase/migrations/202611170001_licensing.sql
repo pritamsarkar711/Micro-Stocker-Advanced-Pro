@@ -137,3 +137,7 @@ revoke all on function public.msap_admin_revoke_code(uuid) from public, anon;
 revoke all on function public.msap_admin_set_expiry(uuid,timestamptz) from public, anon;
 revoke all on function public.msap_admin_set_blocked(uuid,boolean) from public, anon;
 grant execute on function public.msap_is_admin(), public.msap_my_entitlement(), public.msap_create_code(integer,text), public.msap_redeem_code(text), public.msap_admin_codes(), public.msap_admin_users(), public.msap_admin_revoke_code(uuid), public.msap_admin_set_expiry(uuid,timestamptz), public.msap_admin_set_blocked(uuid,boolean) to authenticated;
+
+-- PostgREST caches function signatures; refresh it so a fresh deploy can call
+-- these RPCs immediately instead of answering "not in the schema cache".
+notify pgrst, 'reload schema';

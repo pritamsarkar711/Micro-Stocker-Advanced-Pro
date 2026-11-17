@@ -22,10 +22,12 @@ function remainingLabel(ms: number): string {
 }
 
 export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
-  const { settings, updateSettings } = useApp();
+  const { settings, updateSettings, runtime } = useApp();
   const { items } = useLibrary();
   const { isAdmin, premium, remainingMs } = useLicense();
   const collapsed = settings.sidebarCollapsed && !mobileOpen;
+  // macOS keeps its traffic lights over the rail, so the brand starts below them.
+  const macInset = runtime.isDesktop && runtime.platform === 'darwin';
   const groups = navGroupsFor(isAdmin);
 
   const content = (
@@ -37,7 +39,8 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
     >
       <div
         className={clsx(
-          'flex h-[var(--topbar-h)] shrink-0 items-center border-b border-nav-line px-3.5',
+          'flex shrink-0 items-center border-b border-nav-line px-3.5',
+          macInset ? 'h-[calc(var(--topbar-h)+18px)] pt-[18px]' : 'h-[var(--topbar-h)]',
           collapsed ? 'justify-center' : 'justify-between',
         )}
       >
@@ -73,7 +76,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
         )}
       </div>
 
-      <nav className="flex-1 space-y-3.5 overflow-y-auto px-2.5 py-3" aria-label="Main navigation">
+      <nav className="flex-1 space-y-2.5 overflow-y-auto px-2.5 py-2.5" aria-label="Main navigation">
         {groups.map((group) => (
           <div key={group.id}>
             {!collapsed && (
@@ -91,7 +94,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
                     title={collapsed ? item.label : undefined}
                     className={({ isActive }) =>
                       clsx(
-                        'group relative flex items-center gap-3 rounded-[var(--r-control)] px-2.5 py-[0.4rem] text-[0.8125rem] font-medium transition-colors duration-150',
+                        'group relative flex items-center gap-3 rounded-[var(--r-control)] px-2.5 py-[0.34rem] text-[0.8125rem] font-medium transition-colors duration-150',
                         collapsed && 'justify-center px-0 py-2',
                         isActive
                           ? 'font-semibold text-white shadow-[0_6px_16px_-8px_rgb(0_0_0/0.8)]'
@@ -99,7 +102,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
                       )
                     }
                     style={({ isActive }: { isActive: boolean }) =>
-                      isActive ? { backgroundImage: 'linear-gradient(100deg, var(--brand) 0%, color-mix(in oklab, var(--brand) 70%, var(--secondary)) 100%)' } : undefined
+                      isActive ? { backgroundColor: 'var(--brand)' } : undefined
                     }
                   >
                     {({ isActive }) => (

@@ -20,40 +20,40 @@ const STUDIO_TOOLS: Array<{
   icon: GoogleIconName;
 }> = [
   {
-    to: '/library',
-    title: 'Metadata Generator',
-    sub: 'AI titles, keywords, auto XMP and CSV',
-    icon: 'auto_fix_high',
+    to: '/vector',
+    title: 'Vector Studio',
+    sub: 'Draw, open and export SVG or EPS',
+    icon: 'polyline',
+  },
+  {
+    to: '/quality',
+    title: 'Quality Checker',
+    sub: 'Editability, sharpness and duplicates',
+    icon: 'fact_check',
+  },
+  {
+    to: '/optimize',
+    title: 'Image Optimizer',
+    sub: 'Smaller files, same visible quality',
+    icon: 'compress',
   },
   {
     to: '/upscale',
     title: 'Image Upscaler',
-    sub: 'Choose local models and resolution presets',
+    sub: 'Local models up to 8K',
     icon: 'photo_size_select_large',
-  },
-  {
-    to: '/video-upscale',
-    title: 'Video Upscaler',
-    sub: 'Resize and sharpen stock footage',
-    icon: 'videocam',
   },
   {
     to: '/bg-remove',
     title: 'Background Remover',
-    sub: 'Transparent PNG and white studio cutouts',
+    sub: 'Transparent PNG cutouts',
     icon: 'content_cut',
   },
   {
     to: '/convert',
     title: 'Image Converter',
-    sub: 'JPG, PNG, WebP, AVIF, TIFF, BMP, GIF, ICO, SVG',
+    sub: 'JPG, PNG, WebP, AVIF, TIFF, EPS',
     icon: 'swap_horiz',
-  },
-  {
-    to: '/export',
-    title: 'Export & CSV',
-    sub: 'Agency ready CSVs and embedded IPTC',
-    icon: 'upload_file',
   },
 ];
 

@@ -46,6 +46,21 @@ interface AuditRow {
   created_at: string;
 }
 
+
+/**
+ * PostgREST answers `PGRST202` ("Could not find the function … in the schema
+ * cache") when the admin migration was never applied or when the project has not
+ * reloaded its schema cache yet. Both are setup problems, not admin bugs, so the
+ * console explains the fix instead of echoing the raw driver message.
+ */
+function explainAdminError(raw: string): string {
+  const text = raw || '';
+  if (/schema cache/i.test(text) || /PGRST202/i.test(text) || /could not find the function/i.test(text)) {
+    return 'setup';
+  }
+  return text;
+}
+
 const DURATIONS = [
   { id: '1d', label: '1 day', seconds: 86_400 },
   { id: '7d', label: '7 days', seconds: 604_800 },
@@ -145,7 +160,7 @@ export function AdminPage() {
       setStats(((statsRes.data ?? [])[0] ?? null) as Stats | null);
       setAudit((auditRes.data ?? []) as AuditRow[]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load admin data.');
+      setError(explainAdminError(e instanceof Error ? e.message : 'Could not load admin data.'));
     } finally {
       setLoading(false);
     }
@@ -348,7 +363,43 @@ export function AdminPage() {
         }
       />
 
-      {error && (
+      {error === 'setup' ? (
+        <div role="alert" className="rounded-[var(--r-card)] border border-warn/35 bg-warn-soft px-4 py-3.5 text-[0.8125rem] text-ink">
+          <div className="flex items-start gap-2.5">
+            <GIcon name="storage" size={18} className="mt-0.5 shrink-0 text-warn" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <p className="font-semibold">Admin functions are not installed on this database yet.</p>
+              <p className="text-ink-muted">
+                Apply <code className="font-mono text-[0.75rem]">supabase/migrations/202611170001_licensing.sql</code> and{' '}
+                <code className="font-mono text-[0.75rem]">202611170002_admin_console.sql</code>, then reload the API
+                schema cache.
+              </p>
+              <pre className="overflow-x-auto rounded-[var(--r-control)] border border-line bg-surface px-3 py-2 font-mono text-[0.6875rem] leading-relaxed text-ink-muted">
+notify pgrst, 'reload schema';
+              </pre>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="secondary" icon={<GIcon name="refresh" size={16} />} onClick={() => void load()}>
+                  Check again
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={<GIcon name="content_copy" size={16} />}
+                  onClick={() => {
+                    void navigator.clipboard?.writeText("notify pgrst, 'reload schema';");
+                    toast.success('SQL copied');
+                  }}
+                >
+                  Copy SQL
+                </Button>
+              </div>
+            </div>
+            <button type="button" onClick={() => setError('')} aria-label="Dismiss" className="text-ink-faint hover:text-ink">
+              <GIcon name="close" size={17} />
+            </button>
+          </div>
+        </div>
+      ) : error ? (
         <div role="alert" className="flex items-start gap-2.5 rounded-[var(--r-control)] border border-danger/30 bg-danger-soft px-3.5 py-3 text-[0.8125rem] font-medium text-danger">
           <GIcon name="error" size={18} className="mt-0.5" />
           <span className="flex-1">{error}</span>
@@ -356,7 +407,7 @@ export function AdminPage() {
             <GIcon name="close" size={17} />
           </button>
         </div>
-      )}
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {statCards.map((card) => (

@@ -246,7 +246,7 @@ export function ItemEditor({ item, onClose }: ItemEditorProps) {
             icon={<PlatformLogo id="freepik" size={14} />}
             onClick={() => void exportMetadataCsv([item.id], 'freepik')}
           >
-            Freepik CSV
+            Magnific CSV
           </Button>
         </div>
       </div>
@@ -448,10 +448,10 @@ export function ItemEditor({ item, onClose }: ItemEditorProps) {
             <Input
               value={item.flags.aiTool}
               onChange={(e) => updateFlags(item.id, { aiTool: e.target.value })}
-              placeholder="Generator name for Freepik"
+              placeholder="Generator name for Magnific"
             />
           </Field>
-          <Field label="AI prompt (Freepik CSV)">
+          <Field label="AI prompt (Magnific CSV)">
             <Input
               value={item.flags.aiPrompt ?? ''}
               onChange={(e) => updateFlags(item.id, { aiPrompt: e.target.value })}

@@ -13,7 +13,7 @@ export interface PlatformLogoProps {
 
 /**
  * High definition official marketplace vector emblem.
- * Shutterstock, Adobe Stock and Freepik render in crisp full brand tiles at
+ * Shutterstock, Adobe Stock and Magnific render in crisp full brand tiles at
  * slightly elevated scale for immediate visual recognition.
  */
 export function PlatformLogo({ id, size = 24, bare = false, className, title }: PlatformLogoProps) {

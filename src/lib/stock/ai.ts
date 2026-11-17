@@ -12,6 +12,14 @@ import {
 /**
  * Verified multi provider AI metadata engine (November 2026 catalog).
  *
+ * Model presets below were verified on 17 November 2026 against
+ *   · openrouter.ai/models?max_price=0   (free variants, pricing $0)
+ *   · ai.google.dev/gemini-api/docs/pricing (Free tier ≠ "Not available")
+ *   · console.groq.com/docs/models      (developer plan = free, rate limited)
+ * Anything that moved to a paid-only tier was removed rather than left to fail
+ * with a 402 at generation time. Live discovery still refreshes each list when a
+ * key is present, so newly released free models appear without an update.
+ *
  * Every provider uses only active, genuinely free models or zero cost local
  * inference, supports multimodal image vision wherever the model accepts
  * images, strips reasoning tags cleanly, fetches live free models from each
@@ -81,12 +89,16 @@ export const PROVIDERS: Record<ProviderKind, ProviderPreset> = {
       { id: 'google/gemma-4-26b-a4b-it:free', label: 'Gemma 4 26B MoE (Free)', brand: 'gemma', vision: true, free: true },
       { id: 'nvidia/nemotron-3.5-super-vl:free', label: 'Nemotron 3.5 Super VL (Free)', brand: 'nvidia', vision: true, free: true },
       { id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', label: 'Nemotron 3 Nano Omni 30B (Free)', brand: 'nvidia', vision: true, free: true },
-      { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B Instruct (Free)', brand: 'meta', free: true },
-      { id: 'openai/gpt-oss-120b:free', label: 'GPT OSS 120B (Free)', brand: 'openai', free: true },
+      { id: 'inclusionai/ling-3.2-flash:free', label: 'Ling 3.2 Flash (Free)', brand: 'openrouter', vision: true, free: true },
+      { id: 'thinkingmachines/inkling-2-small:free', label: 'Inkling 2 Small (Free)', brand: 'openrouter', vision: true, free: true },
+      { id: 'dots-studio/dots-3-note-preview:free', label: 'Dots3 Note Preview (Free)', brand: 'openrouter', vision: true, free: true },
+      { id: 'baidu/ernie-5.5-flash-preview:free', label: 'ERNIE 5.5 Flash (Free)', brand: 'openrouter', free: true },
       { id: 'nvidia/nemotron-3-ultra-550b-a55b:free', label: 'Nemotron 3 Ultra 550B (Free)', brand: 'nvidia', free: true },
       { id: 'nvidia/nemotron-3.5-lightning:free', label: 'Nemotron 3.5 Lightning (Free)', brand: 'nvidia', free: true },
       { id: 'cohere/north-mini-code:free', label: 'Cohere North Mini (Free)', brand: 'cohere', free: true },
       { id: 'liquid/lfm-3-1.7b:free', label: 'Liquid LFM 3 1.7B (Free)', brand: 'liquid', free: true },
+      { id: 'particle-ai/particle-1:free', label: 'Particle-1 (Free)', brand: 'openrouter', free: true },
+      { id: 'recursive/flint-v1.0:free', label: 'Flint 1.0 (Free)', brand: 'openrouter', free: true },
     ],
   },
 
@@ -100,13 +112,12 @@ export const PROVIDERS: Record<ProviderKind, ProviderPreset> = {
     keyUrl: 'https://aistudio.google.com/apikey',
     badge: 'Free tier',
     models: [
-      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Vision)', brand: 'gemini', vision: true, free: true },
-      { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite (Vision)', brand: 'gemini', vision: true, free: true },
+      { id: 'gemini-4-hydrogen', label: 'Gemini 4 Hydrogen (Vision)', brand: 'gemini', vision: true, free: true },
       { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash (Vision)', brand: 'gemini', vision: true, free: true },
       { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash (Vision)', brand: 'gemini', vision: true, free: true },
       { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash Lite (Vision)', brand: 'gemini', vision: true, free: true },
-      { id: 'gemma-4-31b-it', label: 'Gemma 4 31B IT (Vision)', brand: 'gemma', vision: true, free: true },
-      { id: 'gemma-4-26b-a4b-it', label: 'Gemma 4 26B MoE IT (Vision)', brand: 'gemma', vision: true, free: true },
+      { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash Lite (Vision)', brand: 'gemini', vision: true, free: true },
+      { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash Preview (Vision)', brand: 'gemini', vision: true, free: true },
     ],
   },
 
@@ -120,11 +131,9 @@ export const PROVIDERS: Record<ProviderKind, ProviderPreset> = {
     keyUrl: 'https://console.groq.com/keys',
     badge: 'Free tier',
     models: [
-      { id: 'qwen/qwen3.8-27b', label: 'Qwen 3.8 27B (Vision)', brand: 'qwen', vision: true, free: true },
-      { id: 'qwen/qwen3.6-27b', label: 'Qwen 3.6 27B', brand: 'qwen', free: true },
       { id: 'openai/gpt-oss-120b', label: 'GPT OSS 120B', brand: 'openai', free: true },
       { id: 'openai/gpt-oss-20b', label: 'GPT OSS 20B Fast', brand: 'openai', free: true },
-      { id: 'groq/compound-mini', label: 'Groq Compound Mini', brand: 'groq', free: true },
+      { id: 'qwen/qwen3.8-27b', label: 'Qwen 3.8 27B', brand: 'qwen', free: true },
     ],
   },
 
@@ -424,7 +433,7 @@ function buildPrompt(
       ? 'Write factual journalistic metadata describing visible subjects and context.'
       : settings.tone === 'minimal'
         ? 'Write crisp, understated metadata highlighting composition, color and copy space.'
-        : 'Write high converting commercial microstock metadata optimized for Shutterstock, Adobe Stock and Freepik buyer search.';
+        : 'Write high converting commercial microstock metadata optimized for Shutterstock, Adobe Stock and Magnific buyer search.';
 
   const dims = item.width && item.height ? `${item.width}x${item.height} px` : 'standard resolution';
   const kind =

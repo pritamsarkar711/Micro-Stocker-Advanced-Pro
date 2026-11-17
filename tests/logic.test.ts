@@ -730,7 +730,144 @@ test('Magic detection and auto decode route every family', async () => {
   equal(autoQoi.width, 2, 'auto qoi width');
 });
 
-/* ====================== currencies, cloud & app shell ===================== */
+/* ====================== quality checker & optimizer ====================== */
+group('Quality Checker & Image Optimizer');
+
+import {
+  analyseImage,
+  analyseSvgFile,
+  differenceHash,
+  hamming,
+  measurePixels,
+  measureSvg,
+} from '@/lib/stock/quality';
+import { downscaleRaster, optimizeRaster, suggestedFormat } from '@/lib/tools/optimizer';
+import { pathToPostScript, starPath, svgToEps, toMatrix } from '@/lib/vector/editor';
+
+test('SVG analysis separates editable artwork from flattened exports', () => {
+  const editable = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><g id="a"><rect x="1" y="1" width="20" height="20" fill="#f00"/><path d="M10 10 L 90 90"/><circle cx="50" cy="50" r="8"/></g></svg>';
+  const ok = analyseSvgFile(editable, 'art.svg', editable.length);
+  equal(ok.verdict, 'ready');
+  equal(ok.issues.filter((i) => i.severity === 'error').length, 0);
+  assert(ok.platforms.some((p) => p.ok), 'vector accepted somewhere');
+
+  const flat = '<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="2000"><image href="data:image/png;base64,AAAA" width="2000" height="2000"/></svg>';
+  const bad = analyseSvgFile(flat, 'canva.svg', flat.length);
+  equal(bad.verdict, 'reject');
+  includes(bad.issues[0].title, 'flattened');
+
+  const metrics = measureSvg(editable);
+  equal(metrics.editableNodes, 3);
+  equal(metrics.groups, 1);
+});
+
+test('SVG analysis flags foreignObject, scripts and live text', () => {
+  const risky = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><foreignObject><div>x</div></foreignObject><text font-family="Arial">hi</text><rect width="5" height="5"/></svg>';
+  const report = analyseSvgFile(risky, 'risky.svg', risky.length);
+  const ids = report.issues.map((i) => i.id);
+  assert(ids.includes('svg-foreign-object'), 'foreignObject flagged');
+  assert(ids.includes('svg-live-text'), 'live text flagged');
+  equal(report.verdict, 'review');
+});
+
+test('pixel metrics detect softness, clipping and duplicates', () => {
+  const flat = new Uint8ClampedArray(32 * 32 * 4).fill(128);
+  for (let i = 3; i < flat.length; i += 4) flat[i] = 255;
+  const soft = measurePixels(flat, 32, 32);
+  equal(soft.sharpness, 0, 'flat image has no edges');
+
+  const checker = new Uint8ClampedArray(32 * 32 * 4);
+  for (let y = 0; y < 32; y += 1) {
+    for (let x = 0; x < 32; x += 1) {
+      const i = (y * 32 + x) * 4;
+      const v = (x + y) % 2 === 0 ? 255 : 0;
+      checker[i] = v;
+      checker[i + 1] = v;
+      checker[i + 2] = v;
+      checker[i + 3] = 255;
+    }
+  }
+  const sharp = measurePixels(checker, 32, 32);
+  assert(sharp.sharpness > soft.sharpness, 'checkerboard is sharper');
+  assert(sharp.clipped > 0.9, 'black and white clipping detected');
+
+  const hash = differenceHash(checker, 32, 32);
+  equal(hash.length, 64);
+  equal(hamming(hash, hash), 0);
+
+  const report = analyseImage({
+    name: 'flat.jpg',
+    bytes: 900 * 1024,
+    width: 1200,
+    height: 1200,
+    type: 'image/jpeg',
+    stats: soft,
+    hash,
+  });
+  equal(report.verdict, 'reject');
+  const ids = report.issues.map((i) => i.id);
+  assert(ids.includes('img-resolution'), 'small file flagged');
+  assert(ids.includes('img-soft'), 'soft file flagged');
+  assert(report.platforms.every((p) => !p.ok), 'no agency accepts it');
+});
+
+test('optimizer downscales with a box filter and never enlarges', () => {
+  const data = new Uint8ClampedArray(4 * 2 * 4);
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = 255;
+    data[i + 3] = 255;
+  }
+  const raster = { width: 4, height: 2, data };
+  const same = downscaleRaster(raster, 10);
+  equal(same.width, 4, 'small image untouched');
+  const half = downscaleRaster(raster, 2);
+  equal(half.width, 2);
+  equal(half.height, 1);
+  equal(half.data[0], 255, 'average preserved');
+});
+
+test('optimizer binary-searches the highest quality under a size target', async () => {
+  const raster = { width: 8, height: 8, data: new Uint8ClampedArray(8 * 8 * 4).fill(200) };
+  const encode = async (_r: typeof raster, quality: number) => new Uint8Array(Math.round(2000 * quality));
+  const result = await optimizeRaster(raster, { format: 'jpg', targetKB: 1 }, encode);
+  assert(result.bytes.byteLength <= 1024, 'fits the target');
+  assert(result.quality > 0.4 && result.quality < 0.6, `quality near the target (${result.quality})`);
+  assert(result.attempts > 1, 'searched');
+  equal(suggestedFormat(true, 'png'), 'png');
+  equal(suggestedFormat(false, 'jpg'), 'jpg');
+});
+
+test('vector EPS export produces a real PostScript document', () => {
+  equal(toMatrix('translate(10 20) scale(2)')?.join(','), '2,0,0,2,10,20');
+  const ps = pathToPostScript('M 0 0 L 10 0 C 12 0 12 10 0 10 Z');
+  includes(ps, 'moveto');
+  includes(ps, 'curveto');
+  includes(ps, 'closepath');
+  includes(starPath(50, 50, 40, 16), 'M');
+
+  // svgToEps only needs a structural object in this environment.
+  const fakeSvg = {
+    tagName: 'svg',
+    getAttribute: (name: string) =>
+      name === 'viewBox' ? '0 0 100 50' : name === 'width' ? '100' : name === 'height' ? '50' : null,
+    children: [
+      {
+        tagName: 'rect',
+        getAttribute: (name: string) =>
+          ({ x: '0', y: '0', width: '100', height: '50', fill: '#102030' } as Record<string, string>)[name] ?? null,
+        children: [],
+      },
+    ],
+  } as unknown as SVGSVGElement;
+  const { eps, skipped } = svgToEps(fakeSvg, 'Unit Test');
+  includes(eps, '%!PS-Adobe-3.0 EPSF-3.0');
+  includes(eps, '%%BoundingBox: 0 0 100 50');
+  includes(eps, '1 -1 scale');
+  includes(eps, 'setrgbcolor fill');
+  equal(skipped.length, 0);
+});
+
+/* ====================== currencies, cloud & app shell ====================== */
 group('Currencies, Cloud schema & Version');
 
 test('all 9 currencies have official symbols and ISO country flags', () => {

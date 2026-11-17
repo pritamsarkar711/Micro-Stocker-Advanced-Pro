@@ -22,6 +22,9 @@ const ExportPage = lazy(() => import('@/pages/ExportPage').then((m) => ({ defaul
 const UpscalePage = lazy(() => import('@/pages/UpscalePage').then((m) => ({ default: m.UpscalePage })));
 const VideoUpscalePage = lazy(() => import('@/pages/VideoUpscalePage').then((m) => ({ default: m.VideoUpscalePage })));
 const BgRemovePage = lazy(() => import('@/pages/BgRemovePage').then((m) => ({ default: m.BgRemovePage })));
+const VectorPage = lazy(() => import('@/pages/VectorPage').then((m) => ({ default: m.VectorPage })));
+const QualityPage = lazy(() => import('@/pages/QualityPage').then((m) => ({ default: m.QualityPage })));
+const OptimizePage = lazy(() => import('@/pages/OptimizePage').then((m) => ({ default: m.OptimizePage })));
 const ConvertPage = lazy(() => import('@/pages/ConvertPage').then((m) => ({ default: m.ConvertPage })));
 const EarningsPage = lazy(() => import('@/pages/EarningsPage').then((m) => ({ default: m.EarningsPage })));
 const SubmissionsPage = lazy(() => import('@/pages/SubmissionsPage').then((m) => ({ default: m.SubmissionsPage })));
@@ -61,6 +64,9 @@ export default function App() {
                         <Route path="upscale" element={<UpscalePage />} />
                         <Route path="video-upscale" element={<VideoUpscalePage />} />
                         <Route path="bg-remove" element={<BgRemovePage />} />
+                        <Route path="vector" element={<VectorPage />} />
+                        <Route path="quality" element={<QualityPage />} />
+                        <Route path="optimize" element={<OptimizePage />} />
                         <Route path="convert" element={<ConvertPage />} />
                         <Route path="planner" element={<PlannerPage />} />
                         <Route path="plan" element={<SubmissionsPage />} />

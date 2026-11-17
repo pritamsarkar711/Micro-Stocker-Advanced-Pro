@@ -10,6 +10,8 @@ export interface NavItem {
   mobileTab?: boolean;
   /** Only rendered for accounts with the administrator role. */
   adminOnly?: boolean;
+  /** Reachable from Settings and cross-links, hidden from the primary rail. */
+  secondary?: boolean;
 }
 
 export const NAV_GROUPS: Array<{ id: NavItem['group']; label: string }> = [
@@ -81,6 +83,30 @@ export const NAV_ITEMS: NavItem[] = [
     keywords: ['cutout', 'transparent', 'png', 'rembg', 'u2net', 'birefnet', 'isnet', 'isolate'],
   },
   {
+    to: '/vector',
+    label: 'Vector Studio',
+    shortLabel: 'Vector',
+    icon: 'polyline',
+    group: 'tools',
+    keywords: ['svg', 'eps', 'ai', 'illustrator', 'draw', 'edit', 'logo', 'vector', 'export'],
+  },
+  {
+    to: '/quality',
+    label: 'Quality Checker',
+    shortLabel: 'Quality',
+    icon: 'fact_check',
+    group: 'tools',
+    keywords: ['check', 'editability', 'svg', 'eps', 'sharpness', 'blur', 'duplicate', 'reject', 'review'],
+  },
+  {
+    to: '/optimize',
+    label: 'Image Optimizer',
+    shortLabel: 'Optimize',
+    icon: 'compress',
+    group: 'tools',
+    keywords: ['compress', 'smaller', 'webp', 'avif', 'filesize', 'strip metadata'],
+  },
+  {
     to: '/convert',
     label: 'Image Converter',
     shortLabel: 'Convert',
@@ -110,6 +136,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Planner',
     icon: 'calendar_month',
     group: 'catalog',
+    secondary: true,
     keywords: ['seasonal', 'holidays', 'events', 'schedule'],
   },
   {
@@ -125,6 +152,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Releases',
     icon: 'assignment_turned_in',
     group: 'catalog',
+    secondary: true,
     keywords: ['model release', 'property release', 'consent'],
   },
   {
@@ -132,6 +160,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Keyword Bank',
     icon: 'local_offer',
     group: 'catalog',
+    secondary: true,
     keywords: ['synonyms', 'vocabulary', 'translations'],
   },
 
@@ -156,6 +185,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Cloud Sync',
     icon: 'cloud_sync',
     group: 'system',
+    secondary: true,
     keywords: ['supabase', 'backup', 'sync', 'database'],
     adminOnly: true,
   },
@@ -171,6 +201,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Contact',
     icon: 'send',
     group: 'system',
+    secondary: true,
     keywords: ['telegram', 'support', 'creator', 'message', 'joegoldberg2025'],
   },
   {
@@ -178,6 +209,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'About',
     icon: 'info',
     group: 'system',
+    secondary: true,
     keywords: ['version', 'license', 'desktop'],
   },
 ];
@@ -185,7 +217,7 @@ export const NAV_ITEMS: NavItem[] = [
 /** Navigation visible to a given role. Admin-only entries are never rendered
  * for regular users – role checks are repeated on the route level too. */
 export function navItemsFor(isAdmin: boolean): NavItem[] {
-  return NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
+  return NAV_ITEMS.filter((item) => !item.secondary && (!item.adminOnly || isAdmin));
 }
 
 export function navGroupsFor(isAdmin: boolean) {
@@ -197,3 +229,6 @@ export function navGroupsFor(isAdmin: boolean) {
 }
 
 export const MOBILE_TABS = NAV_ITEMS.filter((item) => item.mobileTab && !item.adminOnly);
+
+/** Secondary destinations surfaced from Settings instead of the rail. */
+export const SECONDARY_NAV = NAV_ITEMS.filter((item) => item.secondary && !item.adminOnly);

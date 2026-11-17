@@ -693,7 +693,7 @@ export const UPSCALE_TARGETS: UpscaleTarget[] = [
   },
   {
     id: 'freepik',
-    label: 'Freepik',
+    label: 'Magnific',
     badge: '25 MP',
     platformId: 'freepik',
     group: 'platform',

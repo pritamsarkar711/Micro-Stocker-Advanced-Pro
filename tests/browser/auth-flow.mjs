@@ -65,14 +65,29 @@ try {
   await page.getByRole('heading', { name: 'Subscription', exact: true }).waitFor();
   await page.getByPlaceholder('Paste your code').fill('invalid-test-code');
   await page.waitForTimeout(400);
-  await page.getByRole('button', { name: 'Activate', exact: true }).click();
+  await page.locator('#workspace-main').getByRole('button', { name: 'Activate', exact: true }).click();
   await page.getByText('Invalid or unavailable code').waitFor();
   await page.getByPlaceholder('Paste your code').fill('valid-test-code');
-  await page.getByRole('button', { name: 'Activate', exact: true }).click();
+  await page.locator('#workspace-main').getByRole('button', { name: 'Activate', exact: true }).click();
   await page.getByText('Code activated.').waitFor();
   await page.goto(`${process.env.TEST_BASE_URL || 'http://127.0.0.1:5174'}/#/bg-remove`);
   await page.getByRole('heading', { name: 'Background Remover' }).waitFor();
-  const routes = ['/', '/library', '/prepare', '/export', '/upscale', '/video-upscale', '/bg-remove', '/convert', '/planner', '/plan', '/platforms', '/releases', '/bank', '/cloud', '/subscription', '/settings', '/contact', '/report', '/about', '/earnings'];
+
+  // Role separation: an entitled regular user still has no admin surface.
+  const railText = await page.getByRole('navigation', { name: 'Main navigation' }).innerText();
+  assert.ok(!/admin/i.test(railText), `regular navigation must not mention admin:\n${railText}`);
+  assert.ok(!/cloud sync/i.test(railText), 'regular navigation must not offer cloud sync');
+  await page.goto(`${process.env.TEST_BASE_URL || 'http://127.0.0.1:5174'}/#/admin`);
+  await page.getByText('Administrator only').waitFor({ timeout: 8000 });
+  assert.equal(await page.getByRole('button', { name: /generate/i }).count(), 0, 'regular users cannot generate codes');
+  await page.goto(`${process.env.TEST_BASE_URL || 'http://127.0.0.1:5174'}/#/cloud`);
+  await page.getByText('Administrator only').waitFor({ timeout: 8000 });
+  await page.goto(`${process.env.TEST_BASE_URL || 'http://127.0.0.1:5174'}/#/subscription`);
+  assert.equal(await page.getByRole('link', { name: /admin console/i }).count(), 0, 'no admin entry point on subscription');
+  await page.goto(`${process.env.TEST_BASE_URL || 'http://127.0.0.1:5174'}/#/bg-remove`);
+  await page.getByRole('heading', { name: 'Background Remover' }).waitFor();
+
+  const routes = ['/', '/library', '/prepare', '/export', '/upscale', '/video-upscale', '/bg-remove', '/convert', '/vector', '/quality', '/optimize', '/planner', '/plan', '/platforms', '/releases', '/bank', '/cloud', '/subscription', '/settings', '/contact', '/report', '/about', '/earnings'];
   for (const width of [375, 768, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     for (const route of routes) {

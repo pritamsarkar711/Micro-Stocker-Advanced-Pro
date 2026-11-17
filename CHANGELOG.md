@@ -3,6 +3,61 @@
 All notable changes to Micro Stocker Advanced Pro are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.0] - 2026-11-17
+
+### Changed
+- **One flat pink identity, everywhere.** The palette is rebuilt around a single
+  accent (`#c2185b` light / `#e6477c` dark) with plum as the only secondary. Every
+  gradient in the app — buttons, sidebar pill, headline, logo, empty states — is
+  gone; colour is now applied as flat fills. Corner radii dropped to 2–7 px so
+  panels read as a desktop tool rather than a web page.
+- **The logo matches the product.** The mark is a flat pink tile with the
+  monogram, plus a grey `ADVANCED PRO` overline, and the favicon, PWA icons and
+  Windows `.ico` were regenerated from the same geometry.
+- **Freepik is now Magnific.** The marketplace name, portal URL, brand colour and
+  logo are updated, and the alias still resolves existing projects. `freepik` was
+  kept as the internal id so saved submissions and CSV presets keep working.
+- **Platform Rules was rebuilt.** Compact cards with resolution, weight, keyword
+  and title limits visible at a glance, filter chips instead of tabs, and the
+  long AI/vector/CSV rules folded behind a per-agency disclosure.
+- **Focused navigation.** Planner, Releases, Keyword Bank, Contact and About are
+  reachable from Settings instead of the rail, so the sidebar fits on a laptop
+  screen without scrolling.
+- **Free AI models re-verified (17 Nov 2026).** OpenRouter `:free` variants,
+  Google Gemini free-tier models and Groq's developer-plan models were checked
+  against the providers' own listings; paid-only models were removed.
+  Gemini 4 Hydrogen, 3.8/3.6 Flash, 3.5/3.1 Flash-Lite and Gemma 4 are listed.
+- **One window, one chrome.** The renderer is frameless with an in-app
+  drag region, theme toggle and window controls; macOS traffic lights get their
+  own inset above the rail. The duplicated product name is gone and the app no
+  longer looks like a website hosting an app.
+
+### Added
+- **Quality Checker.** Drop images, SVG, EPS or AI files for a scored report:
+  vector editability (flattened raster exports, `foreignObject`, live text
+  without fonts, auto-trace complexity), sharpness, exposure clipping, weight,
+  near-duplicate detection via dHash against the library, and a per-agency
+  pass/fail list. Exports a JSON report.
+- **Image Optimizer.** Re-encodes to JPEG/WebP/AVIF/PNG with an auto quality
+  sweet spot, a target-size binary search, optional long-edge downscaling and
+  metadata stripping. Never returns a file larger than the original.
+- **Vector Studio.** Open an SVG, draw rectangles, ellipses, stars, lines and
+  text, edit fill/stroke/opacity, reorder and duplicate objects, then export
+  clean SVG, a 2× PNG preview or a **real vector EPS** (PostScript emitter with
+  cubic/quadratic path conversion — no raster wrapper).
+- 30 logic tests covering the new quality, optimizer and EPS engines.
+
+### Fixed
+- **Admin Console no longer fails with `message_admin_status` /
+  "not in the schema cache".** Failures are classified: a missing function or a
+  stale PostgREST cache now shows a setup panel with the exact migration files
+  and a copyable `notify pgrst, 'reload schema';`, and both migrations raise that
+  notification themselves so a fresh deploy works immediately.
+- **Regular accounts have no admin surface.** Verified by a browser test: no
+  Admin Console or Cloud Sync entry, no admin link on Subscription, and
+  `/#/admin` + `/#/cloud` render the "Administrator only" guard without any code
+  generation UI.
+
 ## [1.4.0] - 2026-11-17
 
 ### Added

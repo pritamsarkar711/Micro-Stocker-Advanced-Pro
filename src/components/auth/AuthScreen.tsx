@@ -23,9 +23,7 @@ export function AuthScreen() {
         <div className="max-w-lg">
           <h1 className="display text-[2.25rem] leading-[1.15] font-bold tracking-[-0.02em] text-ink xl:text-[2.5rem]">
             The contributor studio for
-            <span className="block bg-gradient-to-r from-brand to-secondary bg-clip-text text-transparent">
-              serious stock portfolios.
-            </span>
+            <span className="block text-brand">serious stock portfolios.</span>
           </h1>
           <p className="mt-4 max-w-md text-[0.9375rem] leading-relaxed text-ink-muted">
             One workspace for metadata, export, upscaling and cutouts — on your machine.

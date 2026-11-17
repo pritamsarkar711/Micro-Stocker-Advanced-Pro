@@ -21,7 +21,7 @@ import {
 } from '@/lib/cloud/config';
 
 export type ThemeSetting = 'light' | 'dark' | 'system';
-export type AccentSetting = 'crimson' | 'indigo' | 'emerald';
+export type AccentSetting = 'pink';
 
 export interface Settings {
   theme: ThemeSetting;
@@ -34,7 +34,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'dark',
-  accent: 'crimson',
+  accent: 'pink',
   density: 'comfortable',
   currency: 'BDT',
   sidebarCollapsed: false,
@@ -95,11 +95,9 @@ function resolveDark(theme: ThemeSetting): boolean {
 }
 
 /** Accept legacy accent names so existing installations keep their choice. */
-export function normalizeAccent(value: unknown): AccentSetting {
-  if (value === 'indigo' || value === 'emerald' || value === 'crimson') return value;
-  if (value === 'green') return 'emerald';
-  if (value === 'blue') return 'crimson';
-  return DEFAULT_SETTINGS.accent;
+/** The product ships one brand colour; legacy stored values all map to it. */
+export function normalizeAccent(_value?: unknown): AccentSetting {
+  return 'pink';
 }
 
 /**
@@ -112,7 +110,7 @@ function paintThemeDom(dark: boolean, accent: AccentSetting, theme: ThemeSetting
   root.classList.add('theme-switching');
   root.classList.toggle('dark', dark);
   root.style.colorScheme = dark ? 'dark' : 'light';
-  root.dataset.accent = accent;
+  void accent;
   const color = dark ? '#121619' : '#f4f6f9';
   document.querySelectorAll('meta[name="theme-color"]').forEach((el) => el.setAttribute('content', color));
   // Flush style recalculation before restoring control transitions.

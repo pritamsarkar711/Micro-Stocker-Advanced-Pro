@@ -22,7 +22,7 @@ await page.getByPlaceholder('Enter password').fill('demo-password');
 await page.getByRole('button', { name: 'Sign in', exact: true }).last().click();
 await page.waitForTimeout(1200);
 await page.screenshot({ path: '/tmp/shots/02-overview.png' });
-for (const [name, route] of [['03-admin','admin'],['04-subscription','subscription'],['05-upscale','upscale'],['06-bg','bg-remove'],['07-convert','convert'],['08-library','library'],['09-settings','settings'],['10-video','video-upscale'],['11-about','about'],['12-overview','']]) {
+for (const [name, route] of [['03-admin','admin'],['04-subscription','subscription'],['05-upscale','upscale'],['06-bg','bg-remove'],['07-convert','convert'],['08-library','library'],['09-settings','settings'],['10-video','video-upscale'],['10a-quality','quality'],['10b-optimize','optimize'],['10c-vector','vector'],['10d-platforms','platforms'],['11-about','about'],['12-overview','']]) {
   await page.goto(`http://127.0.0.1:5173/#/${route}`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(700);
   await page.screenshot({ path: `/tmp/shots/${name}.png`, fullPage: false });
