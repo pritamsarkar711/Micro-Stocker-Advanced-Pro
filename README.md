@@ -36,7 +36,7 @@ dialect and its AI policy.
 | --- | --- | --- | --- |
 | **Shutterstock** | ✅ comma + header | 7–50 | ❌ rejected |
 | **Adobe Stock** | ✅ comma + header | 5–49 (ordered) | ✅ labelled |
-| **Freepik / Magnific** | ✅ semicolon, single quotes, no header | up to 50 | ✅ labelled |
+| **Magnific** (ex-Freepik) | ✅ semicolon, single quotes, no header | up to 50 | ✅ labelled |
 | **Pixabay** | copy sheet | ≤ 20 tags | portal rules |
 | **Dreamstime** | ✅ comma + header | 7–50 | ✅ labelled |
 | **123RF** | ✅ comma + header | 10–50 | ✅ labelled |
@@ -59,10 +59,13 @@ copy-paste sheet with the exact fields in the right order.
 | **Metadata AI** | Free by design, three routes: the built-in offline generator, a model on your own machine (Ollama or any OpenAI-compatible server), or a free-tier cloud key (OpenRouter, Gemini, Mistral, NVIDIA, Groq, Cerebras, Together). Live connection test, real error messages, keys stored locally. |
 | **Library** | Import JPG, PNG, WebP, EPS, AI, SVG. Existing IPTC/XMP is read on import. Grid or list, search, format filters, batch generate, batch embed, metadata templates, near-duplicate scan (64-bit dHash), folder watching on desktop. |
 | **Prepare** | Strip EXIF/GPS and Photoshop blocks, re-encode through sRGB to any portal's size budget, sanitise SVG (scripts, handlers, `@import`, editor namespaces) and report on EPS/AI internals (CMYK, live fonts, rasters, Illustrator version). |
+| **Vector Studio** | Draw or open an SVG, edit fill/stroke/opacity and object order, then export clean SVG, a 2× PNG preview or a true vector EPS (PostScript, not a raster wrapper). Live text is flagged because agencies need outlines. |
+| **Quality Checker** | Scores artwork before upload: vector editability (flattened raster exports, `foreignObject`, fonts left live, auto-trace complexity), sharpness, exposure clipping, file weight, near-duplicates against your library, and a per-agency pass/fail list. Exports a JSON report. |
+| **Image Optimizer** | Re-encodes to JPEG, WebP, AVIF or PNG with a visually-lossless sweet spot or an exact KB target, optional long-edge downscale and metadata stripping. Never writes a larger file than it read. |
 | **Upscale** | Built-in resampling and selectable local GPU models. Review each model and weights licence before commercial use. |
 | **Export** | Exact CSV dialects for every portal above, UTF-8 BOM, platform-safe renaming, batch embedding, planner hand-off, plus re-import of existing metadata CSVs. |
 | **Platforms** | A dense reference for all 14 marketplaces: formats, resolution windows, file caps, keyword rules, title caps, CSV layout and AI policy. |
-| **Planner** | Per-portal queues (todo → queued → submitted → accepted / rejected) with real publishing caps, including Freepik's first-batch window and monthly limit. |
+| **Planner** | Per-portal queues (todo → queued → submitted → accepted / rejected) with real publishing caps, including Magnific's first-batch window and monthly limit. |
 | **Releases** | Model and property release registry with expiry tracking and per-file linking; validation warns when commercial work shows people without a release. |
 | **Earnings** | Import each portal's sales CSV with automatic column detection, get one ledger, a monthly trend, per-platform totals and best sellers. |
 | **Cloud** | Legacy sync is disabled for security. Local backup and restore remain available. |
@@ -103,11 +106,14 @@ electron/          main + preload (fs, dialogs, upscaler, folder watcher)
 src/
   components/      design system (buttons, cards, tables, fields) + shell
   lib/stock/       platforms, csv, csvimport, validate, metadata, xmp, files,
-                   categories, dupes, filedoctor, vectorcheck, sales,
+                   categories, dupes, filedoctor, vectorcheck, quality, sales,
                    submissions, sync + upscale/{models,engine,classic}
+  lib/vector/      SVG document model, path → PostScript, vector EPS writer
+  lib/tools/       converter (+codecs), optimizer, bgremove, videoupscale
   state/           app, toast, library, bank, releases
-  pages/           Overview, Library, Prepare, Export, Upscale, Platforms,
-                   Planner, Releases, Earnings, Keywords, Cloud, Settings, About
+  pages/           Overview, Library, Prepare, Export, Vector, Quality,
+                   Optimize, Upscale, Video, Background, Convert, Platforms,
+                   Planner, Releases, Earnings, Bank, Cloud, Settings, About
 tests/             runtime suite + binary fixtures
 docs/              CI workflow template, user guide, assets
 ```

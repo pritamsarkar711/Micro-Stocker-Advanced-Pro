@@ -73,46 +73,46 @@
 :root {
   color-scheme: light;
 
-  --bg: #f4f6f9;
+  --bg: #f5f6f8;
   --bg-elevated: #ffffff;
   --surface: #ffffff;
-  --surface-2: #f5f7fa;
-  --surface-3: #eaeef4;
-  --surface-inverse: #1c2126;
+  --surface-2: #f4f5f7;
+  --surface-3: #e9ebef;
+  --surface-inverse: #17191d;
 
-  --line: #e2e7ee;
-  --line-strong: #cbd4df;
+  --line: #e3e5ea;
+  --line-strong: #c9ced6;
 
-  --fg: #171d23;
-  --fg-muted: #566471;
-  --fg-subtle: #7e8c9a;
+  --fg: #16181c;
+  --fg-muted: #545a63;
+  --fg-subtle: #7c838d;
 
-  /* Primary — Material crimson */
-  --brand: #b3294e;
-  --brand-hover: #942041;
-  --brand-soft: #fdeef2;
-  --brand-fg: #a02145;
+  /* Primary — one pink brand colour, flat across the whole product. */
+  --brand: #c2185b;
+  --brand-hover: #a3124c;
+  --brand-soft: #fce8f0;
+  --brand-fg: #ad1457;
   --on-brand: #ffffff;
 
-  /* Secondary — Material deep indigo */
-  --secondary: #4829b2;
-  --secondary-soft: #efecfd;
-  --secondary-fg: #43279f;
+  /* Secondary — deeper plum for emphasis only, never a gradient. */
+  --secondary: #7b1a45;
+  --secondary-soft: #f8e6ee;
+  --secondary-fg: #6d163c;
 
-  --ok: #1b6b3a;
-  --ok-soft: #e8f5ec;
+  --ok: #1c6a3c;
+  --ok-soft: #e6f4ea;
   --warn: #8a5a00;
   --warn-soft: #fdf3e2;
   --danger: #b3261e;
   --danger-soft: #fdeeed;
 
-  /* Navigation rail is charcoal in both themes */
-  --nav-bg: #20262c;
-  --nav-bg-2: #171c21;
-  --nav-fg: #c7d2da;
+  /* Navigation rail is neutral charcoal in both themes. */
+  --nav-bg: #17191d;
+  --nav-bg-2: #131518;
+  --nav-fg: #c6cad1;
   --nav-fg-strong: #ffffff;
-  --nav-fg-muted: #8b98a3;
-  --nav-line: rgb(255 255 255 / 0.08);
+  --nav-fg-muted: #868d97;
+  --nav-line: rgb(255 255 255 / 0.07);
   --nav-active: #ffffff;
 
   --elev-1: 0 1px 2px rgb(16 24 32 / 0.05), 0 1px 3px rgb(16 24 32 / 0.07);
@@ -120,14 +120,15 @@
   --elev-3: 0 12px 28px -8px rgb(16 24 32 / 0.2), 0 4px 10px -4px rgb(16 24 32 / 0.1);
   --elev-4: 0 24px 56px -12px rgb(16 24 32 / 0.3);
 
-  --r-xs: 4px;
-  --r-sm: 5px;
-  --r-chip: 6px;
-  --r-md: 7px;
-  --r-lg: 10px;
-  --r-xl: 14px;
-  --r-card: 10px;
-  --r-control: 7px;
+  /* Compact radii: crisp rectangles, not pills. */
+  --r-xs: 2px;
+  --r-sm: 3px;
+  --r-chip: 3px;
+  --r-md: 4px;
+  --r-lg: 6px;
+  --r-xl: 7px;
+  --r-card: 6px;
+  --r-control: 4px;
 
   --accent: var(--brand);
   --accent-hover: var(--brand-hover);
@@ -144,54 +145,32 @@
   --topbar-h: 60px;
 }
 
-/* Indigo primary option */
-:root[data-accent='indigo'] {
-  --brand: #4829b2;
-  --brand-hover: #3a1f96;
-  --brand-soft: #efecfd;
-  --brand-fg: #412598;
-  --secondary: #b3294e;
-  --secondary-soft: #fdeef2;
-  --secondary-fg: #a02145;
-}
-
-/* Emerald option */
-:root[data-accent='emerald'] {
-  --brand: #146c46;
-  --brand-hover: #0f5638;
-  --brand-soft: #e6f4ed;
-  --brand-fg: #116040;
-  --secondary: #4829b2;
-  --secondary-soft: #efecfd;
-  --secondary-fg: #43279f;
-}
-
 .dark {
   color-scheme: dark;
 
-  --bg: #121619;
-  --bg-elevated: #1a1f24;
-  --surface: #1b2126;
-  --surface-2: #222930;
-  --surface-3: #2a333b;
-  --surface-inverse: #eef2f6;
+  --bg: #101114;
+  --bg-elevated: #17191d;
+  --surface: #17191d;
+  --surface-2: #1d2025;
+  --surface-3: #262a30;
+  --surface-inverse: #eef1f5;
 
-  --line: #2c353d;
-  --line-strong: #3f4b55;
+  --line: #2a2e34;
+  --line-strong: #3c424a;
 
-  --fg: #eef2f6;
-  --fg-muted: #a5b2bd;
-  --fg-subtle: #78868f;
+  --fg: #eef1f5;
+  --fg-muted: #a2a9b3;
+  --fg-subtle: #767d87;
 
-  --brand: #d9436d;
-  --brand-hover: #e4587e;
-  --brand-soft: #361923;
-  --brand-fg: #f7a5bb;
+  --brand: #e6477c;
+  --brand-hover: #f0618e;
+  --brand-soft: #35141f;
+  --brand-fg: #f7a1bd;
   --on-brand: #ffffff;
 
-  --secondary: #7b5cf0;
-  --secondary-soft: #241f3d;
-  --secondary-fg: #bda9ff;
+  --secondary: #f2a9c4;
+  --secondary-soft: #2c1520;
+  --secondary-fg: #f7bfd2;
 
   --ok: #58c07c;
   --ok-soft: #16281c;
@@ -200,34 +179,17 @@
   --danger: #f08b85;
   --danger-soft: #2e1918;
 
-  --nav-bg: #171c21;
-  --nav-bg-2: #101417;
-  --nav-fg: #b9c5ce;
+  --nav-bg: #131518;
+  --nav-bg-2: #0e1012;
+  --nav-fg: #b9bfc7;
   --nav-fg-strong: #ffffff;
-  --nav-fg-muted: #7d8b95;
+  --nav-fg-muted: #7b838d;
   --nav-line: rgb(255 255 255 / 0.07);
 
   --elev-1: 0 1px 2px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
   --elev-2: 0 2px 6px rgb(0 0 0 / 0.45), 0 8px 20px -8px rgb(0 0 0 / 0.5);
   --elev-3: 0 14px 32px -10px rgb(0 0 0 / 0.6), 0 4px 12px -4px rgb(0 0 0 / 0.4);
   --elev-4: 0 28px 60px -14px rgb(0 0 0 / 0.7);
-}
-
-.dark[data-accent='indigo'] {
-  --brand: #8d74f5;
-  --brand-hover: #a48ff8;
-  --brand-soft: #251f40;
-  --brand-fg: #c4b4ff;
-  --secondary: #e0567c;
-  --secondary-soft: #361923;
-  --secondary-fg: #f7a5bb;
-}
-
-.dark[data-accent='emerald'] {
-  --brand: #4fbf8b;
-  --brand-hover: #6bd0a0;
-  --brand-soft: #14291f;
-  --brand-fg: #8ddcb5;
 }
 
 /* Instant zero delay theme switching */
@@ -286,6 +248,13 @@ html.theme-switching *::after {
 
   --radius-card: var(--r-card);
   --radius-control: var(--r-control);
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 7px;
+  --radius-2xl: 8px;
+  --radius-3xl: 10px;
 
   --shadow-card: var(--elev-1);
   --shadow-pop: var(--elev-3);
@@ -303,7 +272,6 @@ html.theme-switching *::after {
     font-size: clamp(15.5px, 0.3vw + 14.6px, 17px);
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
-    scrollbar-gutter: stable;
   }
 
   body {
@@ -312,6 +280,8 @@ html.theme-switching *::after {
     color: var(--fg);
     font-family: var(--font-sans);
     font-size: 1rem;
+    font-synthesis: none;
+    font-optical-sizing: auto;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -331,9 +301,9 @@ html.theme-switching *::after {
   h5 {
     font-family: var(--font-display);
     text-wrap: balance;
-    letter-spacing: -0.012em;
+    letter-spacing: -0.005em;
     font-weight: 700;
-    line-height: 1.25;
+    line-height: 1.24;
   }
 
   p {
@@ -358,22 +328,19 @@ html.theme-switching *::after {
     background: color-mix(in oklab, var(--brand) 24%, transparent);
   }
 
+  /* The shell scrolls its own panes; the browser/OS scrollbar is hidden so
+     the desktop window never shows a second, foreign-looking bar. */
+  html,
+  body {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar,
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-  }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  ::-webkit-scrollbar-thumb {
-    background: color-mix(in oklab, var(--fg-subtle) 34%, transparent);
-    border-radius: 999px;
-    border: 2px solid transparent;
-    background-clip: content-box;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in oklab, var(--fg-subtle) 58%, transparent);
-    background-clip: content-box;
+    width: 0;
+    height: 0;
+    display: none;
   }
 
   input[type='range'] {
@@ -484,13 +451,8 @@ html.theme-switching *::after {
 
   .checkerboard {
     background-color: var(--surface-2);
-    background-image:
-      linear-gradient(45deg, var(--line) 25%, transparent 25%),
-      linear-gradient(-45deg, var(--line) 25%, transparent 25%),
-      linear-gradient(45deg, transparent 75%, var(--line) 75%),
-      linear-gradient(-45deg, transparent 75%, var(--line) 75%);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='8' height='8' fill='%23cfd4db'/%3E%3Crect x='8' y='8' width='8' height='8' fill='%23cfd4db'/%3E%3C/svg%3E");
     background-size: 16px 16px;
-    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
   }
 
   .safe-bottom {
@@ -518,22 +480,15 @@ html.theme-switching *::after {
   }
 
   .brand-gradient {
-    background-image: linear-gradient(
-      135deg,
-      var(--brand) 0%,
-      color-mix(in oklab, var(--brand) 62%, var(--secondary)) 58%,
-      var(--secondary) 100%
-    );
+    background-color: var(--brand);
   }
 
   .nav-rail {
-    background-image: linear-gradient(180deg, var(--nav-bg) 0%, var(--nav-bg-2) 100%);
+    background-color: var(--nav-bg);
   }
 
   .surface-glow {
-    background-image:
-      radial-gradient(120% 90% at 8% -10%, color-mix(in oklab, var(--brand) 18%, transparent) 0%, transparent 58%),
-      radial-gradient(100% 80% at 100% 0%, color-mix(in oklab, var(--secondary) 16%, transparent) 0%, transparent 60%);
+    background-color: var(--surface);
   }
 
   .hairline {

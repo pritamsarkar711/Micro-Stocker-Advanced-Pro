@@ -20,9 +20,9 @@ const errs = [];
 page.on('console', m => { if (m.type() === 'error') errs.push(m.text().slice(0, 80)); });
 page.on('pageerror', e => errs.push('PAGE ' + e.message.slice(0, 90)));
 
-const routes = ['', 'library', 'prepare', 'export', 'upscale', 'video-upscale', 'bg-remove', 'convert', 'planner', 'plan', 'platforms', 'releases', 'bank', 'cloud', 'subscription', 'admin', 'settings', 'contact', 'report', 'about', 'earnings'];
+const routes = ['', 'library', 'prepare', 'export', 'vector', 'quality', 'optimize', 'upscale', 'video-upscale', 'bg-remove', 'convert', 'planner', 'plan', 'platforms', 'releases', 'bank', 'cloud', 'subscription', 'admin', 'settings', 'contact', 'report', 'about', 'earnings'];
 const widths = [375, 768, 1280, 1680];
-const shots = new Set(process.env.SHOTS ? process.env.SHOTS.split(',') : ['', 'upscale', 'convert', 'bg-remove', 'library', 'admin', 'subscription', 'settings']);
+const shots = new Set(process.env.SHOTS ? process.env.SHOTS.split(',') : ['', 'vector', 'quality', 'optimize', 'platforms', 'library', 'settings']);
 
 let problems = 0;
 for (const w of widths) {

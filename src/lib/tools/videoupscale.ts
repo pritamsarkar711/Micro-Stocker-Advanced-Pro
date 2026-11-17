@@ -545,7 +545,7 @@ export const VIDEO_TARGETS: VideoTarget[] = [
   { id: '1080p', label: 'Full HD', badge: '1920x1080', icon: 'desktop_windows', group: 'resolution', longEdge: 1920 },
   { id: 'shutterstock_4k', label: 'Shutterstock 4K', badge: '3840p 30fps', platformId: 'shutterstock', group: 'platform', longEdge: 3840, defaultFps: 30 },
   { id: 'adobe_4k', label: 'Adobe Stock 4K', badge: '3840p 30fps', platformId: 'adobe', group: 'platform', longEdge: 3840, defaultFps: 30 },
-  { id: 'freepik_4k', label: 'Freepik 4K', badge: '3840p 30fps', platformId: 'freepik', group: 'platform', longEdge: 3840, defaultFps: 30 },
+  { id: 'freepik_4k', label: 'Magnific 4K', badge: '3840p 30fps', platformId: 'freepik', group: 'platform', longEdge: 3840, defaultFps: 30 },
   { id: 'pond5_4k', label: 'Pond5 4K', badge: '3840p 60fps', platformId: 'pond5', group: 'platform', longEdge: 3840, defaultFps: 60 },
   { id: 'getty_4k', label: 'Getty 4K', badge: '3840p 30fps', platformId: 'getty', group: 'platform', longEdge: 3840, defaultFps: 30 },
 ];

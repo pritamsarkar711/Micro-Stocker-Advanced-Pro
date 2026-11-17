@@ -181,10 +181,12 @@ export const PLATFORMS: Record<PlatformId, PlatformSpec> = {
   },
 
   freepik: {
+    // The marketplace rebranded from Freepik to Magnific; the id stays stable so
+    // existing projects, CSV presets and stored submissions keep resolving.
     id: 'freepik',
-    name: 'Freepik',
-    site: 'https://contributor.freepik.com',
-    color: '#1273EB',
+    name: 'Magnific',
+    site: 'https://www.magnific.com',
+    color: '#E0218A',
     formats: { photo: ['jpg'], vector: ['eps', 'svg'] },
     video: { formats: ['mp4', 'mov'], minHeight: 1080, maxHeight: 2160, durationSec: [5, 60], maxFileGB: 1.5 },
     minMP: 4,

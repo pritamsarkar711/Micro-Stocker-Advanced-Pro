@@ -125,3 +125,7 @@ grant execute on function
   public.msap_admin_stats(),
   public.msap_admin_audit()
 to authenticated;
+
+-- PostgREST caches function signatures; refresh it so a fresh deploy can call
+-- these RPCs immediately instead of answering "not in the schema cache".
+notify pgrst, 'reload schema';

@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import { navItemsFor } from '@/lib/nav';
 import { GIcon } from '@/components/ui/GoogleIcon';
-import { ThemeSwitch } from '@/components/ui/ThemeSwitch';
-import { useApp } from '@/state/AppState';
+import { ThemeToggle } from '@/components/ui/ThemeSwitch';
+import { WindowControls } from './WindowControls';
 import { useAuth } from '@/state/AuthState';
 import { useLibrary } from '@/state/library';
 import { useLicense } from '@/state/LicenseState';
@@ -15,14 +15,23 @@ export interface TopbarProps {
 
 export function Topbar({ onOpenMobileNav }: TopbarProps) {
   const navigate = useNavigate();
-  const { connection } = useApp();
   const { user, openAuth } = useAuth();
   const { items } = useLibrary();
   const { isAdmin, premium, remainingMs, loading: licenseLoading } = useLicense();
 
   const [query, setQuery] = useState('');
   const [focused, setFocused] = useState(false);
+  // Narrow windows show a shorter placeholder so the field label never truncates.
+  const [compact, setCompact] = useState(() =>
+    typeof window === 'undefined' ? false : window.innerWidth < 640,
+  );
   const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onResize = () => setCompact(window.innerWidth < 640);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     if (!focused) return;
@@ -66,7 +75,7 @@ export function Topbar({ onOpenMobileNav }: TopbarProps) {
   const daysLeft = Math.max(0, Math.ceil(remainingMs / 86_400_000));
 
   return (
-    <header className="sticky top-0 z-30 flex h-[var(--topbar-h)] shrink-0 items-center justify-between gap-3 border-b border-line bg-surface/95 px-3 backdrop-blur-md sm:px-5 lg:px-6">
+    <header className="drag-region sticky top-0 z-30 flex h-[var(--topbar-h)] shrink-0 items-center justify-between gap-3 border-b border-line bg-surface px-3 sm:px-5 lg:px-6">
       <div className="flex min-w-0 flex-1 items-center gap-2.5">
         <button
           type="button"
@@ -96,7 +105,7 @@ export function Topbar({ onOpenMobileNav }: TopbarProps) {
                 setFocused(false);
               }
             }}
-            placeholder="Search pages, tools or assets"
+            placeholder={compact ? 'Search' : 'Search pages, tools or assets'}
             aria-label="Search pages, tools or assets"
             className="h-10 w-full rounded-[var(--r-control)] border border-line bg-surface-2 pr-3 pl-10 text-[0.8125rem] text-ink transition-colors placeholder:text-ink-faint hover:border-line-strong focus:border-brand focus:bg-surface focus:outline-none focus:ring-[3px] focus:ring-brand/12"
           />
@@ -133,71 +142,51 @@ export function Topbar({ onOpenMobileNav }: TopbarProps) {
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-        {!licenseLoading && (
+      <div className="no-drag flex shrink-0 items-center gap-1.5">
+        {!licenseLoading && !isAdmin && (
           <button
             type="button"
-            onClick={() => navigate(isAdmin ? '/admin' : '/subscription')}
+            onClick={() => navigate('/subscription')}
             className={clsx(
-              'hidden h-10 items-center gap-2 rounded-[var(--r-control)] border px-3 text-[0.75rem] font-semibold transition-colors sm:inline-flex',
-              isAdmin
-                ? 'border-secondary/35 bg-secondary-soft text-secondary-fg hover:brightness-97 dark:hover:brightness-110'
-                : premium
-                  ? 'border-line bg-surface text-ink-muted hover:bg-surface-2 hover:text-ink'
-                  : 'border-danger/35 bg-danger-soft text-danger',
+              'hidden h-9 items-center gap-1.5 rounded-[var(--r-control)] border px-2.5 text-[0.75rem] font-semibold transition-colors sm:inline-flex',
+              premium
+                ? 'border-line bg-surface text-ink-muted hover:bg-surface-2 hover:text-ink'
+                : 'border-brand bg-brand-soft text-brand-fg hover:bg-brand hover:text-on-brand',
             )}
-            title={isAdmin ? 'Administrator account' : premium ? 'Subscription active' : 'Activate a subscription'}
+            title={premium ? 'Subscription active' : 'Activate a subscription'}
           >
-            <GIcon
-              name={isAdmin ? 'admin_panel_settings' : premium ? 'verified' : 'error'}
-              size={17}
-            />
-            <span>{isAdmin ? 'Admin' : premium ? `${daysLeft}d left` : 'Activate plan'}</span>
+            <GIcon name={premium ? 'verified' : 'key'} size={16} />
+            <span>{premium ? `${daysLeft}d left` : 'Activate'}</span>
           </button>
         )}
 
-        {isAdmin && (
-          <button
-            type="button"
-            onClick={() => navigate('/cloud')}
-            className={clsx(
-              'hidden h-10 items-center gap-2 rounded-[var(--r-control)] border border-line px-3 text-[0.75rem] font-medium transition-colors md:inline-flex',
-              connection.state === 'online'
-                ? 'bg-ok-soft text-ok'
-                : 'bg-surface text-ink-muted hover:bg-surface-2 hover:text-ink',
-            )}
-            title={connection.message}
-          >
-            <GIcon name={connection.state === 'online' ? 'cloud_done' : 'cloud_off'} size={17} />
-            <span>{connection.state === 'online' ? 'Synced' : 'Local'}</span>
-          </button>
-        )}
-
-        <ThemeSwitch />
+        <ThemeToggle />
 
         {user ? (
           <button
             type="button"
             onClick={() => openAuth('account')}
-            className="inline-flex h-10 items-center gap-2 rounded-[var(--r-control)] border border-line bg-surface pr-2.5 pl-1.5 text-[0.8125rem] font-medium text-ink transition-colors hover:border-line-strong hover:bg-surface-2"
+            className="inline-flex h-9 items-center gap-2 rounded-[var(--r-control)] border border-line bg-surface pr-2 pl-1 text-[0.8125rem] font-medium text-ink transition-colors hover:border-line-strong hover:bg-surface-2"
             title={user.email}
           >
             <span className="inline-flex size-7 items-center justify-center rounded-full bg-brand text-[0.75rem] font-bold text-on-brand">
               {user.displayName.slice(0, 1).toUpperCase()}
             </span>
-            <span className="hidden max-w-[9rem] truncate md:inline">{user.displayName}</span>
-            <GIcon name="expand_more" size={17} className="hidden text-ink-faint md:inline" />
+            <span className="hidden max-w-[8rem] truncate md:inline">{user.displayName}</span>
+            <GIcon name="expand_more" size={16} className="hidden text-ink-faint md:inline" />
           </button>
         ) : (
           <button
             type="button"
             onClick={() => openAuth('login')}
-            className="inline-flex h-10 items-center gap-2 rounded-[var(--r-control)] bg-brand px-3.5 text-[0.8125rem] font-semibold text-on-brand transition-colors hover:bg-brand-hover"
+            className="inline-flex h-9 items-center gap-1.5 rounded-[var(--r-control)] bg-brand px-3 text-[0.8125rem] font-semibold text-on-brand transition-colors hover:bg-brand-hover"
           >
-            <GIcon name="account_circle" size={18} />
+            <GIcon name="account_circle" size={17} />
             <span>Sign in</span>
           </button>
         )}
+
+        <WindowControls />
       </div>
     </header>
   );

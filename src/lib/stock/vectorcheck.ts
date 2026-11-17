@@ -136,7 +136,7 @@ export function analyzeEps(text: string): EpsReport {
   const notes: string[] = [];
   const hasEmbeddedRaster = /%%BeginBinary|\/ImageType\s|BeginData:\s*\d+\s+bytes/i.test(text);
   const usesCmyk = /setcmykcolor/i.test(text);
-  if (usesCmyk) notes.push('CMYK color operators found; Freepik and Adobe Stock expect RGB vectors.');
+  if (usesCmyk) notes.push('CMYK color operators found; Magnific and Adobe Stock expect RGB vectors.');
   if (hasEmbeddedRaster) notes.push('Embedded raster image data found; agencies require clean vector paths.');
   if (ccMatch) notes.push('Saved from Illustrator CC; resave as Illustrator 10 or CS6 when required.');
   if (fonts.length) notes.push(`Fonts referenced (${fonts.slice(0, 4).join(', ')}); outline text or verify commercial licensing.`);

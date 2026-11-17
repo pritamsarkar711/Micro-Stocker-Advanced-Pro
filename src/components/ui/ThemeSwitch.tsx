@@ -54,3 +54,25 @@ export function ThemeSwitch({ compact = false, className }: { compact?: boolean;
     </div>
   );
 }
+
+/**
+ * Single-button theme toggle for the top bar. Keeps the chrome quiet: one icon
+ * that reflects the live state instead of two competing segmented options.
+ */
+export function ThemeToggle({ className }: { className?: string }) {
+  const { isDark, setThemeInstant } = useApp();
+  return (
+    <button
+      type="button"
+      onClick={() => setThemeInstant(isDark ? 'light' : 'dark')}
+      aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+      title={isDark ? 'Light theme' : 'Dark theme'}
+      className={clsx(
+        'no-drag inline-flex size-9 shrink-0 items-center justify-center rounded-[var(--r-control)] border border-line bg-surface text-ink-muted transition-colors hover:border-line-strong hover:bg-surface-2 hover:text-ink',
+        className,
+      )}
+    >
+      <GIcon name={isDark ? 'light_mode' : 'dark_mode'} size={18} />
+    </button>
+  );
+}

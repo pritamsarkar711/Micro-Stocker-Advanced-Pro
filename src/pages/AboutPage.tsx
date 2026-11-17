@@ -13,6 +13,8 @@ import { APP_NAME } from '@/lib/version';
 const HIGHLIGHTS: { icon: GoogleIconName; label: string; text: string }[] = [
   { icon: 'memory', label: 'AI metadata', text: 'Runs on device with a local model, or with your own API key.' },
   { icon: 'image', label: 'Upscale and convert', text: 'Local GPU upscalers, background removal, multi format export.' },
+  { icon: 'fact_check', label: 'Pre-flight checks', text: 'Quality, editability and duplicate checks before you upload.' },
+  { icon: 'polyline', label: 'Vector Studio', text: 'Draw, open and export editable SVG and EPS artwork.' },
   { icon: 'sell', label: 'Agency ready', text: 'Lossless IPTC and XMP writes plus CSV presets for every agency.' },
 ];
 
