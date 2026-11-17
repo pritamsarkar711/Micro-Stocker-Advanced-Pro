@@ -22,6 +22,7 @@ import {
   insertArtwork,
   listLayers,
   moveElement,
+  nextShapeId,
   opacityOf,
   paintElement,
   parseSvgDocument,
@@ -44,7 +45,6 @@ import {
 /* -------------------------------------------------------------------------- */
 
 const STORAGE_KEY = 'msap.vector.document.v2';
-const HINT_KEY = 'msap.vector.hint.v2';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 interface GestureBase {
@@ -97,13 +97,6 @@ export function VectorPage() {
   const [category, setCategory] = useState('all');
   const [menu, setMenu] = useState<'new' | 'export' | null>(null);
   const [present, setPresent] = useState(false);
-  const [hintOpen, setHintOpen] = useState(() => {
-    try {
-      return localStorage.getItem(HINT_KEY) !== '1';
-    } catch {
-      return true;
-    }
-  });
 
   const [previewUrl, setPreviewUrl] = useState('');
   const [previewBytes, setPreviewBytes] = useState(0);
@@ -383,7 +376,7 @@ export function VectorPage() {
         el.setAttribute('id', `text-${Date.now().toString(36)}`);
         el.setAttribute('x', String(round(point.x)));
         el.setAttribute('y', String(round(point.y)));
-        el.setAttribute('font-family', 'Plus Jakarta Sans, Arial');
+        el.setAttribute('font-family', 'IBM Plex Sans, Arial');
         el.setAttribute('font-size', String(round(Math.min(doc.w, doc.h) * 0.08)));
         el.setAttribute('font-weight', '700');
         el.setAttribute('fill', '#16181c');
@@ -835,7 +828,7 @@ export function VectorPage() {
           setSelectedIds([]);
           commit(before);
           window.setTimeout(() => fitView(), 30);
-          toast.success(`Opened ${file.name} — every object stays editable`);
+          toast.success(`Opened ${file.name}. Every object stays editable`);
         } else {
           const root = svgRef.current;
           if (!root) return;
@@ -1148,6 +1141,93 @@ export function VectorPage() {
     [mutate, selectedEls],
   );
 
+  const flipSelection = useCallback(
+    (axis: 'x' | 'y') => {
+      const root = svgRef.current;
+      if (!root || !selectedEls.length || !selectionBox) return;
+      const cx = selectionBox.x + selectionBox.w / 2;
+      const cy = selectionBox.y + selectionBox.h / 2;
+      mutate(() =>
+        selectedEls.forEach((el) =>
+          scaleElement(el, axis === 'x' ? -1 : 1, axis === 'y' ? -1 : 1, cx, cy),
+        ),
+      );
+    },
+    [mutate, selectedEls, selectionBox],
+  );
+
+  const centreOnCanvas = useCallback(() => {
+    const root = svgRef.current;
+    if (!root || !selectedEls.length) return;
+    const box = unionBox(selectedEls.map((el) => boxInDocument(el, root)));
+    if (!box) return;
+    const dx = doc.w / 2 - (box.x + box.w / 2);
+    const dy = doc.h / 2 - (box.y + box.h / 2);
+    mutate(() => selectedEls.forEach((el) => translateElement(el, round(dx, 3), round(dy, 3))));
+  }, [doc.h, doc.w, mutate, selectedEls]);
+
+  const renameLayer = useCallback(
+    (id: string, name: string) => {
+      const el = svgRef.current?.querySelector<SVGElement>(`[id="${id}"]`);
+      if (!el || !name.trim()) return;
+      mutate(() => el.setAttribute('data-name', name.trim()));
+    },
+    [mutate],
+  );
+
+  const reorderLayer = useCallback(
+    (id: string, targetId: string, place: 'above' | 'below') => {
+      const root = svgRef.current;
+      const el = root?.querySelector<SVGElement>(`[id="${id}"]`);
+      const target = root?.querySelector<SVGElement>(`[id="${targetId}"]`);
+      if (!root || !el || !target || el === target || el.contains(target) || target.contains(el)) return;
+      if (el.parentNode !== target.parentNode) return;
+      mutate(() => {
+        // The list shows the topmost object first, so "above" means later in the DOM.
+        if (place === 'above') target.parentNode?.insertBefore(target, el);
+        else target.parentNode?.insertBefore(el, target.nextSibling);
+      });
+    },
+    [mutate],
+  );
+
+  const clipboard = useRef<string[]>([]);
+
+  const copySelection = useCallback(() => {
+    if (!selectedEls.length) return;
+    const serialiser = new XMLSerializer();
+    clipboard.current = selectedEls.map((el) => serialiser.serializeToString(el));
+  }, [selectedEls]);
+
+  const pasteClipboard = useCallback(() => {
+    const root = svgRef.current;
+    if (!root || !clipboard.current.length) return;
+    const offset = Math.max(12, Math.min(doc.w, doc.h) * 0.03);
+    mutate(() => {
+      const created: string[] = [];
+      clipboard.current.forEach((text) => {
+        try {
+          const parsed = new DOMParser().parseFromString(
+            `<svg xmlns="http://www.w3.org/2000/svg">${text}</svg>`,
+            'image/svg+xml',
+          );
+          const source = parsed.documentElement.firstElementChild;
+          if (!source) return;
+          const node = root.ownerDocument.importNode(source, true) as SVGElement;
+          const tag = node.tagName.toLowerCase();
+          node.setAttribute('id', nextShapeId(tag));
+          if (node.getAttribute('data-locked') === '1') node.removeAttribute('data-locked');
+          root.appendChild(node);
+          translateElement(node, offset, offset);
+          created.push(node.getAttribute('id')!);
+        } catch {
+          /* skip malformed clipboard entry */
+        }
+      });
+      if (created.length) setSelectedIds(created);
+    });
+  }, [doc.h, doc.w, mutate]);
+
   const selectAll = useCallback(() => {
     const root = svgRef.current;
     if (!root) return;
@@ -1208,7 +1288,7 @@ export function VectorPage() {
         if (kind === 'eps') {
           const { eps, skipped } = svgToEps(root, docName || 'Micro Stocker Advanced Pro');
           triggerBlobDownload(new Blob([eps], { type: 'application/postscript' }), `${docName || 'artwork'}.eps`);
-          if (skipped.length) toast.info(`EPS exported — skipped: ${Array.from(new Set(skipped)).join(', ')}`);
+          if (skipped.length) toast.info(`EPS exported. Skipped: ${Array.from(new Set(skipped)).join(', ')}`);
           else toast.success('EPS exported');
           return;
         }
@@ -1248,8 +1328,27 @@ export function VectorPage() {
     setTool,
     nudge,
     arrange,
+    flipSelection,
+    copySelection,
+    pasteClipboard,
   });
-  actions.current = { undo, redo, deleteSelection, duplicateSelection, groupSelection, ungroupSelection, selectAll, fitView, zoomBy, setTool, nudge, arrange };
+  actions.current = {
+    undo,
+    redo,
+    deleteSelection,
+    duplicateSelection,
+    groupSelection,
+    ungroupSelection,
+    selectAll,
+    fitView,
+    zoomBy,
+    setTool,
+    nudge,
+    arrange,
+    flipSelection,
+    copySelection,
+    pasteClipboard,
+  };
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1283,6 +1382,23 @@ export function VectorPage() {
       if (meta && key === 'a') {
         event.preventDefault();
         actions.current.selectAll();
+        return;
+      }
+      if (meta && key === 'c') {
+        actions.current.copySelection();
+        return;
+      }
+      if (meta && key === 'v') {
+        event.preventDefault();
+        actions.current.pasteClipboard();
+        return;
+      }
+      if (event.shiftKey && key === 'h') {
+        actions.current.flipSelection('x');
+        return;
+      }
+      if (event.shiftKey && key === 'v') {
+        actions.current.flipSelection('y');
         return;
       }
       if (meta && key === 'g') {
@@ -1331,7 +1447,7 @@ export function VectorPage() {
         return;
       }
       const shortcut = TOOLS.find((item) => item.shortcut.toLowerCase() === key);
-      if (shortcut && !meta) actions.current.setTool(shortcut.id);
+      if (shortcut && !meta && !event.shiftKey) actions.current.setTool(shortcut.id);
     };
     const onKeyUp = (event: KeyboardEvent) => {
       if (event.code === 'Space') spaceDown.current = false;
@@ -1662,43 +1778,12 @@ export function VectorPage() {
               </div>
             </div>
 
-            {hintOpen && (
-              <div className="absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-start gap-2 rounded-[var(--r-control)] border border-line bg-surface/95 px-2 py-1.5 shadow-sm backdrop-blur">
-                <StudioIcon name="sparkle" size={14} className="mt-0.5 text-brand" />
-                <p className="text-2xs leading-relaxed text-ink-muted">
-                  Pick a shape, drag on the canvas, then style it on the right. Scroll to pan · ⌘/Ctrl + scroll to zoom ·
-                  drop an SVG to place it here.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setHintOpen(false);
-                    try {
-                      localStorage.setItem(HINT_KEY, '1');
-                    } catch {
-                      /* ignore */
-                    }
-                  }}
-                  className="text-ink-faint hover:text-ink"
-                  aria-label="Dismiss hint"
-                >
-                  <StudioIcon name="close" size={12} />
-                </button>
-              </div>
-            )}
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-2.5 py-1 text-2xs text-ink-faint">
             <span>
               {doc.w} × {doc.h} px · {layers.filter((layer) => layer.depth === 0).length}{' '}
               {layers.filter((layer) => layer.depth === 0).length === 1 ? 'object' : 'objects'}
-            </span>
-            <span className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1">
-                <span className="size-1.5 rounded-full bg-ok" />
-                Autosaved
-              </span>
-              <span className="hidden sm:inline">Space = pan · Shift+click = multi-select</span>
             </span>
           </div>
         </div>
@@ -1730,7 +1815,7 @@ export function VectorPage() {
               <span>
                 {doc.w} × {doc.h}
               </span>
-              <span>{previewBytes ? `${Math.max(1, Math.round(previewBytes / 1024))} KB` : '—'}</span>
+              <span>{previewBytes ? `${Math.max(1, Math.round(previewBytes / 1024))} KB` : ''}</span>
             </div>
           </div>
 
@@ -1765,6 +1850,8 @@ export function VectorPage() {
               selectedIds={selectedIds}
               onSelect={(id, additive) => select([id], additive)}
               onToggle={toggleLayer}
+              onRename={renameLayer}
+              onReorder={reorderLayer}
               onDelete={(id) => {
                 const root = svgRef.current;
                 const el = root?.querySelector<SVGElement>(`[id="${id}"]`);
@@ -1821,9 +1908,6 @@ export function VectorPage() {
                       ))}
                     </div>
                   </div>
-                  <p className="px-1 text-2xs leading-relaxed text-ink-faint">
-                    Nothing selected. Draw a shape, drop an SVG, or add an element from the Elements tab.
-                  </p>
                 </div>
               )}
 
@@ -2022,6 +2106,29 @@ export function VectorPage() {
                       </div>
                     </div>
                   )}
+
+                  <div>
+                    <div className="mb-1 text-2xs font-semibold tracking-[0.12em] text-ink-faint uppercase">Transform</div>
+                    <div className="flex gap-1">
+                      {[
+                        { icon: 'flip_h' as StudioIconName, label: 'Flip horizontal', run: () => flipSelection('x') },
+                        { icon: 'flip_v' as StudioIconName, label: 'Flip vertical', run: () => flipSelection('y') },
+                        { icon: 'centre' as StudioIconName, label: 'Centre on canvas', run: centreOnCanvas },
+                        { icon: 'copy' as StudioIconName, label: 'Duplicate', run: duplicateSelection },
+                      ].map((item) => (
+                        <button
+                          key={item.label}
+                          type="button"
+                          onClick={item.run}
+                          title={item.label}
+                          aria-label={item.label}
+                          className="flex h-7 flex-1 items-center justify-center rounded-[var(--r-xs)] border border-line text-ink-muted hover:border-brand hover:text-ink"
+                        >
+                          <StudioIcon name={item.icon} size={14} />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
                   <div>
                     <div className="mb-1 text-2xs font-semibold tracking-[0.12em] text-ink-faint uppercase">Align</div>

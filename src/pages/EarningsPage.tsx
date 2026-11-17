@@ -52,7 +52,7 @@ export function EarningsPage() {
   const onFileText = (text: string) => {
     const result = parseDelimited(text);
     if (result.headers.length < 2) {
-      toast.error('Could not parse', 'No header row detected — is this a CSV export from the portal?');
+      toast.error('Could not parse', 'No header row detected. Use a CSV export from the portal.');
       return;
     }
     setParsed(result);
@@ -65,7 +65,7 @@ export function EarningsPage() {
     if (!parsed || !mapping) return;
     const mapped = mapRows(parsed.rows, parsed.headers, mapping, platform);
     if (mapped.length === 0) {
-      toast.error('Nothing mapped', 'Check the column assignment — date or earnings column is missing.');
+      toast.error('Nothing mapped', 'Check the column assignment. Date or earnings column is missing.');
       return;
     }
     const existingIds = new Set(sales.map((s) => s.id));
@@ -145,7 +145,7 @@ export function EarningsPage() {
           <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {(Object.keys(mapping) as (keyof ColumnMapping)[]).map((key) => (
               <Field key={key} label={key}>
-                <Select value={mapping[key]} onChange={(e) => setMapping({ ...mapping, [key]: e.target.value })} options={[{ value: '', label: '— skip —' }, ...parsed!.headers.map((h) => ({ value: h, label: h }))]} />
+                <Select value={mapping[key]} onChange={(e) => setMapping({ ...mapping, [key]: e.target.value })} options={[{ value: '', label: 'Skip' }, ...parsed!.headers.map((h) => ({ value: h, label: h }))]} />
               </Field>
             ))}
           </div>

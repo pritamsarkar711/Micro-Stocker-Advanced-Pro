@@ -33,10 +33,10 @@ interface CheckItem {
 
 const SEVERITY_ORDER: Record<Severity, number> = { error: 0, warn: 1, info: 2 };
 
-const VERDICT_META: Record<Verdict, { label: string; tone: 'ok' | 'warn' | 'danger'; icon: 'check_circle' | 'error' | 'warning' }> = {
+const VERDICT_META: Record<Verdict, { label: string; tone: 'ok' | 'warn' | 'danger'; icon: 'check_circle' | 'cancel' | 'info' }> = {
   ready: { label: 'Ready', tone: 'ok', icon: 'check_circle' },
-  review: { label: 'Review', tone: 'warn', icon: 'warning' },
-  reject: { label: 'At risk', tone: 'danger', icon: 'error' },
+  review: { label: 'Review', tone: 'warn', icon: 'info' },
+  reject: { label: 'At risk', tone: 'danger', icon: 'cancel' },
 };
 
 const readText = (file: File) => file.text();
@@ -209,7 +209,7 @@ export function QualityPage() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  icon={<GIcon name="delete_sweep" size={16} />}
+                  icon={<GIcon name="delete" size={16} />}
                   onClick={() => setChecks([])}
                 >
                   Clear
@@ -249,16 +249,8 @@ export function QualityPage() {
             <GIcon name="fact_check" size={26} />
           </span>
           <div>
-            <div className="text-[0.9375rem] font-semibold text-ink">Drop artwork to check it</div>
-            <div className="mt-1 text-[0.8125rem] text-ink-muted">
-              JPG, PNG, WebP, AVIF, SVG, EPS and AI · checks editability, sharpness, size and duplicates
-            </div>
-          </div>
-          <div className="flex flex-wrap justify-center gap-1.5 text-[0.6875rem] text-ink-faint">
-            <span className="rounded-[var(--r-chip)] border border-line px-2 py-1">Vector editability</span>
-            <span className="rounded-[var(--r-chip)] border border-line px-2 py-1">Blur &amp; noise</span>
-            <span className="rounded-[var(--r-chip)] border border-line px-2 py-1">Near-duplicates</span>
-            <span className="rounded-[var(--r-chip)] border border-line px-2 py-1">Per-agency limits</span>
+            <div className="text-[0.9375rem] font-semibold text-ink">Drop files</div>
+            <div className="mt-1 text-[0.8125rem] text-ink-muted">JPG, PNG, WebP, AVIF, SVG, EPS</div>
           </div>
         </div>
       ) : (
@@ -267,9 +259,9 @@ export function QualityPage() {
             <span className="text-[0.8125rem] font-medium text-ink">
               {summary.total} file{summary.total === 1 ? '' : 's'}
             </span>
-            <Badge tone="ok" icon="check_circle">{summary.ready} ready</Badge>
-            <Badge tone="warn" icon="warning">{summary.review} to review</Badge>
-            <Badge tone="danger" icon="error">{summary.risk} at risk</Badge>
+            <Badge tone="ok" icon={<GIcon name="check_circle" size={13} />}>{summary.ready} ready</Badge>
+            <Badge tone="warn" icon={<GIcon name="info" size={13} />}>{summary.review} to review</Badge>
+            <Badge tone="danger" icon={<GIcon name="cancel" size={13} />}>{summary.risk} at risk</Badge>
             {busy && <span className="text-[0.75rem] text-ink-faint">analysing…</span>}
           </div>
 
@@ -311,7 +303,7 @@ export function QualityPage() {
                     </div>
                     {report && meta && (
                       <div className="flex items-center gap-3">
-                        <Badge tone={meta.tone} icon={meta.icon}>
+                        <Badge tone={meta.tone} icon={<GIcon name={meta.icon} size={13} />}>
                           {meta.label}
                         </Badge>
                         <ScoreRing score={report.score} verdict={report.verdict} />
@@ -339,7 +331,7 @@ export function QualityPage() {
                                 )}
                               >
                                 <GIcon
-                                  name={issue.severity === 'error' ? 'error' : issue.severity === 'warn' ? 'warning' : 'check_circle'}
+                                  name={issue.severity === 'error' ? 'cancel' : issue.severity === 'warn' ? 'info' : 'check_circle'}
                                   size={13}
                                 />
                               </span>
@@ -374,7 +366,7 @@ export function QualityPage() {
                               {report.platforms.map((platform) => (
                                 <li key={platform.id as PlatformId} className="flex items-center gap-2 text-[0.75rem]">
                                   <GIcon
-                                    name={platform.ok ? 'check_circle' : 'error'}
+                                    name={platform.ok ? 'check_circle' : 'cancel'}
                                     size={14}
                                     className={platform.ok ? 'text-ok' : 'text-danger'}
                                   />

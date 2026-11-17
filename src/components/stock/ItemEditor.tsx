@@ -189,7 +189,7 @@ export function ItemEditor({ item, onClose }: ItemEditorProps) {
             size="sm"
             variant="primary"
             loading={generating}
-            icon={<GIcon name="auto_fix_high" size={15} />}
+            icon={<GIcon name="brush" size={15} />}
             onClick={() => void handleGenerate()}
           >
             Generate metadata

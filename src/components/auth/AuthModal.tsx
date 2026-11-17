@@ -12,7 +12,7 @@ import { date } from '@/lib/format';
 import { AuthForm } from './AuthForm';
 
 export function AuthModal() {
-  const { user, modalOpen, closeAuth, updateDisplayName, logout } = useAuth();
+  const { user, modalOpen, closeAuth, updateDisplayName, logout, mfaRequired } = useAuth();
   const { premium, isAdmin, expiresAt } = useLicense();
   const toast = useToast();
   const [editName, setEditName] = useState('');
@@ -24,7 +24,7 @@ export function AuthModal() {
 
   if (!user) {
     return (
-      <Modal open={modalOpen} onClose={closeAuth} title="Account" size="sm">
+      <Modal open={modalOpen} onClose={closeAuth} title={mfaRequired ? 'Two step verification' : 'Account'} size="sm">
         <AuthForm compact onDone={closeAuth} />
       </Modal>
     );
@@ -76,7 +76,7 @@ export function AuthModal() {
           <div className="rounded-[var(--r-control)] border border-line p-2.5">
             <div className="text-ink-faint">Plan expires</div>
             <div className="mt-0.5 font-semibold text-ink">
-              {isAdmin ? 'Never' : expiresAt ? date(expiresAt) : '—'}
+              {isAdmin ? 'Never' : expiresAt ? date(expiresAt) : 'Not set'}
             </div>
           </div>
         </div>

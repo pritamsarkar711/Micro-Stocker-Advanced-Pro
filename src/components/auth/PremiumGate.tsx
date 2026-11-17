@@ -33,7 +33,7 @@ export function PremiumGate({ children }: { children: ReactNode }) {
         <div className="space-y-5 p-6">
           {error && (
             <div className="flex items-start gap-2.5 rounded-[var(--r-control)] border border-danger/30 bg-danger-soft px-3 py-2.5 text-[0.8125rem] text-danger">
-              <GIcon name="warning" size={18} className="mt-0.5" />
+              <GIcon name="info" size={18} className="mt-0.5" />
               <div>
                 <p className="font-semibold">We could not verify your plan.</p>
                 <p className="mt-0.5 opacity-90">{error}</p>

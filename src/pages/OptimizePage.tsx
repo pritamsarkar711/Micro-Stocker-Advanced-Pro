@@ -173,7 +173,7 @@ export function OptimizePage() {
             : format;
 
         const maxLongEdge = Number(longEdge) || 0;
-        const result = await optimizeRaster(
+        let result = await optimizeRaster(
           raster,
           {
             format: targetFormat,
@@ -184,6 +184,21 @@ export function OptimizePage() {
           },
           (r, q) => encodeRaster({ width: r.width, height: r.height, data: r.data } as never, targetFormat, q),
         );
+
+        // If the first pass grew the file, try a lower quality before giving up.
+        if (
+          mode !== 'target' &&
+          result.bytes.byteLength >= item.before &&
+          targetFormat === sourceFormat &&
+          !result.resized
+        ) {
+          const retry = await optimizeRaster(
+            raster,
+            { format: targetFormat, quality: 0.7, maxLongEdge, qualityFloor: 0.5 },
+            (r, q) => encodeRaster({ width: r.width, height: r.height, data: r.data } as never, targetFormat, q),
+          );
+          if (retry.bytes.byteLength < result.bytes.byteLength) result = retry;
+        }
 
         // Never hand back something larger than the original.
         if (result.bytes.byteLength >= item.before && targetFormat === sourceFormat && !result.resized) {
@@ -343,7 +358,7 @@ export function OptimizePage() {
             )}
             {mode === 'auto' && (
               <p className="mt-1.5 text-[0.75rem] text-ink-muted">
-                Encodes at the format’s visually lossless sweet spot.
+                Visually lossless.
               </p>
             )}
           </Field>
@@ -369,12 +384,12 @@ export function OptimizePage() {
           </label>
 
           <div className="flex gap-2 pt-1">
-            <Button className="flex-1" onClick={() => void run()} disabled={!queue.length || running} icon={<GIcon name="bolt" size={16} />}>
+            <Button className="flex-1" onClick={() => void run()} disabled={!queue.length || running} icon={<GIcon name="play_arrow" size={16} />}>
               {running ? 'Optimizing…' : 'Optimize'}
             </Button>
             {queue.length > 0 && (
               <Button variant="ghost" onClick={clearAll} aria-label="Clear queue">
-                <GIcon name="delete_sweep" size={16} />
+                <GIcon name="delete" size={16} />
               </Button>
             )}
           </div>
@@ -395,16 +410,14 @@ export function OptimizePage() {
                 <GIcon name="compress" size={26} />
               </span>
               <div>
-                <div className="text-[0.9375rem] font-semibold text-ink">Drop images to shrink them</div>
-                <div className="mt-1 text-[0.8125rem] text-ink-muted">
-                  · no visible quality loss · upscaled files come back to their real detail level
-                </div>
+                <div className="text-[0.9375rem] font-semibold text-ink">Drop images</div>
+                <div className="mt-1 text-[0.8125rem] text-ink-muted">JPG, PNG, WebP, AVIF</div>
               </div>
             </div>
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-2">
-                <Badge tone="brand" icon="compress">
+                <Badge tone="brand" icon={<GIcon name="compress" size={13} />}>
                   {totals.percent}% smaller
                 </Badge>
                 <span className="text-[0.8125rem] text-ink-muted">
@@ -450,7 +463,7 @@ export function OptimizePage() {
                       </div>
                       {item.status === 'done' && item.after !== undefined && (
                         <Badge tone={percent > 0 ? 'ok' : 'neutral'} size="sm">
-                          {percent > 0 ? `−${percent}%` : 'already tight'}
+                          {percent > 0 ? `-${percent}%` : 'already tight'}
                         </Badge>
                       )}
                       {item.status === 'done' && item.outUrl && item.outName && (

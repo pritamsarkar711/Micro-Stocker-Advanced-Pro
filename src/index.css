@@ -1,27 +1,52 @@
 @import 'tailwindcss';
 
 /* ==================================================================== */
-/*  Typography — Plus Jakarta Sans (variable, self-hosted)              */
-/*  A geometric humanist grotesque with a tall x-height and a friendly   */
-/*  editorial rhythm: it reads as premium at small UI sizes and still    */
-/*  feels designed at display sizes. One 200–800 variable file covers    */
-/*  every weight, so the whole app ships ~50 KB of Latin text.           */
+/*  Typography — IBM Plex Sans (self-hosted, four static weights)        */
+/*  A precise grotesque with engineered details and very clear numerals: */
+/*  it holds up in dense tables, reads calmly in long copy and looks      */
+/*  deliberate at display sizes. Only the weights the interface actually  */
+/*  uses ship (400/500/600/700), Latin and Latin Extended.               */
 /* ==================================================================== */
 @font-face {
-  font-family: 'Plus Jakarta Sans';
-  src: url('./assets/fonts/jakarta-latin.woff2') format('woff2-variations'),
-       url('./assets/fonts/jakarta-latin.woff2') format('woff2');
-  font-weight: 200 800;
+  font-family: 'IBM Plex Sans';
+  src: url('./assets/fonts/plex-latin-400.woff2') format('woff2');
+  font-weight: 400;
   font-style: normal;
   font-display: swap;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
     U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: 'Plus Jakarta Sans';
-  src: url('./assets/fonts/jakarta-latin-ext.woff2') format('woff2-variations'),
-       url('./assets/fonts/jakarta-latin-ext.woff2') format('woff2');
-  font-weight: 200 800;
+  font-family: 'IBM Plex Sans';
+  src: url('./assets/fonts/plex-latin-500.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('./assets/fonts/plex-latin-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('./assets/fonts/plex-latin-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('./assets/fonts/plex-latin-ext-400.woff2') format('woff2');
+  font-weight: 400;
   font-style: normal;
   font-display: swap;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
@@ -29,25 +54,47 @@
     U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: 'Plus Jakarta Sans';
-  src: url('./assets/fonts/jakarta-italic.woff2') format('woff2-variations'),
-       url('./assets/fonts/jakarta-italic.woff2') format('woff2');
-  font-weight: 200 800;
-  font-style: italic;
+  font-family: 'IBM Plex Sans';
+  src: url('./assets/fonts/plex-latin-ext-500.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
   font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('./assets/fonts/plex-latin-ext-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('./assets/fonts/plex-latin-ext-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
 }
 
-/* Currency glyph fallbacks: Jakarta has no Taka or Rupee sign, so two tiny
-   Noto subsets fill exactly those code points and nothing else. */
+/* Currency fallbacks: IBM Plex Sans has Rupee but no Taka, so two tiny Noto
+   subsets cover exactly those code points and nothing else. */
 @font-face {
-  font-family: 'Plus Jakarta Currency';
+  font-family: 'Plex Currency';
   src: url('./assets/fonts/currency-taka.woff2') format('woff2');
   unicode-range: U+09F3;
   font-weight: 100 900;
   font-display: swap;
 }
 @font-face {
-  font-family: 'Plus Jakarta Currency';
+  font-family: 'Plex Currency';
   src: url('./assets/fonts/currency-rupee.woff2') format('woff2');
   unicode-range: U+20B9;
   font-weight: 100 900;
@@ -97,10 +144,12 @@
   --secondary-soft: #f8e6ee;
   --secondary-fg: #6d163c;
 
-  --ok: #1c6a3c;
-  --ok-soft: #e6f4ea;
-  --warn: #8a5a00;
-  --warn-soft: #fdf3e2;
+  /* Status tones stay inside the pink/plum family so the product reads as one
+     palette. "Attention" is plum, destructive keeps a red that is not green. */
+  --ok: #a3124c;
+  --ok-soft: #fce8f0;
+  --warn: #7b1a45;
+  --warn-soft: #f8e6ee;
   --danger: #b3261e;
   --danger-soft: #fdeeed;
 
@@ -178,10 +227,10 @@
   --secondary-soft: #2c1520;
   --secondary-fg: #f7bfd2;
 
-  --ok: #58c07c;
-  --ok-soft: #16281c;
-  --warn: #e0b25c;
-  --warn-soft: #2a2317;
+  --ok: #f7a1bd;
+  --ok-soft: #35141f;
+  --warn: #e08bab;
+  --warn-soft: #2c1520;
   --danger: #f08b85;
   --danger-soft: #2e1918;
 
@@ -250,8 +299,8 @@ html.theme-switching *::after {
   --text-2xs: 0.75rem;
   --text-2xs--line-height: 1.05rem;
 
-  --font-sans: 'Plus Jakarta Sans', 'Plus Jakarta Currency', 'Segoe UI', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-display: 'Plus Jakarta Sans', 'Plus Jakarta Currency', 'Segoe UI', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-sans: 'IBM Plex Sans', 'Plex Currency', 'Segoe UI', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: 'IBM Plex Sans', 'Plex Currency', 'Segoe UI', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', 'Roboto Mono', Menlo, Consolas, monospace;
 
   --radius-card: var(--r-card);

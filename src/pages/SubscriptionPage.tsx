@@ -63,13 +63,13 @@ export function SubscriptionPage() {
               <div>
                 <div className="opacity-75">Expires</div>
                 <div className="mt-0.5 font-semibold">
-                  {isAdmin ? 'Never' : expiresAt ? dateTime(expiresAt) : '—'}
+                  {isAdmin ? 'Never' : expiresAt ? dateTime(expiresAt) : 'Not set'}
                 </div>
               </div>
               <div>
                 <div className="opacity-75">Time left</div>
                 <div className="mt-0.5 font-semibold">
-                  {loading ? 'Checking…' : isAdmin ? 'Unlimited' : remainingMs > 0 ? countdown(remainingMs) : '—'}
+                  {loading ? 'Checking…' : isAdmin ? 'Unlimited' : remainingMs > 0 ? countdown(remainingMs) : 'Not set'}
                 </div>
               </div>
             </div>
@@ -78,7 +78,7 @@ export function SubscriptionPage() {
           <div className="space-y-3 p-5">
             {error && (
               <div className="flex items-start gap-2 rounded-[var(--r-control)] border border-danger/30 bg-danger-soft px-3 py-2 text-[0.8125rem] text-danger">
-                <GIcon name="warning" size={17} className="mt-0.5" />
+                <GIcon name="info" size={17} className="mt-0.5" />
                 <span>{error}</span>
               </div>
             )}
@@ -94,13 +94,13 @@ export function SubscriptionPage() {
               {isAdmin
                 ? 'Administrator accounts have unrestricted access and can issue codes from the admin console.'
                 : premium
-                  ? 'Add another code at any time — remaining time is kept and new time is added on top.'
+                  ? 'Add another code at any time. Remaining time is kept and new time is added on top.'
                   : 'Enter the code from your administrator to unlock every tool.'}
             </p>
             <div className="flex flex-wrap gap-2 pt-1">
               {isAdmin && (
                 <Link to="/admin">
-                  <Button size="sm" icon={<GIcon name="admin_panel_settings" size={18} />}>
+                  <Button size="sm" icon={<GIcon name="settings" size={18} />}>
                     Admin console
                   </Button>
                 </Link>

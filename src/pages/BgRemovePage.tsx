@@ -469,7 +469,7 @@ export function BgRemovePage() {
               <span className="inline-flex size-10 items-center justify-center rounded-[var(--r-control)] bg-accent-soft text-accent">
                 <GIcon name="content_cut" size={22} />
               </span>
-              <div className="text-sm font-semibold text-ink">Drop photos, products or illustrations</div>
+              <div className="text-sm font-semibold text-ink">Drop images</div>
               <div className="text-xs text-ink-muted">
                 Export transparent PNG, WebP or pure white stock JPG cutouts
               </div>
@@ -500,7 +500,7 @@ export function BgRemovePage() {
                     <Button
                       size="xs"
                       variant="ghost"
-                      icon={<GIcon name="delete_sweep" size={14} />}
+                      icon={<GIcon name="delete" size={14} />}
                       onClick={clearQueue}
                     >
                       Clear

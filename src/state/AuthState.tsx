@@ -198,6 +198,19 @@ export interface RegisterResult {
   user?: UserSession;
 }
 
+export interface MfaFactor {
+  id: string;
+  friendlyName: string;
+  createdAt: string;
+}
+
+export interface MfaEnrollment {
+  factorId: string;
+  secret: string;
+  qr: string | null;
+  uri: string | null;
+}
+
 interface AuthState {
   ready: boolean;
   user: UserSession | null;
@@ -209,19 +222,32 @@ interface AuthState {
   notice: AuthNotice | null;
   /** True when the user arrived from a password-recovery link. */
   recovery: boolean;
+  /** Signed in with a password but still needs the authenticator code. */
+  mfaRequired: boolean;
+  /** Verified authenticator factor on this account, if any. */
+  mfaFactor: MfaFactor | null;
   openAuth: (mode?: AuthModalMode) => void;
   closeAuth: () => void;
   setPendingEmail: (email: string | null) => void;
   clearNotice: () => void;
   dismissRecovery: () => void;
   register: (email: string, password: string, displayName?: string) => Promise<RegisterResult>;
-  login: (email: string, password: string) => Promise<{ ok: boolean; error?: string; user?: UserSession }>;
+  login: (email: string, password: string) => Promise<{ ok: boolean; error?: string; user?: UserSession; mfaRequired?: boolean }>;
   verifyEmailOtp: (email: string, token: string) => Promise<{ ok: boolean; error?: string }>;
   resendVerification: (email: string) => Promise<{ ok: boolean; error?: string }>;
   requestPasswordReset: (email: string) => Promise<{ ok: boolean; error?: string }>;
   updatePassword: (password: string) => Promise<{ ok: boolean; error?: string }>;
+  /** Confirm the current password, then set a new one. */
+  changePassword: (current: string, next: string) => Promise<{ ok: boolean; error?: string }>;
   updateDisplayName: (name: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Ends every session for this account, including other devices. */
+  signOutEverywhere: () => Promise<{ ok: boolean; error?: string }>;
+  refreshMfa: () => Promise<void>;
+  enrollTotp: (friendlyName?: string) => Promise<{ ok: boolean; error?: string; enrollment?: MfaEnrollment }>;
+  confirmTotp: (factorId: string, code: string) => Promise<{ ok: boolean; error?: string }>;
+  disableTotp: (factorId: string) => Promise<{ ok: boolean; error?: string }>;
+  verifyMfaCode: (code: string) => Promise<{ ok: boolean; error?: string }>;
   deleteAccount: () => Promise<void>;
 }
 
@@ -282,12 +308,18 @@ export function friendlyAuthError(raw: string | undefined | null): string {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
-  const [user, setUser] = useState<UserSession | null>(null);
+  const [sessionUser, setSessionUser] = useState<UserSession | null>(null);
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaFactor, setMfaFactor] = useState<MfaFactor | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<AuthModalMode>('login');
   const [pendingEmail, setPendingEmailState] = useState<string | null>(null);
   const [notice, setNotice] = useState<AuthNotice | null>(null);
   const [recovery, setRecovery] = useState(false);
+
+  // While the authenticator challenge is pending the app stays signed out, so
+  // every gate and route keeps its normal unauthenticated behaviour.
+  const user = mfaRequired ? null : sessionUser;
 
   useEffect(() => {
     const client = licensingClient();
@@ -316,8 +348,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const refresh = async () => {
       const revision = ++authRevision;
       const { data, error } = await client.auth.getUser();
+      let needsMfa = false;
+      if (!error && data.user) {
+        try {
+          const assurance = await client.auth.mfa.getAuthenticatorAssuranceLevel();
+          needsMfa = Boolean(
+            assurance.data && assurance.data.nextLevel === 'aal2' && assurance.data.currentLevel !== 'aal2',
+          );
+        } catch {
+          needsMfa = false;
+        }
+      }
       if (active && revision === authRevision) {
-        setUser(!error && data.user ? toUser(data.user) : null);
+        setSessionUser(!error && data.user ? toUser(data.user) : null);
+        setMfaRequired(needsMfa);
         setReady(true);
       }
     };
@@ -327,7 +371,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === 'SIGNED_OUT') {
         ++authRevision;
         if (active) {
-          setUser(null);
+          setSessionUser(null);
           setReady(true);
         }
       } else if (event === 'PASSWORD_RECOVERY') {
@@ -335,7 +379,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (active) {
           setRecovery(true);
           setReady(true);
-          if (session?.user) setUser(toUser(session.user));
+          if (session?.user) setSessionUser(toUser(session.user));
         }
       } else if (event !== 'INITIAL_SESSION') {
         ++authRevision;
@@ -396,7 +440,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { ok: false, error: 'Unable to verify your session. Please sign in.' };
     }
     const session = toUser(verified.data.user);
-    setUser(session);
+    setSessionUser(session);
     return { ok: true, user: session };
   }, []);
 
@@ -417,9 +461,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { ok: false, error: 'Unable to verify your session. Please try again.' };
     }
     const session = toUser(verified.data.user);
-    setUser(session);
+    setSessionUser(session);
     setPendingEmailState(null);
-    return { ok: true, user: session };
+    let needsMfa = false;
+    try {
+      const assurance = await client.auth.mfa.getAuthenticatorAssuranceLevel();
+      needsMfa = Boolean(
+        assurance.data && assurance.data.nextLevel === 'aal2' && assurance.data.currentLevel !== 'aal2',
+      );
+    } catch {
+      needsMfa = false;
+    }
+    setMfaRequired(needsMfa);
+    return { ok: true, user: session, mfaRequired: needsMfa };
   }, []);
 
   const verifyEmailOtp = useCallback<AuthState['verifyEmailOtp']>(async (email, token) => {
@@ -435,7 +489,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (verified.error || !verified.data.user) {
       return { ok: true };
     }
-    setUser(toUser(verified.data.user));
+    setSessionUser(toUser(verified.data.user));
     setPendingEmailState(null);
     return { ok: true };
   }, []);
@@ -480,15 +534,135 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!client || !name.trim()) return;
     const { data, error } = await client.auth.updateUser({ data: { display_name: name.trim().slice(0, 60) } });
     if (error) throw error;
-    if (data.user) setUser(toUser(data.user));
+    if (data.user) setSessionUser(toUser(data.user));
   }, []);
 
   const logout = useCallback(async () => {
     const client = licensingClient();
     if (client) await client.auth.signOut();
-    setUser(null);
+    setSessionUser(null);
     setPendingEmailState(null);
+    setMfaRequired(false);
+    setMfaFactor(null);
   }, []);
+
+  const signOutEverywhere = useCallback<AuthState['signOutEverywhere']>(async () => {
+    const client = licensingClient();
+    if (!client) return { ok: false, error: 'Licensing service unavailable.' };
+    const { error } = await client.auth.signOut({ scope: 'global' });
+    if (error) return { ok: false, error: friendlyAuthError(error.message) };
+    setSessionUser(null);
+    setPendingEmailState(null);
+    setMfaRequired(false);
+    setMfaFactor(null);
+    return { ok: true };
+  }, []);
+
+  const changePassword = useCallback<AuthState['changePassword']>(async (current, next) => {
+    const client = licensingClient();
+    if (!client) return { ok: false, error: 'Licensing service unavailable.' };
+    const email = sessionUser?.email;
+    if (!email) return { ok: false, error: 'Sign in again to change your password.' };
+    if (!current) return { ok: false, error: 'Enter your current password.' };
+    if (next.length < 8) return { ok: false, error: 'New password must be at least 8 characters.' };
+    if (next.length > 128) return { ok: false, error: 'New password must be 128 characters or fewer.' };
+    if (next === current) return { ok: false, error: 'Choose a password you have not used here.' };
+    const reauth = await client.auth.signInWithPassword({ email, password: current });
+    if (reauth.error) return { ok: false, error: 'Current password is incorrect.' };
+    const { error } = await client.auth.updateUser({ password: next });
+    if (error) return { ok: false, error: friendlyAuthError(error.message) };
+    return { ok: true };
+  }, [sessionUser?.email]);
+
+  const refreshMfa = useCallback<AuthState['refreshMfa']>(async () => {
+    const client = licensingClient();
+    if (!client) return;
+    try {
+      const { data } = await client.auth.mfa.listFactors();
+      const totp = data?.totp ?? [];
+      const verified = totp.find((factor) => factor.status === 'verified');
+      setMfaFactor(
+        verified
+          ? { id: verified.id, friendlyName: verified.friendly_name ?? 'Authenticator app', createdAt: verified.created_at }
+          : null,
+      );
+    } catch {
+      setMfaFactor(null);
+    }
+  }, []);
+
+  const enrollTotp = useCallback<AuthState['enrollTotp']>(async (friendlyName) => {
+    const client = licensingClient();
+    if (!client) return { ok: false, error: 'Licensing service unavailable.' };
+    const { data, error } = await client.auth.mfa.enroll({
+      factorType: 'totp',
+      friendlyName: friendlyName?.trim() || 'Authentication app',
+    });
+    if (error || !data) return { ok: false, error: friendlyAuthError(error?.message ?? 'Could not start setup.') };
+    const totp = data.totp;
+    return {
+      ok: true,
+      enrollment: {
+        factorId: data.id,
+        secret: totp.secret,
+        qr: totp.qr_code || null,
+        uri: totp.uri || null,
+      },
+    };
+  }, []);
+
+  const confirmTotp = useCallback<AuthState['confirmTotp']>(async (factorId, code) => {
+    const client = licensingClient();
+    if (!client) return { ok: false, error: 'Licensing service unavailable.' };
+    const clean = code.replace(/\D/g, '');
+    if (clean.length !== 6) return { ok: false, error: 'Enter the 6 digit code from the app.' };
+    const challenge = await client.auth.mfa.challenge({ factorId });
+    if (challenge.error || !challenge.data) {
+      return { ok: false, error: friendlyAuthError(challenge.error?.message ?? 'Could not verify the code.') };
+    }
+    const verify = await client.auth.mfa.verify({ factorId, challengeId: challenge.data.id, code: clean });
+    if (verify.error) return { ok: false, error: friendlyAuthError(verify.error.message) };
+    await refreshMfa();
+    return { ok: true };
+  }, [refreshMfa]);
+
+  const verifyMfaCode = useCallback<AuthState['verifyMfaCode']>(async (code) => {
+    const client = licensingClient();
+    if (!client) return { ok: false, error: 'Licensing service unavailable.' };
+    const clean = code.replace(/\D/g, '');
+    if (clean.length !== 6) return { ok: false, error: 'Enter the 6 digit code from the app.' };
+    const { data: factors } = await client.auth.mfa.listFactors();
+    const factor = factors?.totp?.find((item) => item.status === 'verified');
+    if (!factor) {
+      setMfaRequired(false);
+      return { ok: true };
+    }
+    const challenge = await client.auth.mfa.challenge({ factorId: factor.id });
+    if (challenge.error || !challenge.data) {
+      return { ok: false, error: friendlyAuthError(challenge.error?.message ?? 'Could not verify the code.') };
+    }
+    const verify = await client.auth.mfa.verify({ factorId: factor.id, challengeId: challenge.data.id, code: clean });
+    if (verify.error) return { ok: false, error: 'That code is not valid. Try the next one.' };
+    setMfaRequired(false);
+    const current = await client.auth.getUser();
+    if (!current.error && current.data.user) setSessionUser(toUser(current.data.user));
+    return { ok: true };
+  }, []);
+
+  const disableTotp = useCallback<AuthState['disableTotp']>(async (factorId) => {
+    const client = licensingClient();
+    if (!client) return { ok: false, error: 'Licensing service unavailable.' };
+    const { error } = await client.auth.mfa.unenroll({ factorId });
+    if (error) return { ok: false, error: friendlyAuthError(error.message) };
+    setMfaFactor(null);
+    return { ok: true };
+  }, []);
+
+  // Keep the factor badge in sync with the signed-in account.
+  useEffect(() => {
+    if (sessionUser) void refreshMfa();
+    else setMfaFactor(null);
+  }, [refreshMfa, sessionUser]);
 
   const deleteAccount = useCallback(async () => {
     // Account deletion requires an administrative endpoint; never claim a local
@@ -505,6 +679,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       pendingEmail,
       notice,
       recovery,
+      mfaRequired,
+      mfaFactor,
       openAuth,
       closeAuth,
       setPendingEmail,
@@ -516,8 +692,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resendVerification,
       requestPasswordReset,
       updatePassword,
+      changePassword,
       updateDisplayName,
       logout,
+      signOutEverywhere,
+      refreshMfa,
+      enrollTotp,
+      confirmTotp,
+      disableTotp,
+      verifyMfaCode,
       deleteAccount,
     }),
     [
@@ -528,6 +711,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       pendingEmail,
       notice,
       recovery,
+      mfaRequired,
+      mfaFactor,
       openAuth,
       closeAuth,
       setPendingEmail,
@@ -539,8 +724,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resendVerification,
       requestPasswordReset,
       updatePassword,
+      changePassword,
       updateDisplayName,
       logout,
+      signOutEverywhere,
+      refreshMfa,
+      enrollTotp,
+      confirmTotp,
+      disableTotp,
+      verifyMfaCode,
       deleteAccount,
     ],
   );

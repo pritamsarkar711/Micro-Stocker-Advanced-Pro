@@ -472,7 +472,7 @@ export function VideoUpscalePage() {
               <span className="inline-flex size-10 items-center justify-center rounded-[var(--r-control)] bg-accent-soft text-accent">
                 <GIcon name="videocam" size={22} />
               </span>
-              <div className="text-sm font-semibold text-ink">Drop videos or click to import</div>
+              <div className="text-sm font-semibold text-ink">Drop videos</div>
               <div className="text-xs text-ink-muted">MP4, MOV, WebM and MKV clips supported</div>
             </div>
           )}

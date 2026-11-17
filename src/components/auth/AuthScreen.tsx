@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { Logo } from '@/components/layout/Logo';
 import { GIcon } from '@/components/ui/GoogleIcon';
-import { AuthForm } from './AuthForm';
+import { AuthForm, type AuthView } from './AuthForm';
 import { demoMode } from '@/lib/cloud/demo';
+import { useAuth } from '@/state/AuthState';
 
 const HIGHLIGHTS = [
   { icon: 'smart_toy' as const, title: 'AI metadata', copy: 'Titles, keywords and categories for 14 marketplaces.' },
@@ -14,6 +16,9 @@ const HIGHLIGHTS = [
  * proper place for verification codes, resend actions and password recovery.
  */
 export function AuthScreen() {
+  const { mfaRequired } = useAuth();
+  const [view, setView] = useState<AuthView>('signin');
+  const showIntro = !mfaRequired && (view === 'signin' || view === 'create');
   return (
     <div className="flex min-h-dvh flex-col bg-bg lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
       {/* Brand panel */}
@@ -26,7 +31,7 @@ export function AuthScreen() {
             <span className="block text-brand">serious stock portfolios.</span>
           </h1>
           <p className="mt-4 max-w-md text-[0.9375rem] leading-relaxed text-ink-muted">
-            One workspace for metadata, export, upscaling and cutouts — on your machine.
+            One workspace for metadata, export, upscaling and cutouts, on your machine.
           </p>
 
           <ul className="mt-8 space-y-4">
@@ -61,14 +66,16 @@ export function AuthScreen() {
           aria-label="Sign in"
           className="w-full max-w-[26rem] rounded-[var(--r-card)] border border-line bg-surface p-5 shadow-[var(--elev-2)] sm:p-7"
         >
-          <div className="mb-4">
-            <h2 className="text-[1.125rem] font-bold text-ink">Welcome back</h2>
-            <p className="mt-0.5 text-[0.8125rem] text-ink-muted">Sign in or create your account.</p>
-          </div>
-          <AuthForm />
+          {showIntro && (
+            <div className="mb-4">
+              <h2 className="text-[1.125rem] font-bold text-ink">Welcome back</h2>
+              <p className="mt-0.5 text-[0.8125rem] text-ink-muted">Sign in or create your account.</p>
+            </div>
+          )}
+          <AuthForm onViewChange={setView} />
         </div>
 
-        {demoMode ? (
+        {demoMode && showIntro ? (
           <div className="mt-5 w-full max-w-[26rem] rounded-[var(--r-card)] border border-line bg-surface-2 px-4 py-3 text-[0.75rem] leading-relaxed text-ink-muted">
             <span className="font-semibold text-ink">Preview build.</span> Sign in with any email and an
             8+ character password. Use <code className="font-mono text-ink">admin@demo.local</code> for the

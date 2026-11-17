@@ -189,7 +189,7 @@ export function analyseSvgFile(text: string, name: string, bytes: number): Quali
       severity: 'error',
       title: 'No editable geometry',
       detail: 'The file contains no paths, shapes or text.',
-      fix: 'Check the export settings — the artwork probably lives on a hidden layer.',
+      fix: 'Check the export settings. The artwork may be on a hidden layer.',
     });
   }
 
@@ -234,6 +234,21 @@ export function analyseSvgFile(text: string, name: string, bytes: number): Quali
       title: 'Very high object count (possible auto-trace)',
       detail: `${m.editableNodes.toLocaleString()} objects. Auto-traced artwork usually fails the quality review.`,
       fix: 'Simplify the trace (fewer nodes, cleaner curves).',
+    });
+  }
+
+  const strokeWidths = Array.from(text.matchAll(/stroke-width\s*=\s*["']([\d.]+)["']/gi))
+    .map((match) => Number.parseFloat(match[1]!))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  const hairlines = strokeWidths.filter((value) => value < 0.75).length;
+  if (hairlines > 0) {
+    score -= 6;
+    issues.push({
+      id: 'svg-hairline',
+      severity: 'warn',
+      title: 'Hairline strokes will break when scaled',
+      detail: `${hairlines} stroke(s) are thinner than 0.75 px. Agencies print vector art at large sizes.`,
+      fix: 'Thicken the strokes or convert them to filled shapes.',
     });
   }
 
@@ -418,6 +433,18 @@ export interface PixelStats {
   /** Fraction of fully transparent pixels. */
   transparent: number;
   meanLuma: number;
+  /** Fraction of near-white pixels (highlight clipping). */
+  clippedHigh: number;
+  /** Fraction of near-black pixels (shadow clipping). */
+  clippedLow: number;
+  /** Colour balance: mean deviation between channels, 0 = neutral. */
+  colourCast: number;
+  /** Fraction of pixels pushed to near-maximum saturation. */
+  overSaturated: number;
+  /** High-frequency grain estimate, roughly 0 to 40. */
+  noise: number;
+  /** Fraction of pixels sitting on a strong edge. */
+  edgeDensity: number;
 }
 
 const luma = (r: number, g: number, b: number) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
@@ -431,36 +458,64 @@ export function measurePixels(data: Uint8ClampedArray, width: number, height: nu
   let clipped = 0;
   let transparent = 0;
   let lumaSum = 0;
+  let clippedHigh = 0;
+  let clippedLow = 0;
+  let castSum = 0;
+  let castCount = 0;
+  let overSaturated = 0;
 
   for (let y = 0; y < h; y += 1) {
     const sy = Math.min(height - 1, y * step);
     for (let x = 0; x < w; x += 1) {
       const sx = Math.min(width - 1, x * step);
       const i = (sy * width + sx) * 4;
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
       const a = data[i + 3];
-      const value = luma(data[i], data[i + 1], data[i + 2]);
+      const value = luma(r, g, b);
       gray[y * w + x] = value;
       lumaSum += value;
       if (a < 8) transparent += 1;
+      if (value <= 2) clippedLow += 1;
+      if (value >= 253) clippedHigh += 1;
       if (value <= 2 || value >= 253) clipped += 1;
+      if (a >= 8) {
+        const hi = Math.max(r, g, b);
+        const lo = Math.min(r, g, b);
+        castSum += hi - lo;
+        castCount += 1;
+        if (hi > 90 && hi - lo > hi * 0.92) overSaturated += 1;
+      }
     }
   }
 
   let sum = 0;
   let sumSq = 0;
   let n = 0;
+  let edges = 0;
+  let noiseSum = 0;
+  let noiseCount = 0;
   for (let y = 1; y < h - 1; y += 1) {
     for (let x = 1; x < w - 1; x += 1) {
       const i = y * w + x;
       const lap =
         4 * gray[i] - gray[i - 1] - gray[i + 1] - gray[i - w] - gray[i + w];
+      const abs = Math.abs(lap);
       sum += lap;
       sumSq += lap * lap;
       n += 1;
+      if (abs > 24) edges += 1;
+      // Grain lives in flat areas; strong edges would drown the measurement.
+      if (abs < 18) {
+        noiseSum += abs;
+        noiseCount += 1;
+      }
     }
   }
   const mean = n ? sum / n : 0;
   const variance = n ? sumSq / n - mean * mean : 0;
+  const opaque = Math.max(1, w * h - transparent);
 
   return {
     width,
@@ -469,6 +524,12 @@ export function measurePixels(data: Uint8ClampedArray, width: number, height: nu
     clipped: clipped / (w * h),
     transparent: transparent / (w * h),
     meanLuma: lumaSum / (w * h),
+    clippedHigh: clippedHigh / (w * h),
+    clippedLow: clippedLow / (w * h),
+    colourCast: castCount ? castSum / castCount / 255 : 0,
+    overSaturated: overSaturated / opaque,
+    noise: noiseCount ? noiseSum / noiseCount : 0,
+    edgeDensity: n ? edges / n : 0,
   };
 }
 
@@ -555,14 +616,89 @@ export function analyseImage(input: ImageQualityInput, libraryHashes: Array<{ na
     });
   }
 
-  if (stats.clipped > 0.06) {
-    score -= 14;
+  if (stats.clippedHigh > 0.08) {
+    score -= 12;
+    issues.push({
+      id: 'img-clipping-high',
+      severity: 'warn',
+      title: 'Blown highlights',
+      detail: `${(stats.clippedHigh * 100).toFixed(1)}% of pixels are pure white and carry no detail.`,
+      fix: 'Pull the highlights back before export.',
+    });
+  } else if (stats.clippedLow > 0.12) {
+    score -= 11;
+    issues.push({
+      id: 'img-clipping-low',
+      severity: 'warn',
+      title: 'Crushed shadows',
+      detail: `${(stats.clippedLow * 100).toFixed(1)}% of pixels are pure black.`,
+      fix: 'Lift the shadows so the image keeps detail at thumbnail size.',
+    });
+  } else if (stats.clipped > 0.06) {
+    score -= 8;
     issues.push({
       id: 'img-clipping',
       severity: 'warn',
-      title: 'Blown highlights or crushed shadows',
-      detail: `${(stats.clipped * 100).toFixed(1)}% of pixels are pure black or pure white.`,
-      fix: 'Recover the highlights/whites before export.',
+      title: 'High contrast clipping',
+      detail: `${(stats.clipped * 100).toFixed(1)}% of pixels sit at pure black or pure white.`,
+      fix: 'Recover the highlights and whites before export.',
+    });
+  }
+
+  const isJpeg = /jpe?g/i.test(input.type) || /\.jpe?g$/i.test(input.name);
+  if (isJpeg && stats.transparent > 0.02) {
+    score -= 20;
+    issues.push({
+      id: 'img-jpeg-alpha',
+      severity: 'error',
+      title: 'Transparency in a JPEG',
+      detail: `${(stats.transparent * 100).toFixed(1)}% of the frame is transparent. JPEG cannot store alpha, so those pixels turn black.`,
+      fix: 'Export a PNG, or flatten the image on a solid background.',
+    });
+  }
+
+  if (stats.colourCast > 0.2) {
+    score -= 10;
+    issues.push({
+      id: 'img-cast',
+      severity: 'warn',
+      title: 'Visible colour cast',
+      detail: `Channels differ by ${Math.round(stats.colourCast * 255)} levels on average, so neutrals are tinted.`,
+      fix: 'Set a neutral white balance and re-check grey areas.',
+    });
+  }
+
+  if (stats.overSaturated > 0.12) {
+    score -= 8;
+    issues.push({
+      id: 'img-saturation',
+      severity: 'warn',
+      title: 'Colour is pushed past the gamut',
+      detail: `${(stats.overSaturated * 100).toFixed(0)}% of pixels are near-maximum saturation and lose separation.`,
+      fix: 'Reduce saturation or vibrance slightly before export.',
+    });
+  }
+
+  if (stats.noise > 11) {
+    score -= 9;
+    issues.push({
+      id: 'img-noise',
+      severity: 'warn',
+      title: 'Visible grain or noise',
+      detail: `Noise index ${stats.noise.toFixed(1)} in flat areas.`,
+      fix: 'Apply light noise reduction or shoot at a lower ISO.',
+    });
+  }
+
+  const bytesPerPixel = bytes / Math.max(1, width * height);
+  if (bytesPerPixel < 0.06) {
+    score -= 9;
+    issues.push({
+      id: 'img-compression',
+      severity: 'warn',
+      title: 'Heavily compressed',
+      detail: `${bytesPerPixel.toFixed(3)} bytes per pixel. Expect blocking and colour banding in smooth areas.`,
+      fix: 'Re-export at a higher quality setting.',
     });
   }
 
@@ -627,7 +763,10 @@ export function analyseImage(input: ImageQualityInput, libraryHashes: Array<{ na
     { label: 'Dimensions', value: `${width} × ${height}` },
     { label: 'Megapixels', value: megapixels.toFixed(1) },
     { label: 'Sharpness', value: stats.sharpness.toFixed(0) },
+    { label: 'Detail', value: `${(stats.edgeDensity * 100).toFixed(1)}%` },
     { label: 'Clipping', value: `${(stats.clipped * 100).toFixed(1)}%` },
+    { label: 'Colour cast', value: `${Math.round(stats.colourCast * 255)}` },
+    { label: 'Noise', value: stats.noise.toFixed(1) },
     { label: 'Transparency', value: `${(stats.transparent * 100).toFixed(0)}%` },
     { label: 'Weight', value: `${(bytes / 1024 / 1024).toFixed(2)} MB` },
   ];

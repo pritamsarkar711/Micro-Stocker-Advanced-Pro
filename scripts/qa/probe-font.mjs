@@ -22,10 +22,10 @@ const info = await page.evaluate(async () => {
   const probe = (family) => { const c = document.createElement('canvas').getContext('2d'); c.font = `40px ${family}`; return c.measureText('Handgloves typography 123').width; };
   return {
     loaded,
-    checkJakarta: document.fonts.check('16px "Plus Jakarta Sans"'),
+    checkPlex: document.fonts.check('16px "IBM Plex Sans"'),
     bodyFont: getComputedStyle(document.body).fontFamily,
     titleFont: getComputedStyle(document.querySelector('h1,h2') ?? document.body).fontFamily,
-    widthJakarta: probe('Plus Jakarta Sans'),
+    widthPlex: probe('IBM Plex Sans'),
     widthArial: probe('Arial'),
     widthSerif: probe('serif'),
   };

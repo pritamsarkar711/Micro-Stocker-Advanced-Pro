@@ -3,6 +3,55 @@
 All notable changes to Micro Stocker Advanced Pro are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.7.0] - 2026-11-17
+
+### Added
+- **Account security in Settings.** Change password with the current password as
+  confirmation, email yourself a reset link, turn two step verification on or
+  off with any TOTP authenticator app (QR code, manual key and 6 digit check),
+  and sign out of every device. The sign-in screen now asks for the
+  authenticator code when a factor is enrolled, and the Forgot password flow
+  produces a recovery link from the same screen. Administrators use the same
+  panel.
+- **A much larger Vector Studio library.** 150 elements across eight categories
+  (shapes, commerce, arrows, frames, icons, interface, nature, people) with
+  instant search, plus two new frames, arrow and interface families.
+- **Real layer management.** Search, in-place rename, drag to restack,
+  Shift+click multi-select, hide and lock, with group counts.
+- **More editing tools.** Flip horizontally or vertically, centre on the canvas,
+  duplicate from the transform row, and copy or paste objects with
+  ⌘/Ctrl+C and ⌘/Ctrl+V.
+- **Deeper quality analysis.** Split highlight and shadow clipping, colour cast,
+  over-saturation, grain, detail density, bytes-per-pixel compression checks,
+  transparency-in-JPEG detection and hairline stroke warnings for vectors.
+- **Smarter optimizer.** A second lower-quality pass and a stepwise long-edge
+  reduction replace the old "give up at the floor" behaviour, so target sizes are
+  met without visible mush.
+
+### Changed
+- **Typeface replaced with IBM Plex Sans** (400, 500, 600 and 700, self-hosted,
+  latin and latin-ext). The currency subsets stay for `৳` and `₹`.
+- **Colour is strictly pink.** Success and attention tones are now pink and plum
+  in both themes; no green remains anywhere in the interface.
+- **No forbidden iconography.** Flash, bolt, thunder, warning, alert, sparkle,
+  shield and magic glyphs are gone from every screen, action and empty state.
+- **Shorter copy.** Autosave banners, canvas hints, "nothing selected" and
+  "nothing here yet" paragraphs, verbose dropdown hints and duplicate headings
+  are removed across the studio and the tools.
+- **No em or en dashes** in interface text, table placeholders or template
+  titles.
+
+### Fixed
+- Quote card template no longer overflows its artboard; the line lengths fit the
+  1600 x 2000 canvas.
+- Window controls: the close button keeps a white glyph on its red hover state,
+  and all three buttons share one radius, height and focus ring.
+- Badges no longer print icon names as text, blank icons no longer appear in the
+  auth and quality screens, and password, code and email fields are properly
+  labelled for screen readers.
+- "Clear" actions across the tools now use an icon that exists in the subset.
+- Optimizer never returns a heavier file.
+
 ## [1.6.0] - 2026-11-17
 
 ### Added

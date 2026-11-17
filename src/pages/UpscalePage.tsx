@@ -468,7 +468,7 @@ export function UpscalePage() {
             <span className="inline-flex size-10 items-center justify-center rounded-[var(--r-control)] bg-accent-soft text-accent">
               <GIcon name="add_photo_alternate" size={22} />
             </span>
-            <div className="text-sm font-semibold text-ink">Drop images or click to select</div>
+            <div className="text-sm font-semibold text-ink">Drop images</div>
             <div className="text-xs text-ink-muted">JPG, PNG, WebP, AVIF, BMP and TIFF supported</div>
           </div>
 
@@ -496,7 +496,7 @@ export function UpscalePage() {
                     <Button
                       size="xs"
                       variant="ghost"
-                      icon={<GIcon name="delete_sweep" size={14} />}
+                      icon={<GIcon name="delete" size={14} />}
                       onClick={clearQueue}
                     >
                       Clear

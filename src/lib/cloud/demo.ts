@@ -144,6 +144,93 @@ function publicUserRow(user: DemoUser) {
   };
 }
 
+
+/* ------------------------------------------------------------------------- */
+/*  Demo two factor (preview builds only)                                    */
+/* ------------------------------------------------------------------------- */
+
+const MFA_KEY = 'msap.demo.mfa';
+const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
+interface DemoFactor {
+  id: string;
+  friendlyName: string;
+  createdAt: string;
+  secret: string;
+  verified: boolean;
+}
+
+function readFactors(): DemoFactor[] {
+  try {
+    const raw = localStorage.getItem(MFA_KEY);
+    const parsed = raw ? (JSON.parse(raw) as DemoFactor[]) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeFactors(list: DemoFactor[]): void {
+  try {
+    localStorage.setItem(MFA_KEY, JSON.stringify(list));
+  } catch {
+    /* preview storage is best effort */
+  }
+}
+
+function randomSecret(bytes = 20): string {
+  const buffer = crypto.getRandomValues(new Uint8Array(bytes));
+  let bits = 0;
+  let value = 0;
+  let out = '';
+  for (const byte of buffer) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      out += B32[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) out += B32[(value << (5 - bits)) & 31];
+  return out;
+}
+
+function decodeBase32(secret: string): Uint8Array<ArrayBuffer> {
+  const clean = secret.toUpperCase().replace(/[^A-Z2-7]/g, '');
+  let bits = 0;
+  let value = 0;
+  const out: number[] = [];
+  for (const char of clean) {
+    const index = B32.indexOf(char);
+    if (index < 0) continue;
+    value = (value << 5) | index;
+    bits += 5;
+    if (bits >= 8) {
+      out.push((value >>> (bits - 8)) & 255);
+      bits -= 8;
+    }
+  }
+  const bytes = new Uint8Array(new ArrayBuffer(out.length));
+  bytes.set(out);
+  return bytes;
+}
+
+/** RFC 6238 TOTP so the preview validates real authenticator codes. */
+async function totpFor(secret: string, offset = 0): Promise<string> {
+  const counter = Math.floor(Date.now() / 30_000) + offset;
+  const buffer = new ArrayBuffer(8);
+  const view = new DataView(buffer);
+  view.setUint32(4, counter, false);
+  const key = await crypto.subtle.importKey('raw', decodeBase32(secret), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+  const digest = new Uint8Array(await crypto.subtle.sign('HMAC', key, buffer));
+  const start = digest[19] & 0x0f;
+  const code =
+    ((digest[start] & 0x7f) << 24) | (digest[start + 1] << 16) | (digest[start + 2] << 8) | digest[start + 3];
+  return String(code % 1_000_000).padStart(6, '0');
+}
+
+let demoAal: 'aal1' | 'aal2' = 'aal1';
+
 const demoAuth = {
   async getUser() {
     const user = currentUser();
@@ -153,12 +240,82 @@ const demoAuth = {
     const user = currentUser();
     return { data: { session: user ? { user, access_token: 'demo' } : null }, error: null };
   },
+  mfa: {
+    async listFactors() {
+      const factors = readFactors().map((factor) => ({
+        id: factor.id,
+        friendly_name: factor.friendlyName,
+        factor_type: 'totp',
+        status: factor.verified ? 'verified' : 'unverified',
+        created_at: factor.createdAt,
+        updated_at: factor.createdAt,
+      }));
+      return { data: { all: factors, totp: factors }, error: null };
+    },
+    async enroll({ friendlyName }: { friendlyName?: string } = {}) {
+      const factor: DemoFactor = {
+        id: `factor_${Math.random().toString(36).slice(2, 12)}`,
+        friendlyName: friendlyName || 'Authentication app',
+        createdAt: nowIso(),
+        secret: randomSecret(),
+        verified: false,
+      };
+      writeFactors([...readFactors(), factor]);
+      const email = me()?.email ?? 'account';
+      return {
+        data: {
+          id: factor.id,
+          type: 'totp',
+          friendly_name: factor.friendlyName,
+          totp: {
+            qr_code: '',
+            secret: factor.secret,
+            uri: `otpauth://totp/Micro%20Stocker%20Advanced%20Pro:${encodeURIComponent(email)}?secret=${factor.secret}&issuer=Micro%20Stocker%20Advanced%20Pro`,
+          },
+        },
+        error: null,
+      };
+    },
+    async challenge() {
+      return { data: { id: `challenge_${Math.random().toString(36).slice(2, 10)}`, expires_at: Date.now() + 300_000 }, error: null };
+    },
+    async verify({ factorId, code }: { factorId: string; code: string }) {
+      const factor = readFactors().find((item) => item.id === factorId);
+      if (!factor) return { data: null, error: { message: 'Factor not found' } };
+      const trimmed = String(code ?? '').replace(/\D/g, '');
+      if (trimmed.length !== 6) return { data: null, error: { message: 'Invalid TOTP code entered' } };
+      const candidates = await Promise.all([totpFor(factor.secret, -1), totpFor(factor.secret, 0), totpFor(factor.secret, 1)]);
+      if (!candidates.includes(trimmed)) {
+        return { data: null, error: { message: 'Invalid TOTP code entered' } };
+      }
+      writeFactors(readFactors().map((item) => (item.id === factorId ? { ...item, verified: true } : item)));
+      demoAal = 'aal2';
+      return { data: { access_token: 'demo', token_type: 'bearer' }, error: null };
+    },
+    async unenroll({ factorId }: { factorId: string }) {
+      writeFactors(readFactors().filter((item) => item.id !== factorId));
+      demoAal = 'aal1';
+      return { data: { id: factorId }, error: null };
+    },
+    async getAuthenticatorAssuranceLevel() {
+      const hasFactor = Boolean(readFactors().some((factor) => factor.verified));
+      return {
+        data: {
+          currentLevel: hasFactor ? demoAal : 'aal1',
+          nextLevel: hasFactor ? 'aal2' : 'aal1',
+          currentAuthenticationMethods: hasFactor ? [{ method: 'password', timestamp: Date.now() }] : [],
+        },
+        error: null,
+      };
+    },
+  },
   async signInWithPassword({ email, password }: { email: string; password: string }) {
     if (!password || password.length < 8) {
       return { data: { user: null, session: null }, error: { message: 'Invalid login credentials' } };
     }
     const user = ensureUser(email);
     signedInId = user.id;
+    demoAal = 'aal1';
     try {
       localStorage.setItem(SESSION_KEY, user.id);
     } catch {
@@ -176,6 +333,7 @@ const demoAuth = {
     if (!/^\d{6,}$/.test(token)) return { data: null, error: { message: 'Token has expired or is invalid' } };
     const user = ensureUser(email);
     signedInId = user.id;
+    demoAal = 'aal1';
     try {
       localStorage.setItem(SESSION_KEY, user.id);
     } catch {
@@ -201,6 +359,7 @@ const demoAuth = {
   },
   async signOut() {
     signedInId = null;
+    demoAal = 'aal1';
     try {
       localStorage.removeItem(SESSION_KEY);
     } catch {

@@ -194,11 +194,16 @@ export function listLayers(root: SVGSVGElement): LayerInfo[] {
     Array.from(parent.children).forEach((child) => {
       const tag = child.tagName.toLowerCase();
       if (tag === 'defs' || tag === 'metadata' || tag === 'title' || tag === 'desc' || tag === 'style') return;
-      if (!child.getAttribute('id')) {
+      const existingId = child.getAttribute('id');
+      if (!existingId) {
         child.setAttribute('id', nextShapeId(tag));
       }
       const id = child.getAttribute('id')!;
-      const label = child.getAttribute('data-name') || child.getAttribute('inkscape:label') || friendlyName(tag);
+      // Imported documents carry meaningful ids ("quote", "bg", "logo_mark").
+      // Generated ids look like "rect-mwk3" and should stay generic.
+      const generated = /^(rect|roundrect|circle|ellipse|path|text|line|polygon|polyline|g|image|art)-[a-z0-9]+/i.test(existingId ?? '');
+      const humanised = existingId && !generated ? humaniseId(existingId) : null;
+      const label = child.getAttribute('data-name') || child.getAttribute('inkscape:label') || humanised || friendlyName(tag);
       layers.push({
         id,
         tag,
@@ -213,6 +218,21 @@ export function listLayers(root: SVGSVGElement): LayerInfo[] {
   };
   walk(root, 0);
   return layers;
+}
+
+const ID_LABELS: Record<string, string> = {
+  bg: 'Background',
+  fg: 'Foreground',
+  img: 'Image',
+  txt: 'Text',
+};
+
+function humaniseId(id: string): string {
+  const known = ID_LABELS[id.toLowerCase()];
+  if (known) return known;
+  const words = id.replace(/[_-]+/g, ' ').trim();
+  if (!words) return id;
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 export function friendlyName(tag: string): string {

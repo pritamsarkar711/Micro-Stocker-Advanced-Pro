@@ -122,10 +122,10 @@ export function PlatformsPage() {
                 <Stat
                   icon="aspect_ratio"
                   label="Resolution"
-                  value={p.minMP > 0 ? `${p.minMP}${p.maxMP ? `–${p.maxMP}` : '+'} MP` : 'Vector'}
+                  value={p.minMP > 0 ? `${p.minMP}${p.maxMP ? `-${p.maxMP}` : '+'} MP` : 'Vector'}
                 />
                 <Stat icon="save" label="Max file" value={`${p.maxFileMB} MB`} />
-                <Stat icon="sell" label="Keywords" value={`${p.keywords.min}–${p.keywords.max}`} />
+                <Stat icon="sell" label="Keywords" value={`${p.keywords.min}-${p.keywords.max}`} />
                 <Stat icon="description" label="Title" value={`${p.title.recommendedChars ?? p.title.maxChars} chars`} />
               </div>
 
