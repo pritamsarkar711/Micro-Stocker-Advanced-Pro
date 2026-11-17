@@ -27,6 +27,16 @@ for (const [name, route] of [['03-admin','admin'],['04-subscription','subscripti
   await page.waitForTimeout(700);
   await page.screenshot({ path: `/tmp/shots/${name}.png`, fullPage: false });
 }
+// Dark-mode pass: the same routes with the dark theme forced.
+await page.evaluate(() => {
+  localStorage.setItem('msap:data:msap:settings', JSON.stringify({ theme: 'dark' }));
+  document.documentElement.classList.add('dark');
+});
+for (const [name, route] of [['d-overview',''],['d-library','library'],['d-admin','admin'],['d-subscription','subscription'],['d-platforms','platforms'],['d-vector','vector'],['d-quality','quality'],['d-settings','settings']]) {
+  await page.goto(`http://127.0.0.1:5173/#/${route}`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: `/tmp/shots/${name}.png` });
+}
 console.log('ERRORS:', JSON.stringify(errors.slice(0,10), null, 1));
 await browser.close();
 rmSync(scratch,{recursive:true,force:true});

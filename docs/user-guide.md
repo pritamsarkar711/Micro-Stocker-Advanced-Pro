@@ -52,18 +52,40 @@ Open any card. Tabs:
 
 ## 4. Vector Studio
 
-The beginner path to a submission-ready vector.
+A small illustration app inside the workspace: quick enough to draw a badge in a
+minute, precise enough to clean up a real SVG.
 
-- **Create** — pick a canvas preset (2000², 4000×3000, 3840×2160, 3000×4000)
-  and draw with the rectangle, ellipse, star, line and text tools.
-- **Open** — drop an SVG in. Everything stays editable because the app keeps the
-  real SVG document, not a picture of it.
-- **Edit** — click any object to select it, drag to move, use the arrow keys to
-  nudge, and change fill, stroke width and opacity from the inspector. Undo and
-  redo cover every change.
-- **Export** — clean SVG (scripts and editor junk removed), a 2× PNG preview for
-  the portal thumbnail, or a **vector EPS** built from PostScript paths. Live text
-  is listed as skipped in the EPS export because agencies require outlines.
+- **Start** — six canvas presets, six editable templates (sale badge, price tag,
+  quote card, product frame, story cover, logo mark), or drop your own SVG.
+- **Draw** — rectangle, rounded box, ellipse, circle, triangle, diamond, star,
+  polygon, line, arrow and text. Drag to size a shape; click to drop the default
+  size; hold Shift while dragging a corner to keep the proportions.
+- **Select and transform** — click an object, Shift+click for several, or drag a
+  marquee across empty canvas. Drag the body to move, the eight handles to
+  resize, the round handle to rotate. Objects snap to the canvas edges and
+  centre with pink guide lines.
+- **Style** — fill swatches plus a colour picker, stroke colour and width,
+  opacity, rotation, corner radius, and text size, weight, tracking and
+  alignment. X/Y/W/H fields give exact numbers, and the align row snaps objects
+  to the canvas or to each other. Group, ungroup, duplicate, reorder and lock.
+- **Elements** — 80+ ready shapes, marketplace icons, arrows, frames and
+  commerce marks. They insert centred and stay fully editable, and every new
+  insert steps across the canvas so it never hides behind the last one.
+- **Import** — `Open SVG` replaces the canvas with a real, editable document;
+  dropping a file (or `Open SVG` while another artwork is open) places it as a
+  group that you can move, scale and restyle.
+- **Live preview** — the panel in the inspector renders the current document on
+  every change, exactly as exported. **Present** opens it full screen.
+- **Export** — sanitised SVG, PNG at 1×, 2× or 4×, or a vector EPS built from
+  PostScript paths. Live text is reported as skipped in EPS because agencies
+  require outlines.
+- **Never lose work** — every change is undoable (⌘/Ctrl+Z, ⇧⌘Z) and the canvas
+  is autosaved locally; reopen the studio and your last artwork is there.
+
+Shortcuts: `V` select, `R` rectangle, `U` rounded box, `O` ellipse, `C` circle,
+`G` triangle, `D` diamond, `S` star, `P` polygon, `L` line, `A` arrow, `T` text,
+arrows nudge, `Shift`+arrows nudge further, `[` / `]` send back / bring front,
+`0` fit, `Space`+drag pans, ⌘/Ctrl+scroll zooms.
 
 ## 5. Quality Checker
 

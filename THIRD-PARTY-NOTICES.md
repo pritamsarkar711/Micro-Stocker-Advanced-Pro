@@ -22,14 +22,14 @@ below. Their licences continue to govern those components.
 
 | Asset | Licence | Use |
 | --- | --- | --- |
-| Telenor (Light/Regular/Medium/Bold + italics) | Telenor brand font, redistributed for Grameenphone-branded use | Entire UI, self-hosted in `src/assets/fonts/` |
-| Noto Sans Bengali (subset) + Noto Sans Latin Ext (subset) | SIL Open Font License 1.1 | Fallback glyphs only: `৳` and `₹`, which the Telenor family does not contain |
+| Plus Jakarta Sans Variable (upright + italic, latin and latin-ext subsets) | SIL Open Font License 1.1 | Entire UI, self-hosted in `src/assets/fonts/` |
+| Noto Sans Bengali (subset) + Noto Sans Latin Ext (subset) | SIL Open Font License 1.1 | Fallback glyphs only: `৳` and `₹`, which Plus Jakarta Sans does not contain |
 
-The Telenor faces are unmodified WOFF2 conversions of the vendor OTF files. The
-two Noto subsets are generated with `fontTools` from `@fontsource/noto-sans-bengali`
-and `@fontsource/noto-sans` and are restricted by `unicode-range` to the single
-currency glyph each provides, so they never affect Latin text. No font is
-fetched from a third-party server at runtime.
+The Plus Jakarta Sans files are unmodified WOFF2 cuts from
+`@fontsource-variable/plus-jakarta-sans@5.3.0` (variable weight 200-800). The two
+Noto subsets are generated with `fontTools` and restricted by `unicode-range` to
+the single currency glyph each provides, so they never affect Latin text. No font
+is fetched from a third-party server at runtime.
 
 ## Bundled upscaling engine (downloaded on request)
 

@@ -3,6 +3,66 @@
 All notable changes to Micro Stocker Advanced Pro are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.6.0] - 2026-11-17
+
+### Added
+- **Vector Studio is now a real editor.** Eleven drawing tools (rectangle,
+  rounded box, ellipse, circle, triangle, diamond, star, polygon, line, arrow,
+  text), drag-to-draw with Shift-constrained proportions, marquee and
+  Shift+click multi-select, eight resize handles, a rotate handle, snapping to
+  canvas edges and centre with on-canvas guides, an X/Y/W/H inspector, align and
+  distribute, group/ungroup, lock and hide, layer reordering, and 80 steps of
+  undo/redo. Keyboard shortcuts cover every tool plus nudge, zoom and fit.
+- **An element library.** 80+ shapes, commerce marks, arrows, frames and icons
+  across five categories, six editable templates (sale badge, price tag, quote
+  card, product frame, story cover, logo mark), and a cascade so inserts never
+  land on top of each other.
+- **Real SVG import that stays editable.** Open a file as the document, or drop
+  it into the current artwork as a scalable group. Parsing drops scripts,
+  handlers, external references and unknown nodes before anything touches the
+  canvas.
+- **Live preview and presentation.** The inspector renders the current document
+  on every change — the same artwork the exporter produces — plus a full-screen
+  Present mode. PNG export now offers 1x, 2x and 4x.
+- **Autosave.** The studio restores your last artwork when you come back.
+- **Contrast auditing.** `scripts/qa/contrast.mjs` walks every text node on all
+  24 routes in both themes, composites translucent backgrounds and checks WCAG
+  AA. The suite now reports zero failures.
+- **Vector regression suite.** `scripts/qa/vector-check.mjs` draws, resizes,
+  rotates, types, inserts, multi-selects, imports and exports a document on
+  every run.
+
+### Changed
+- **New typeface: Plus Jakarta Sans.** The Telenor family is gone. The UI now
+  ships a self-hosted variable face (200–800, upright and italic, latin and
+  latin-ext) with the two Noto currency subsets kept for `৳` and `₹`. Nothing is
+  fetched from a font CDN at runtime.
+- **Colour, corrected in both themes.** Brand fills and brand ink are now
+  separate tokens: `--brand` paints text, icons, borders and rings, while
+  `--brand-solid` paints every fill that carries white text. That moves white on
+  pink from 3.8:1 to more than 8:1 without dulling the accent, and fixes the
+  active sidebar item, buttons, tabs, chips and badges at once. Faint text
+  (`--fg-subtle`) was darkened in light mode and lifted in dark mode to clear
+  4.5:1 on both surfaces.
+- **Magnific's real mark.** The hand-drawn monogram is replaced with the
+  official monochrome "M" (notched top, raised inner peak), traced from
+  magnific.com and used on a black tile in both themes.
+- **Admin Console backend is live.** The licensing migration was applied to the
+  Supabase project together with an audit log and four admin RPCs, and every
+  `msap_*` function was hardened so anonymous callers cannot execute it. The
+  "admin functions are not installed" setup panel is deleted; the console now
+  loads real accounts, codes, stats and audit rows.
+- **Studio checkerboard.** The transparency grid now follows the theme instead of
+  staying bright white on a dark canvas.
+- Groq's provider badge reads "Rate-limited" rather than "Free tier", matching
+  what the API actually offers.
+
+### Fixed
+- Timeline-style history in the studio no longer double-restores snapshots;
+  undo and redo are exact, and slider drags commit a single step on release.
+- Slider and colour controls no longer swallow keyboard shortcuts while focused.
+- The live preview no longer crops or stretches non-square artwork.
+
 ## [1.5.0] - 2026-11-17
 
 ### Changed

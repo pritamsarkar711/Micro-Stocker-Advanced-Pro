@@ -41,15 +41,17 @@ export const PLATFORM_BRAND: Record<PlatformId, PlatformBrand> = {
   },
   freepik: {
     name: 'Magnific',
-    color: '#E0218A',
-    badgeBg: '#E0218A',
+    // The official Magnific wordmark mark is monochrome: a bold "M" with a
+    // notched top and a raised inner peak. Traced from magnific.com (Nov 2026)
+    // and kept as a single non-uniform path so it scales crisply at any size.
+    color: '#111114',
+    badgeBg: '#111114',
     badgeFg: '#FFFFFF',
     featured: true,
     site: 'https://www.magnific.com',
     viewBox: '0 0 24 24',
-    // Magnific (formerly Freepik): flat pink tile with the "M" monogram and spark.
     glyph:
-      '<path fill="currentColor" fill-rule="evenodd" d="M4.6 2h14.8A2.6 2.6 0 0 1 22 4.6v14.8a2.6 2.6 0 0 1-2.6 2.6H4.6A2.6 2.6 0 0 1 2 19.4V4.6A2.6 2.6 0 0 1 4.6 2Zm2.05 14.9V8.5c0-.9 1.07-1.36 1.7-.72L12 11.5l3.65-3.72c.63-.64 1.7-.18 1.7.72v8.4h-2.3v-4.6L12 15.4l-3.05-3.1v4.6h-2.3Z"/>',
+      '<path fill="currentColor" d="M4.8 3.72h4.56L12 9.48l2.64-5.76h4.56L24 20.28h-5.76L12 12.96l-6.24 7.32H0Z"/>',
   },
   pixabay: {
     name: 'Pixabay',

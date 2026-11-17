@@ -17,6 +17,8 @@ export interface LayerInfo {
   label: string;
   index: number;
   depth: number;
+  hidden: boolean;
+  locked: boolean;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -197,7 +199,15 @@ export function listLayers(root: SVGSVGElement): LayerInfo[] {
       }
       const id = child.getAttribute('id')!;
       const label = child.getAttribute('data-name') || child.getAttribute('inkscape:label') || friendlyName(tag);
-      layers.push({ id, tag, label: String(label), index: layers.length, depth });
+      layers.push({
+        id,
+        tag,
+        label: String(label),
+        index: layers.length,
+        depth,
+        hidden: child.getAttribute('display') === 'none' || (child as SVGElement).style.display === 'none',
+        locked: child.getAttribute('data-locked') === '1',
+      });
       if (tag === 'g') walk(child, depth + 1);
     });
   };
@@ -641,4 +651,395 @@ export async function svgToPngBlob(svgText: string, width: number, height: numbe
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Editing primitives (v2)                                                   */
+/* -------------------------------------------------------------------------- */
+
+export interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+type Matrix = [number, number, number, number, number, number];
+
+const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0];
+
+function matrixOfTransform(transform: string | null): Matrix {
+  if (!transform) return IDENTITY;
+  return toMatrix(transform) ?? IDENTITY;
+}
+
+function multiply(m: Matrix, n: Matrix): Matrix {
+  return [
+    m[0] * n[0] + m[2] * n[1],
+    m[1] * n[0] + m[3] * n[1],
+    m[0] * n[2] + m[2] * n[3],
+    m[1] * n[2] + m[3] * n[3],
+    m[0] * n[4] + m[2] * n[5] + m[4],
+    m[1] * n[4] + m[3] * n[5] + m[5],
+  ];
+}
+
+function applyMatrix(m: Matrix, x: number, y: number): [number, number] {
+  return [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
+}
+
+/** Bounding box of an element in its parent's coordinate space. */
+export function boxInParent(el: SVGElement): Box {
+  const b = (el as SVGGraphicsElement).getBBox();
+  const m = matrixOfTransform(el.getAttribute('transform'));
+  const corners = [
+    applyMatrix(m, b.x, b.y),
+    applyMatrix(m, b.x + b.width, b.y),
+    applyMatrix(m, b.x + b.width, b.y + b.height),
+    applyMatrix(m, b.x, b.y + b.height),
+  ];
+  const xs = corners.map((c) => c[0]);
+  const ys = corners.map((c) => c[1]);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
+}
+
+/**
+ * Bounding box in document coordinates (the SVG viewBox space), which is what
+ * alignment, snapping and the rulers work in.
+ */
+export function boxInDocument(el: SVGElement, root: SVGSVGElement): Box {
+  const box = boxInParent(el);
+  const chain: Matrix[] = [];
+  let node: Element | null = el.parentNode as Element | null;
+  while (node && node !== root) {
+    if (node instanceof SVGElement) chain.push(matrixOfTransform(node.getAttribute('transform')));
+    node = node.parentNode as Element | null;
+  }
+  let m: Matrix = IDENTITY;
+  for (let i = chain.length - 1; i >= 0; i -= 1) m = multiply(m, chain[i]!);
+  const corners = [
+    applyMatrix(m, box.x, box.y),
+    applyMatrix(m, box.x + box.w, box.y),
+    applyMatrix(m, box.x + box.w, box.y + box.h),
+    applyMatrix(m, box.x, box.y + box.h),
+  ];
+  const xs = corners.map((c) => c[0]);
+  const ys = corners.map((c) => c[1]);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
+}
+
+export function unionBox(boxes: Box[]): Box | null {
+  if (!boxes.length) return null;
+  const x = Math.min(...boxes.map((b) => b.x));
+  const y = Math.min(...boxes.map((b) => b.y));
+  const right = Math.max(...boxes.map((b) => b.x + b.w));
+  const bottom = Math.max(...boxes.map((b) => b.y + b.h));
+  return { x, y, w: right - x, h: bottom - y };
+}
+
+/** Wraps a transform so it applies *before* whatever is already on the node. */
+function prependTransform(el: SVGElement, value: string): void {
+  const existing = el.getAttribute('transform') ?? '';
+  el.setAttribute('transform', `${value} ${existing}`.trim());
+}
+
+/** Scale about a point given in the element's parent space. */
+export function scaleElement(el: SVGElement, sx: number, sy: number, cx: number, cy: number): void {
+  if (!Number.isFinite(sx) || !Number.isFinite(sy) || sx === 0 || sy === 0) return;
+  prependTransform(
+    el,
+    `translate(${round(cx)} ${round(cy)}) scale(${round(sx, 4)} ${round(sy, 4)}) translate(${round(-cx)} ${round(-cy)})`,
+  );
+}
+
+/** Rotate about a point given in the element's parent space. */
+export function rotateElement(el: SVGElement, deg: number, cx: number, cy: number): void {
+  prependTransform(el, `rotate(${round(deg, 3)} ${round(cx)} ${round(cy)})`);
+}
+
+function round(n: number, digits = 2): number {
+  const f = 10 ** digits;
+  return Math.round(n * f) / f;
+}
+
+/** Current rotation in degrees, as far as the transform attribute reveals. */
+export function rotationOf(el: SVGElement): number {
+  const m = matrixOfTransform(el.getAttribute('transform'));
+  const deg = (Math.atan2(m[1], m[0]) * 180) / Math.PI;
+  const snapped = Math.round(deg * 10) / 10;
+  return Math.abs(snapped) < 0.05 ? 0 : snapped;
+}
+
+export function setRotation(el: SVGElement, deg: number, cx: number, cy: number): void {
+  const current = rotationOf(el);
+  const delta = deg - current;
+  if (Math.abs(delta) < 0.01) return;
+  rotateElement(el, delta, cx, cy);
+}
+
+export function setOpacity(el: SVGElement, opacity: number): void {
+  const value = Math.max(0, Math.min(1, opacity));
+  if (value >= 0.999) el.removeAttribute('opacity');
+  else el.setAttribute('opacity', String(round(value, 3)));
+}
+
+export function opacityOf(el: SVGElement): number {
+  const value = Number(el.getAttribute('opacity') ?? '1');
+  return Number.isFinite(value) ? value : 1;
+}
+
+/** Applies fill/stroke to an element *and* everything inside it. */
+export function paintElement(el: SVGElement, kind: 'fill' | 'stroke', color: string, width?: number): void {
+  const targets: SVGElement[] = [el, ...Array.from(el.querySelectorAll<SVGElement>('path, rect, circle, ellipse, polygon, polyline, line, text, g'))];
+  targets.forEach((node) => {
+    if (kind === 'fill') {
+      // Outline-only artwork must not be flood-filled.
+      if (node.getAttribute('fill') === 'none') return;
+      node.setAttribute('fill', color);
+      node.style.removeProperty('fill');
+    } else {
+      if (color === 'none' || !color) {
+        node.removeAttribute('stroke');
+        node.removeAttribute('stroke-width');
+        return;
+      }
+      node.setAttribute('stroke', color);
+      node.setAttribute('stroke-width', String(width ?? 2));
+    }
+  });
+}
+
+export function fillOf(el: SVGElement): string {
+  const own = el.getAttribute('fill') ?? el.style.fill;
+  if (own) return own;
+  const child = el.querySelector<SVGElement>('path, rect, circle, ellipse, polygon, polyline');
+  return child?.getAttribute('fill') ?? '#16181c';
+}
+
+export function strokeOf(el: SVGElement): { color: string; width: number } {
+  const child = el.querySelector<SVGElement>('path, rect, circle, ellipse, polygon, polyline');
+  const host = el.getAttribute('stroke') || el.getAttribute('fill') === 'none' ? el : (child ?? el);
+  return {
+    color: host.getAttribute('stroke') ?? 'none',
+    width: Number(host.getAttribute('stroke-width') ?? '0') || 0,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Arrangement, grouping, alignment                                          */
+/* -------------------------------------------------------------------------- */
+
+export function moveElement(el: SVGElement, delta: 'front' | 'back' | 'up' | 'down'): void {
+  const parent = el.parentNode as Element | null;
+  if (!parent) return;
+  if (delta === 'front') parent.appendChild(el);
+  else if (delta === 'back') parent.insertBefore(el, parent.firstChild);
+  else if (delta === 'up') {
+    const next = el.nextElementSibling;
+    if (next) parent.insertBefore(next, el);
+  } else {
+    const prev = el.previousElementSibling;
+    if (prev) parent.insertBefore(el, prev);
+  }
+}
+
+export function groupElements(elements: SVGElement[]): SVGGElement | null {
+  const parent = elements[0]?.parentNode as Element | null;
+  if (!parent || elements.length < 2) return null;
+  const group = document.createElementNS(SVG_NS, 'g');
+  group.setAttribute('id', nextShapeId('group'));
+  group.setAttribute('data-name', 'Group');
+  const anchor = elements[0]!;
+  parent.insertBefore(group, anchor);
+  elements.forEach((el) => {
+    if (el.parentNode === parent) group.appendChild(el);
+  });
+  return group;
+}
+
+export function ungroupElement(group: SVGElement): SVGElement[] {
+  const parent = group.parentNode as Element | null;
+  if (!parent) return [];
+  const children = Array.from(group.children).filter((child): child is SVGElement => child instanceof SVGElement);
+  children.forEach((child) => parent.insertBefore(child, group));
+  group.remove();
+  return children;
+}
+
+export type AlignMode = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom';
+
+export function alignElements(root: SVGSVGElement, elements: SVGElement[], mode: AlignMode, frame: Box): void {
+  elements.forEach((el) => {
+    const box = boxInDocument(el, root);
+    let dx = 0;
+    let dy = 0;
+    if (mode === 'left') dx = frame.x - box.x;
+    if (mode === 'center') dx = frame.x + frame.w / 2 - (box.x + box.w / 2);
+    if (mode === 'right') dx = frame.x + frame.w - (box.x + box.w);
+    if (mode === 'top') dy = frame.y - box.y;
+    if (mode === 'middle') dy = frame.y + frame.h / 2 - (box.y + box.h / 2);
+    if (mode === 'bottom') dy = frame.y + frame.h - (box.y + box.h);
+    const scale = parentScale(el);
+    if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) translateElement(el, round(dx / scale, 3), round(dy / scale, 3));
+  });
+}
+
+/** Total scale factor of an element's ancestor chain, for screen↔local maths. */
+function parentScale(el: SVGElement): number {
+  let scale = 1;
+  let node: Element | null = el.parentNode as Element | null;
+  while (node && node.tagName.toLowerCase() !== 'svg') {
+    if (node instanceof SVGElement) {
+      const m = matrixOfTransform(node.getAttribute('transform'));
+      scale *= Math.hypot(m[0], m[1]) || 1;
+    }
+    node = node.parentNode as Element | null;
+  }
+  return scale || 1;
+}
+
+export function distributeElements(root: SVGSVGElement, elements: SVGElement[], axis: 'x' | 'y'): void {
+  if (elements.length < 3) return;
+  const boxes = elements.map((el) => ({ el, box: boxInDocument(el, root) }));
+  boxes.sort((a, b) => (axis === 'x' ? a.box.x - b.box.x : a.box.y - b.box.y));
+  const first = boxes[0]!.box;
+  const last = boxes[boxes.length - 1]!.box;
+  const span = axis === 'x' ? last.x + last.w - first.x : last.y + last.h - first.y;
+  const total = boxes.reduce((sum, item) => sum + (axis === 'x' ? item.box.w : item.box.h), 0);
+  const gap = (span - total) / (boxes.length - 1);
+  let cursor = axis === 'x' ? first.x : first.y;
+  boxes.forEach((item) => {
+    const current = axis === 'x' ? item.box.x : item.box.y;
+    const delta = cursor - current;
+    const scale = parentScale(item.el);
+    if (Math.abs(delta) > 0.01) {
+      translateElement(item.el, axis === 'x' ? round(delta / scale, 3) : 0, axis === 'y' ? round(delta / scale, 3) : 0);
+    }
+    cursor += (axis === 'x' ? item.box.w : item.box.h) + gap;
+  });
+}
+
+export function cloneElement(el: SVGElement, offset = 0): SVGElement {
+  const clone = el.cloneNode(true) as SVGElement;
+  clone.setAttribute('id', nextShapeId('copy'));
+  if (offset) translateElement(clone, offset, offset);
+  return clone;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Element library + import insertion                                        */
+/* -------------------------------------------------------------------------- */
+
+const SVG_TAGS = new Set([
+  'g',
+  'path',
+  'rect',
+  'circle',
+  'ellipse',
+  'polygon',
+  'polyline',
+  'line',
+  'text',
+  'tspan',
+  'defs',
+  'clipPath',
+  'use',
+]);
+
+/**
+ * Inserts library artwork (or the contents of an imported SVG) as one editable
+ * group, scaled into `frame`. Unknown/unsafe nodes are dropped rather than
+ * copied, so a malicious SVG cannot smuggle script into the studio.
+ */
+export function insertArtwork(
+  root: SVGSVGElement,
+  markup: string,
+  options: {
+    frame: Box;
+    viewBox?: { w: number; h: number };
+    fill?: string;
+    stroke?: string;
+    strokeWidth?: number;
+    outline?: boolean;
+    name?: string;
+  },
+): SVGGElement | null {
+  const { frame, viewBox = { w: 100, h: 100 } } = options;
+  const doc = new DOMParser().parseFromString(
+    `<svg xmlns="${SVG_NS}" viewBox="0 0 ${viewBox.w} ${viewBox.h}">${markup}</svg>`,
+    'image/svg+xml',
+  );
+  if (doc.querySelector('parsererror')) return null;
+
+  const group = document.createElementNS(SVG_NS, 'g');
+  group.setAttribute('id', nextShapeId('art'));
+  group.setAttribute('data-name', options.name ?? 'Artwork');
+
+  const sx = frame.w / viewBox.w;
+  const sy = frame.h / viewBox.h;
+  const s = Math.min(sx, sy);
+  const tx = frame.x + (frame.w - viewBox.w * s) / 2;
+  const ty = frame.y + (frame.h - viewBox.h * s) / 2;
+  group.setAttribute('transform', `translate(${round(tx, 3)} ${round(ty, 3)}) scale(${round(s, 5)})`);
+
+  const copy = (source: Element, target: Element) => {
+    Array.from(source.children).forEach((child) => {
+      const tag = child.tagName.toLowerCase();
+      if (tag === 'defs' || tag === 'metadata' || tag === 'style' || tag === 'script' || tag === 'title' || tag === 'desc') return;
+      if (!SVG_TAGS.has(tag)) return;
+      const clone = document.createElementNS(SVG_NS, tag);
+      Array.from(child.attributes).forEach((attr) => {
+        const name = attr.name.toLowerCase();
+        if (name.startsWith('on')) return;
+        if (name === 'href' || name === 'xlink:href') return;
+        if (name === 'style' && /url\s*\(/i.test(attr.value)) return;
+        clone.setAttribute(attr.name, attr.value);
+      });
+      if (tag === 'text' || tag === 'tspan') clone.textContent = child.textContent;
+      if (!clone.getAttribute('fill') && tag !== 'g' && tag !== 'defs') {
+        clone.setAttribute('fill', options.outline ? 'none' : (options.fill ?? '#16181c'));
+      }
+      if (options.outline) {
+        if (!clone.getAttribute('stroke')) clone.setAttribute('stroke', options.stroke ?? options.fill ?? '#16181c');
+        if (!clone.getAttribute('stroke-width')) clone.setAttribute('stroke-width', String(options.strokeWidth ?? 2));
+      }
+      copy(child, clone);
+      target.appendChild(clone);
+    });
+  };
+  copy(doc.documentElement, group);
+  if (!group.childNodes.length) return null;
+  root.appendChild(group);
+  return group;
+}
+
+/** Turns a parsed SVG file into a group that fits the current document. */
+export function importDocumentInto(
+  root: SVGSVGElement,
+  source: SVGSVGElement,
+  frame: Box,
+): SVGGElement | null {
+  const box = (source.getAttribute('viewBox') ?? '').split(/[\s,]+/).map(Number);
+  const w = Number.isFinite(box[2]) && box[2] > 0 ? box[2]! : Number(source.getAttribute('width')) || 100;
+  const h = Number.isFinite(box[3]) && box[3] > 0 ? box[3]! : Number(source.getAttribute('height')) || 100;
+  const inner = new XMLSerializer().serializeToString(source)
+    .replace(/^<svg[^>]*>/, '')
+    .replace(/<\/svg>$/, '');
+  return insertArtwork(root, inner, { frame, viewBox: { w, h }, name: 'Imported SVG' });
+}
+
+/** Reads the viewBox of a document as `{w, h}`, falling back to its width/height. */
+export function documentSize(svg: SVGSVGElement): { w: number; h: number } {
+  const box = (svg.getAttribute('viewBox') ?? '').split(/[\s,]+/).map(Number);
+  if (Number.isFinite(box[2]) && Number.isFinite(box[3]) && box[2]! > 0 && box[3]! > 0) {
+    return { w: box[2]!, h: box[3]! };
+  }
+  return {
+    w: Number(svg.getAttribute('width')) || 2000,
+    h: Number(svg.getAttribute('height')) || 2000,
+  };
 }
