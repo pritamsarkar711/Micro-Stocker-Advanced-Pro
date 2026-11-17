@@ -1,81 +1,132 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Field, Input } from '@/components/ui/Field';
+import { GIcon } from '@/components/ui/GoogleIcon';
+import { ActivationCard } from '@/components/auth/ActivationCard';
 import { useLicense } from '@/state/LicenseState';
-import { licensingClient } from '@/lib/cloud/licensing';
+import { useAuth } from '@/state/AuthState';
+import { dateTime } from '@/lib/format';
 
-interface CodeRow { id: string; kind: string; duration_seconds: number; created_at: string; redeemed_at: string | null; redeemed_by: string | null; revoked_at: string | null }
-interface UserRow { user_id: string; email: string; created_at: string; expires_at: string | null; is_blocked: boolean }
+function countdown(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const days = Math.floor(total / 86_400);
+  const hours = Math.floor((total % 86_400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
 
 export function SubscriptionPage() {
-  const license = useLicense();
-  const [code, setCode] = useState('');
-  const [message, setMessage] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [duration, setDuration] = useState(30);
-  const [unit, setUnit] = useState('days');
-  const [kind, setKind] = useState('premium');
-  const [issued, setIssued] = useState('');
-  const [codes, setCodes] = useState<CodeRow[]>([]);
-  const [users, setUsers] = useState<UserRow[]>([]);
+  const { loading, premium, isAdmin, isBlocked, expiresAt, remainingMs, error, refresh } = useLicense();
+  const { user } = useAuth();
 
-  async function loadAdmin() {
-    const client = licensingClient();
-    if (!client) return;
-    const [c, u] = await Promise.all([client.rpc('msap_admin_codes'), client.rpc('msap_admin_users')]);
-    if (c.error || u.error) { setMessage(c.error?.message || u.error?.message || 'Unable to load admin data'); return; }
-    setCodes(c.data as CodeRow[]); setUsers(u.data as UserRow[]);
-  }
-  useEffect(() => { if (license.isAdmin) void loadAdmin(); }, [license.isAdmin]);
-  async function redeem(e: FormEvent) {
-    e.preventDefault(); setBusy(true); setMessage('');
-    try { await license.redeem(code); setCode(''); setMessage('Code activated.'); }
-    catch (e) { setMessage(e instanceof Error ? e.message : 'Activation failed'); }
-    finally { setBusy(false); }
-  }
-  async function generate() {
-    const client = licensingClient(); if (!client) return;
-    const seconds = duration * (unit === 'hours' ? 3600 : unit === 'days' ? 86400 : 60);
-    if (!Number.isSafeInteger(seconds) || seconds < 60 || seconds > 315360000) { setMessage('Duration must be between one minute and ten years.'); return; }
-    setBusy(true); setMessage(''); setIssued('');
-    const { data, error } = await client.rpc('msap_create_code', { p_duration_seconds: seconds, p_kind: kind });
-    if (error || !data?.[0]?.code) setMessage(error?.message || 'Code generation failed');
-    else { setIssued(data[0].code); await loadAdmin(); }
-    setBusy(false);
-  }
-  async function revoke(id: string) {
-    const client = licensingClient(); if (!client || !confirm('Revoke this unused code?')) return;
-    const { error } = await client.rpc('msap_admin_revoke_code', { p_id: id });
-    if (error) setMessage(error.message); else await loadAdmin();
-  }
-  async function setExpiry(user: UserRow) {
-    const input = prompt(`Set expiry for ${user.email} as an ISO date and time (for example 2027-01-01T00:00:00Z). Enter a past date to disable premium.`, user.expires_at || new Date().toISOString());
-    if (!input) return;
-    const date = new Date(input);
-    if (!Number.isFinite(date.getTime())) { setMessage('Invalid date'); return; }
-    const { error } = await licensingClient()!.rpc('msap_admin_set_expiry', { p_user_id: user.user_id, p_expires_at: date.toISOString() });
-    if (error) setMessage(error.message); else { await loadAdmin(); await license.refresh(); }
-  }
-  async function toggleBlocked(user: UserRow) {
-    const action = user.is_blocked ? 'Unblock' : 'Block';
-    if (!confirm(`${action} ${user.email}?`)) return;
-    const { error } = await licensingClient()!.rpc('msap_admin_set_blocked', { p_user_id: user.user_id, p_blocked: !user.is_blocked });
-    if (error) setMessage(error.message); else await loadAdmin();
-  }
-  const seconds = Math.ceil(license.remainingMs / 1000);
-  const countdown = `${Math.floor(seconds / 86400)}d ${Math.floor(seconds % 86400 / 3600)}h ${Math.floor(seconds % 3600 / 60)}m ${seconds % 60}s`;
-  return <div className="space-y-5"><PageHeader title="Subscription" />
-    <Card><CardHeader title="Premium access" /><p className="text-sm">{license.loading ? 'Checking…' : license.premium ? `Active · ${countdown} remaining` : 'Not active'}</p>
-      {license.expiresAt && <p className="mt-1 text-xs text-ink-muted">Expires {new Date(license.expiresAt).toLocaleString()}</p>}
-      {license.error && <p className="mt-2 text-sm text-danger">Unable to verify subscription: {license.error}</p>}
-      <form className="mt-4 flex flex-wrap items-end gap-2" onSubmit={(e) => void redeem(e)}><div className="min-w-52 flex-1"><Field label="Activation code"><Input value={code} onChange={(e) => setCode(e.target.value)} autoComplete="off" placeholder="Paste your code" /></Field></div><Button type="submit" disabled={!code.trim()} loading={busy}>Activate</Button><Button variant="outline" onClick={() => void license.refresh()}>Refresh</Button></form>
-      {message && <p role="status" className="mt-3 text-sm text-ink">{message}</p>}
-    </Card>
-    {license.isAdmin && <><Card><CardHeader title="Administrator · create code" /><div className="flex flex-wrap items-end gap-3"><div><Field label="Duration"><Input type="number" min="1" step="1" value={duration} onChange={(e) => setDuration(Number(e.target.value))} /></Field></div><label className="text-xs">Unit <select className="rounded border border-line bg-surface p-2 text-ink" value={unit} onChange={(e) => setUnit(e.target.value)}><option value="minutes">Minutes</option><option value="hours">Hours</option><option value="days">Days</option></select></label><label className="text-xs">Type <select className="rounded border border-line bg-surface p-2 text-ink" value={kind} onChange={(e) => setKind(e.target.value)}><option value="premium">Premium</option><option value="trial">Free trial</option></select></label><Button loading={busy} onClick={() => void generate()}>Generate</Button></div>
-      {issued && <div className="mt-3 rounded border border-line p-3"><p className="text-xs text-ink-muted">Copy this code now. It cannot be shown again.</p><code className="break-all text-sm">{issued}</code><Button className="ml-3" size="xs" variant="secondary" onClick={() => void navigator.clipboard.writeText(issued)}>Copy</Button></div>}
-    </Card><Card><CardHeader title="Codes" /><div className="max-h-72 overflow-auto"><table className="w-full text-left text-xs"><thead><tr><th>Created</th><th>Type</th><th>Duration</th><th>Status</th><th /></tr></thead><tbody>{codes.map((c) => <tr key={c.id} className="border-t border-line"><td className="py-2">{new Date(c.created_at).toLocaleString()}</td><td>{c.kind}</td><td>{c.duration_seconds / 60} min</td><td>{c.revoked_at ? 'Revoked' : c.redeemed_at ? 'Used' : 'Available'}</td><td>{!c.redeemed_at && !c.revoked_at && <Button size="xs" variant="outline" onClick={() => void revoke(c.id)}>Revoke</Button>}</td></tr>)}</tbody></table></div></Card>
-    <Card><CardHeader title="Users & subscriptions" /><div className="max-h-72 overflow-auto"><table className="w-full text-left text-xs"><thead><tr><th>Account</th><th>Expiry</th><th>Status</th><th /></tr></thead><tbody>{users.map((u) => <tr key={u.user_id} className="border-t border-line"><td className="py-2">{u.email}</td><td>{u.expires_at ? new Date(u.expires_at).toLocaleString() : 'None'}</td><td>{u.is_blocked ? 'Blocked' : 'Active'}</td><td><div className="flex gap-1"><Button size="xs" variant="outline" onClick={() => void setExpiry(u)}>Set expiry</Button><Button size="xs" variant="outline" onClick={() => void toggleBlocked(u)}>{u.is_blocked ? 'Unblock' : 'Block'}</Button></div></td></tr>)}</tbody></table></div></Card></>}
-  </div>;
+  const status = isBlocked ? 'Blocked' : isAdmin ? 'Administrator' : premium ? 'Active' : 'Inactive';
+
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        title="Subscription"
+        description="Activate a code to unlock the studio."
+        actions={
+          <Button size="sm" variant="outline" icon={<GIcon name="refresh" size={18} />} onClick={() => void refresh()}>
+            Refresh
+          </Button>
+        }
+      />
+
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+        <Card padding="none" className="overflow-hidden">
+          <div
+            className={
+              premium || isAdmin
+                ? 'brand-gradient px-5 py-6 text-white'
+                : 'bg-surface-3 px-5 py-6 text-ink'
+            }
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[0.75rem] font-semibold tracking-[0.14em] uppercase opacity-80">
+                  Current plan
+                </div>
+                <div className="mt-1.5 text-[1.75rem] leading-none font-bold">{status}</div>
+                <div className="mt-2 text-[0.875rem] opacity-90">{user?.email}</div>
+              </div>
+              <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-[var(--r-control)] bg-white/18">
+                <GIcon name={isAdmin ? 'admin_panel_settings' : 'workspace_premium'} size={26} />
+              </span>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3 text-[0.8125rem]">
+              <div>
+                <div className="opacity-75">Expires</div>
+                <div className="mt-0.5 font-semibold">
+                  {isAdmin ? 'Never' : expiresAt ? dateTime(expiresAt) : '—'}
+                </div>
+              </div>
+              <div>
+                <div className="opacity-75">Time left</div>
+                <div className="mt-0.5 font-semibold">
+                  {loading ? 'Checking…' : isAdmin ? 'Unlimited' : remainingMs > 0 ? countdown(remainingMs) : '—'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3 p-5">
+            {error && (
+              <div className="flex items-start gap-2 rounded-[var(--r-control)] border border-danger/30 bg-danger-soft px-3 py-2 text-[0.8125rem] text-danger">
+                <GIcon name="warning" size={17} className="mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={isBlocked ? 'danger' : premium ? 'ok' : 'warn'} dot>
+                {isBlocked ? 'Access disabled' : premium ? 'Full access' : 'Activation required'}
+              </Badge>
+              {expiresAt && !isAdmin && (
+                <Badge tone="neutral">Renews by code</Badge>
+              )}
+            </div>
+            <p className="text-[0.8125rem] leading-relaxed text-ink-muted">
+              {isAdmin
+                ? 'Administrator accounts have unrestricted access and can issue codes from the admin console.'
+                : premium
+                  ? 'Add another code at any time — remaining time is kept and new time is added on top.'
+                  : 'Enter the code from your administrator to unlock every tool.'}
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {isAdmin && (
+                <Link to="/admin">
+                  <Button size="sm" icon={<GIcon name="admin_panel_settings" size={18} />}>
+                    Admin console
+                  </Button>
+                </Link>
+              )}
+              <Link to="/contact">
+                <Button size="sm" variant="outline" icon={<GIcon name="support_agent" size={18} />}>
+                  Support
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader title="Activate a code" icon={<GIcon name="redeem" size={18} />} />
+          <ActivationCard />
+          <div className="mt-5 space-y-2 border-t border-line pt-4 text-[0.8125rem] text-ink-muted">
+            {['All studio tools and exports', 'Unlimited local processing', 'Works offline once activated'].map((line) => (
+              <div key={line} className="flex items-center gap-2">
+                <GIcon name="check_circle" size={17} className="text-ok" />
+                {line}
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
 }

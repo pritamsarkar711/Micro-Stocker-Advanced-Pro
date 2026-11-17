@@ -15,7 +15,7 @@ export function ThemeSwitch({ compact = false, className }: { compact?: boolean;
       role="group"
       aria-label="Color theme"
       className={clsx(
-        'inline-flex h-9 shrink-0 items-center gap-0.5 r-control border border-line bg-surface-2 p-0.5',
+        'inline-flex h-10 shrink-0 items-center gap-0.5 r-control border border-line bg-surface-2 p-0.5',
         className,
       )}
     >
@@ -26,7 +26,7 @@ export function ThemeSwitch({ compact = false, className }: { compact?: boolean;
         aria-label="Light mode"
         title="Light mode"
         className={clsx(
-          'inline-flex h-full items-center justify-center gap-1.5 r-chip px-2 text-[0.75rem] font-medium select-none',
+          'inline-flex h-full items-center justify-center gap-1.5 r-chip px-2.5 text-[0.75rem] font-semibold select-none',
           !isDark
             ? 'bg-brand text-white shadow-[0_1px_2px_rgb(0_0_0/0.14)]'
             : 'text-fg-muted hover:text-fg',
@@ -42,7 +42,7 @@ export function ThemeSwitch({ compact = false, className }: { compact?: boolean;
         aria-label="Dark mode"
         title="Dark mode"
         className={clsx(
-          'inline-flex h-full items-center justify-center gap-1.5 r-chip px-2 text-[0.75rem] font-medium select-none',
+          'inline-flex h-full items-center justify-center gap-1.5 r-chip px-2.5 text-[0.75rem] font-semibold select-none',
           isDark
             ? 'bg-brand text-white shadow-[0_1px_2px_rgb(0_0_0/0.24)]'
             : 'text-fg-muted hover:text-fg',

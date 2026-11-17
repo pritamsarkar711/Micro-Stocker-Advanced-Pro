@@ -24,7 +24,7 @@ try {
     if (url.pathname.endsWith('/msap_my_entitlement')) return json(route, [{ expires_at: entitled ? new Date(expiryAt ?? Date.now() + 3600_000).toISOString() : null, server_time: new Date().toISOString(), is_admin: false, is_blocked: blocked }]);
     if (url.pathname.endsWith('/msap_redeem_code')) {
       const body = req.postDataJSON();
-      if (body.p_code !== 'valid-test-code') return json(route, { message: 'Invalid or unavailable code' }, 400);
+      if (String(body.p_code ?? '').toUpperCase() !== 'VALIDTESTCODE') return json(route, { message: 'Invalid or unavailable code' }, 400);
       entitled = true;
       return json(route, [{ expires_at: new Date(Date.now() + 3600_000).toISOString(), server_time: new Date().toISOString() }]);
     }
@@ -46,26 +46,29 @@ try {
   assert.ok(await contrast() >= 4.5, 'hover sign-in contrast');
 
   assert.equal(await page.getByRole('navigation', { name: 'Main navigation' }).count(), 0, 'workspace inaccessible before sign in');
-  await page.getByRole('button', { name: 'Create account' }).click();
+  await page.getByRole('tab', { name: 'Create account' }).click();
   await page.getByPlaceholder('you@example.com').fill(user.email);
   await page.getByPlaceholder('Enter password').fill('valid-password');
   await page.getByRole('button', { name: 'Register and sign in' }).click();
-  await page.getByText('Check your email to confirm your account, then sign in.').waitFor();
-  await page.getByRole('button', { name: 'Sign in', exact: true }).first().click();
+  // Email links cannot reach a desktop build, so sign-up finishes with an in-app OTP.
+  await page.getByRole('heading', { name: 'Verify your email' }).waitFor();
+  await page.getByRole('button', { name: 'Back to sign in' }).click();
   await page.getByPlaceholder('you@example.com').fill(user.email);
   await page.getByPlaceholder('Enter password').fill('valid-password');
   await page.getByRole('button', { name: 'Sign in', exact: true }).last().click();
   try { await page.getByRole('navigation', { name: 'Main navigation' }).waitFor({timeout: 10000}); } catch (e) { console.error('Auth flow state:', await page.locator('body').innerText()); throw e; }
   assert.equal(await page.getByRole('navigation', { name: 'Main navigation' }).count(), 1, 'no duplicate sidebar');
-  await page.getByText('Premium subscription required').waitFor();
+  await page.getByText('Activate your subscription').waitFor();
   await page.goto(`${process.env.TEST_BASE_URL || 'http://127.0.0.1:5174'}/#/bg-remove`);
-  await page.getByText('Premium subscription required').waitFor();
-  await page.getByRole('link', { name: 'Open subscription' }).click();
+  await page.getByText('Activate your subscription').waitFor();
+  await page.getByRole('link', { name: 'Subscription details' }).click();
+  await page.getByRole('heading', { name: 'Subscription', exact: true }).waitFor();
   await page.getByPlaceholder('Paste your code').fill('invalid-test-code');
-  await page.getByRole('button', { name: 'Activate' }).click();
+  await page.waitForTimeout(400);
+  await page.getByRole('button', { name: 'Activate', exact: true }).click();
   await page.getByText('Invalid or unavailable code').waitFor();
   await page.getByPlaceholder('Paste your code').fill('valid-test-code');
-  await page.getByRole('button', { name: 'Activate' }).click();
+  await page.getByRole('button', { name: 'Activate', exact: true }).click();
   await page.getByText('Code activated.').waitFor();
   await page.goto(`${process.env.TEST_BASE_URL || 'http://127.0.0.1:5174'}/#/bg-remove`);
   await page.getByRole('heading', { name: 'Background Remover' }).waitFor();
@@ -83,13 +86,13 @@ try {
   await page.setViewportSize({ width: 1280, height: 900 });
   expiryAt = Date.now() + 3000;
   await page.goto(`${process.env.TEST_BASE_URL || 'http://127.0.0.1:5174'}/#/subscription`);
-  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await page.getByRole('button', { name: 'Refresh', exact: true }).first().click();
   await page.goto(`${process.env.TEST_BASE_URL || 'http://127.0.0.1:5174'}/#/bg-remove`);
   await page.getByRole('heading', { name: 'Background Remover' }).waitFor();
-  await page.getByText('Premium subscription required').waitFor({ timeout: 8000 });
+  await page.getByText('Your plan has expired.').waitFor({ timeout: 8000 });
   blocked = true;
   await page.goto(`${process.env.TEST_BASE_URL || 'http://127.0.0.1:5174'}/#/subscription`);
-  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await page.getByRole('button', { name: 'Refresh', exact: true }).first().click();
   await page.getByRole('heading', { name: 'Account disabled' }).waitFor();
   assert.deepEqual(failures, []);
   console.log('Auth UI: login gate, subscription activation, premium gate and blocked account passed (mock API)');

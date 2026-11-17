@@ -241,8 +241,8 @@ export function ConvertPage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
-        <div className="space-y-4 xl:col-span-5">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,21rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,23rem)_minmax(0,1fr)]">
+        <div className="space-y-4">
           <Card>
             <CardHeader title={`Output format (${CONVERT_FORMATS.length})`} icon={<GIcon name="swap_horiz" size={17} />} />
             <div className="mb-2">
@@ -252,7 +252,7 @@ export function ConvertPage() {
                 placeholder="Search formats (png, psd, exr...)"
               />
             </div>
-            <div className="grid max-h-80 grid-cols-3 gap-1.5 overflow-y-auto pr-1">
+            <div className="grid max-h-72 grid-cols-2 gap-1.5 overflow-y-auto pr-1">
               {CONVERT_FORMATS.filter(
                 (fmt) =>
                   !formatSearch ||
@@ -371,7 +371,7 @@ export function ConvertPage() {
           </Card>
         </div>
 
-        <div className="space-y-4 xl:col-span-7">
+        <div className="flex min-h-[30rem] min-w-0 flex-col gap-4 lg:sticky lg:top-[4.75rem] lg:self-start">
           <div
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
@@ -379,7 +379,7 @@ export function ConvertPage() {
               if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
             }}
             onClick={() => fileRef.current?.click()}
-            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--r-card)] border border-dashed border-line-strong bg-surface px-6 py-8 text-center hover:border-accent hover:bg-accent-soft/25"
+            className="flex min-h-[18rem] flex-1 cursor-pointer flex-col items-center justify-center gap-3 rounded-[var(--r-card)] border border-dashed border-line-strong bg-surface px-6 py-10 text-center transition-colors hover:border-brand hover:bg-brand-soft/30"
           >
             <span className="inline-flex size-10 items-center justify-center rounded-[var(--r-control)] bg-accent-soft text-accent">
               <GIcon name="swap_horiz" size={22} />

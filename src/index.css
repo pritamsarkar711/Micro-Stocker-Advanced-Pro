@@ -1,145 +1,233 @@
 @import 'tailwindcss';
 
 /* ==================================================================== */
-/*  Self hosted variable fonts (OFL 1.1)                                */
+/*  Brand typography — Telenor (Grameenphone brand font family)          */
+/*  Shipped locally so the UI renders identically offline and in the     */
+/*  desktop build. Weights: 300 / 400 / 500 / 700 + italics.            */
 /* ==================================================================== */
 @font-face {
-  font-family: 'InterVar';
-  src: url('/fonts/inter-var-latin.woff2') format('woff2-variations');
-  font-weight: 100 900;
+  font-family: 'Telenor';
+  src: url('./assets/fonts/telenor-300.woff2') format('woff2');
+  font-weight: 300;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
-  font-family: 'ManropeVar';
-  src: url('/fonts/manrope-var-latin.woff2') format('woff2-variations');
-  font-weight: 200 800;
+  font-family: 'Telenor';
+  src: url('./assets/fonts/telenor-400.woff2') format('woff2');
+  font-weight: 400;
   font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Telenor';
+  src: url('./assets/fonts/telenor-500.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Telenor';
+  src: url('./assets/fonts/telenor-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Telenor';
+  src: url('./assets/fonts/telenor-400-italic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Telenor';
+  src: url('./assets/fonts/telenor-700-italic.woff2') format('woff2');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Currency glyph fallbacks: Telenor has no Taka or Rupee signs. */
+@font-face {
+  font-family: 'TelenorTaka';
+  src: url('./assets/fonts/currency-taka.woff2') format('woff2');
+  unicode-range: U+09F3;
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'TelenorSymbol';
+  src: url('./assets/fonts/currency-rupee.woff2') format('woff2');
+  unicode-range: U+20B9;
+  font-weight: 100 900;
   font-display: swap;
 }
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ==================================================================== */
-/*  Material Design 3 monochrome + single primary colour system         */
+/*  Design tokens — Material UI inspired SaaS surface system            */
+/*  Crimson primary / indigo secondary, charcoal navigation rail.      */
 /* ==================================================================== */
 :root {
   color-scheme: light;
 
-  /* Neutral surfaces */
-  --bg: #f5f7fa;
+  --bg: #f4f6f9;
   --bg-elevated: #ffffff;
   --surface: #ffffff;
-  --surface-2: #f1f4f8;
-  --surface-3: #e6ebf1;
-  --surface-inverse: #141a21;
+  --surface-2: #f5f7fa;
+  --surface-3: #eaeef4;
+  --surface-inverse: #1c2126;
 
-  /* Borders */
-  --line: #dfe5ec;
-  --line-strong: #c2cbd6;
+  --line: #e2e7ee;
+  --line-strong: #cbd4df;
 
-  /* Typography */
-  --fg: #141a21;
-  --fg-muted: #52606d;
-  --fg-subtle: #7b8794;
+  --fg: #171d23;
+  --fg-muted: #566471;
+  --fg-subtle: #7e8c9a;
 
-  /* Primary: Material Blue 800 */
-  --brand: #1565c0;
-  --brand-hover: #0d47a1;
-  --brand-soft: #e8f1fc;
-  --brand-fg: #0d47a1;
+  /* Primary — Material crimson */
+  --brand: #b3294e;
+  --brand-hover: #942041;
+  --brand-soft: #fdeef2;
+  --brand-fg: #a02145;
   --on-brand: #ffffff;
 
-  /* Minimal status tokens aligned to Blue and Deep Green (no extra hues) */
-  --ok: #1b5e20;
-  --ok-soft: #e8f3e9;
-  --warn: #475569;
-  --warn-soft: #edf1f5;
-  --danger: #b42318;
-  --danger-soft: #fbeeed;
+  /* Secondary — Material deep indigo */
+  --secondary: #4829b2;
+  --secondary-soft: #efecfd;
+  --secondary-fg: #43279f;
 
-  /* Material Design 3 elevation */
-  --elev-0: none;
-  --elev-1: 0 1px 2px rgb(15 23 42 / 0.05), 0 1px 3px rgb(15 23 42 / 0.06);
-  --elev-2: 0 2px 6px rgb(15 23 42 / 0.08), 0 1px 2px rgb(15 23 42 / 0.05);
-  --elev-3: 0 8px 24px -4px rgb(15 23 42 / 0.14), 0 2px 6px rgb(15 23 42 / 0.06);
-  --elev-4: 0 20px 44px -10px rgb(15 23 42 / 0.22);
+  --ok: #1b6b3a;
+  --ok-soft: #e8f5ec;
+  --warn: #8a5a00;
+  --warn-soft: #fdf3e2;
+  --danger: #b3261e;
+  --danger-soft: #fdeeed;
 
-  /* Slightly reduced, crisp geometry */
-  --r-xs: 3px;
-  --r-sm: 4px;
-  --r-chip: 4px;
-  --r-md: 6px;
-  --r-lg: 8px;
-  --r-xl: 10px;
-  --r-card: 8px;
-  --r-control: 6px;
+  /* Navigation rail is charcoal in both themes */
+  --nav-bg: #20262c;
+  --nav-bg-2: #171c21;
+  --nav-fg: #c7d2da;
+  --nav-fg-strong: #ffffff;
+  --nav-fg-muted: #8b98a3;
+  --nav-line: rgb(255 255 255 / 0.08);
+  --nav-active: #ffffff;
 
-  /* Unified primary alias */
+  --elev-1: 0 1px 2px rgb(16 24 32 / 0.05), 0 1px 3px rgb(16 24 32 / 0.07);
+  --elev-2: 0 2px 4px rgb(16 24 32 / 0.06), 0 6px 16px -6px rgb(16 24 32 / 0.14);
+  --elev-3: 0 12px 28px -8px rgb(16 24 32 / 0.2), 0 4px 10px -4px rgb(16 24 32 / 0.1);
+  --elev-4: 0 24px 56px -12px rgb(16 24 32 / 0.3);
+
+  --r-xs: 4px;
+  --r-sm: 5px;
+  --r-chip: 6px;
+  --r-md: 7px;
+  --r-lg: 10px;
+  --r-xl: 14px;
+  --r-card: 10px;
+  --r-control: 7px;
+
   --accent: var(--brand);
   --accent-hover: var(--brand-hover);
   --accent-soft: var(--brand-soft);
   --accent-fg: var(--brand-fg);
 
-  /* Motion */
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-emphasized: cubic-bezier(0.3, 0, 0, 1);
-  --dur-fast: 100ms;
-  --dur-base: 160ms;
+  --dur-fast: 110ms;
+  --dur-base: 170ms;
+
+  --rail-w: 264px;
+  --rail-w-collapsed: 76px;
+  --topbar-h: 60px;
 }
 
-/* Deep Green primary option */
-:root[data-accent='green'] {
-  --brand: #1b5e20;
-  --brand-hover: #134617;
-  --brand-soft: #e7f2e8;
-  --brand-fg: #144d18;
-  --on-brand: #ffffff;
+/* Indigo primary option */
+:root[data-accent='indigo'] {
+  --brand: #4829b2;
+  --brand-hover: #3a1f96;
+  --brand-soft: #efecfd;
+  --brand-fg: #412598;
+  --secondary: #b3294e;
+  --secondary-soft: #fdeef2;
+  --secondary-fg: #a02145;
+}
+
+/* Emerald option */
+:root[data-accent='emerald'] {
+  --brand: #146c46;
+  --brand-hover: #0f5638;
+  --brand-soft: #e6f4ed;
+  --brand-fg: #116040;
+  --secondary: #4829b2;
+  --secondary-soft: #efecfd;
+  --secondary-fg: #43279f;
 }
 
 .dark {
   color-scheme: dark;
 
-  --bg: #0f1318;
-  --bg-elevated: #151a21;
-  --surface: #171d25;
-  --surface-2: #1d2530;
-  --surface-3: #252f3d;
-  --surface-inverse: #f1f4f8;
+  --bg: #121619;
+  --bg-elevated: #1a1f24;
+  --surface: #1b2126;
+  --surface-2: #222930;
+  --surface-3: #2a333b;
+  --surface-inverse: #eef2f6;
 
-  --line: #26303d;
-  --line-strong: #374556;
+  --line: #2c353d;
+  --line-strong: #3f4b55;
 
-  --fg: #edf1f5;
-  --fg-muted: #9fb0c2;
-  --fg-subtle: #6f8194;
+  --fg: #eef2f6;
+  --fg-muted: #a5b2bd;
+  --fg-subtle: #78868f;
 
-  /* Primary: Material Blue in dark mode with crisp contrast */
-  --brand: #1565c0;
-  --brand-hover: #0d47a1;
-  --brand-soft: #132842;
-  --brand-fg: #90caf9;
+  --brand: #d9436d;
+  --brand-hover: #e4587e;
+  --brand-soft: #361923;
+  --brand-fg: #f7a5bb;
   --on-brand: #ffffff;
 
-  --ok: #4caf50;
-  --ok-soft: #132617;
-  --warn: #9fb0c2;
-  --warn-soft: #202935;
-  --danger: #e57373;
-  --danger-soft: #2b1718;
+  --secondary: #7b5cf0;
+  --secondary-soft: #241f3d;
+  --secondary-fg: #bda9ff;
 
-  --elev-1: 0 1px 3px rgb(0 0 0 / 0.36);
-  --elev-2: 0 3px 10px rgb(0 0 0 / 0.45);
-  --elev-3: 0 12px 28px -6px rgb(0 0 0 / 0.6);
-  --elev-4: 0 24px 52px -12px rgb(0 0 0 / 0.72);
+  --ok: #58c07c;
+  --ok-soft: #16281c;
+  --warn: #e0b25c;
+  --warn-soft: #2a2317;
+  --danger: #f08b85;
+  --danger-soft: #2e1918;
+
+  --nav-bg: #171c21;
+  --nav-bg-2: #101417;
+  --nav-fg: #b9c5ce;
+  --nav-fg-strong: #ffffff;
+  --nav-fg-muted: #7d8b95;
+  --nav-line: rgb(255 255 255 / 0.07);
+
+  --elev-1: 0 1px 2px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
+  --elev-2: 0 2px 6px rgb(0 0 0 / 0.45), 0 8px 20px -8px rgb(0 0 0 / 0.5);
+  --elev-3: 0 14px 32px -10px rgb(0 0 0 / 0.6), 0 4px 12px -4px rgb(0 0 0 / 0.4);
+  --elev-4: 0 28px 60px -14px rgb(0 0 0 / 0.7);
 }
 
-.dark[data-accent='green'] {
-  --brand: #2e7d32;
-  --brand-hover: #256829;
-  --brand-soft: #132917;
-  --brand-fg: #81c784;
-  --on-brand: #ffffff;
+.dark[data-accent='indigo'] {
+  --brand: #8d74f5;
+  --brand-hover: #a48ff8;
+  --brand-soft: #251f40;
+  --brand-fg: #c4b4ff;
+  --secondary: #e0567c;
+  --secondary-soft: #361923;
+  --secondary-fg: #f7a5bb;
+}
+
+.dark[data-accent='emerald'] {
+  --brand: #4fbf8b;
+  --brand-hover: #6bd0a0;
+  --brand-soft: #14291f;
+  --brand-fg: #8ddcb5;
 }
 
 /* Instant zero delay theme switching */
@@ -174,6 +262,9 @@ html.theme-switching *::after {
   --color-accent-hover: var(--brand-hover);
   --color-accent-soft: var(--brand-soft);
   --color-accent-fg: var(--brand-fg);
+  --color-secondary: var(--secondary);
+  --color-secondary-soft: var(--secondary-soft);
+  --color-secondary-fg: var(--secondary-fg);
   --color-ok: var(--ok);
   --color-ok-soft: var(--ok-soft);
   --color-warn: var(--warn);
@@ -181,12 +272,17 @@ html.theme-switching *::after {
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
 
-  --text-2xs: 0.6875rem;
-  --text-2xs--line-height: 1rem;
+  --color-nav: var(--nav-bg);
+  --color-nav-fg: var(--nav-fg);
+  --color-nav-fg-strong: var(--nav-fg-strong);
+  --color-nav-fg-muted: var(--nav-fg-muted);
 
-  --font-sans: 'InterVar', 'Roboto', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-display: 'ManropeVar', 'InterVar', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, 'SFMono-Regular', 'Roboto Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  --text-2xs: 0.75rem;
+  --text-2xs--line-height: 1.05rem;
+
+  --font-sans: 'Telenor', 'TelenorTaka', 'TelenorSymbol', 'Segoe UI', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: 'Telenor', 'TelenorTaka', 'TelenorSymbol', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', 'Roboto Mono', Menlo, Consolas, monospace;
 
   --radius-card: var(--r-card);
   --radius-control: var(--r-control);
@@ -204,7 +300,7 @@ html.theme-switching *::after {
   }
 
   html {
-    font-size: clamp(14px, 0.35vw + 13px, 15.5px);
+    font-size: clamp(15.5px, 0.3vw + 14.6px, 17px);
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
     scrollbar-gutter: stable;
@@ -215,9 +311,11 @@ html.theme-switching *::after {
     background-color: var(--bg);
     color: var(--fg);
     font-family: var(--font-sans);
-    font-optical-sizing: auto;
+    font-size: 1rem;
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
     overscroll-behavior: none;
   }
 
@@ -229,15 +327,25 @@ html.theme-switching *::after {
   h1,
   h2,
   h3,
-  h4 {
+  h4,
+  h5 {
     font-family: var(--font-display);
     text-wrap: balance;
-    letter-spacing: -0.015em;
+    letter-spacing: -0.012em;
     font-weight: 700;
+    line-height: 1.25;
   }
 
   p {
     text-wrap: pretty;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font-family: inherit;
+    font-size: inherit;
   }
 
   :focus-visible {
@@ -247,24 +355,24 @@ html.theme-switching *::after {
   }
 
   ::selection {
-    background: color-mix(in oklab, var(--brand) 22%, transparent);
+    background: color-mix(in oklab, var(--brand) 24%, transparent);
   }
 
   ::-webkit-scrollbar {
-    width: 9px;
-    height: 9px;
+    width: 10px;
+    height: 10px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: color-mix(in oklab, var(--fg-subtle) 35%, transparent);
+    background: color-mix(in oklab, var(--fg-subtle) 34%, transparent);
     border-radius: 999px;
     border: 2px solid transparent;
     background-clip: content-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in oklab, var(--fg-subtle) 60%, transparent);
+    background: color-mix(in oklab, var(--fg-subtle) 58%, transparent);
     background-clip: content-box;
   }
 
@@ -283,20 +391,40 @@ html.theme-switching *::after {
       min-height: 2.5rem;
     }
   }
+
+  @media (max-width: 420px) {
+    html {
+      font-size: 15.5px;
+    }
+  }
 }
 
 /* ==================================================================== */
 /*  Utilities                                                           */
 /* ==================================================================== */
 @layer utilities {
-  /* Accent text on dark surfaces needs a lighter tone than solid controls. */
-  .dark .text-accent, .dark .text-brand { color: var(--brand-fg); }
+  .dark .text-accent,
+  .dark .text-brand {
+    color: var(--brand-fg);
+  }
 
   .card {
     background-color: var(--surface);
     border: 1px solid var(--line);
     border-radius: var(--r-card);
     box-shadow: var(--elev-1);
+  }
+
+  .card-hover {
+    transition:
+      border-color var(--dur-base) var(--ease-standard),
+      box-shadow var(--dur-base) var(--ease-standard),
+      transform var(--dur-base) var(--ease-standard);
+  }
+  .card-hover:hover {
+    border-color: color-mix(in oklab, var(--brand) 35%, var(--line));
+    box-shadow: var(--elev-2);
+    transform: translateY(-1px);
   }
 
   .panel {
@@ -308,11 +436,9 @@ html.theme-switching *::after {
   .r-control {
     border-radius: var(--r-control);
   }
-
   .r-chip {
-    border-radius: var(--r-xs);
+    border-radius: var(--r-chip);
   }
-
   .r-dialog {
     border-radius: var(--r-lg);
   }
@@ -348,12 +474,12 @@ html.theme-switching *::after {
 
   .grid-auto-fit {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14.5rem), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15.5rem), 1fr));
   }
 
   .grid-auto-fill {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 14.5rem), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 15.5rem), 1fr));
   }
 
   .checkerboard {
@@ -383,12 +509,42 @@ html.theme-switching *::after {
   .animate-in-fast {
     animation: fade-slide-in var(--dur-base) var(--ease-emphasized) both;
   }
+
+  /* Full-bleed workspace canvas: no artificial max-width, no side gutters
+     beyond a comfortable responsive padding. */
+  .workspace {
+    width: 100%;
+    max-width: none;
+  }
+
+  .brand-gradient {
+    background-image: linear-gradient(
+      135deg,
+      var(--brand) 0%,
+      color-mix(in oklab, var(--brand) 62%, var(--secondary)) 58%,
+      var(--secondary) 100%
+    );
+  }
+
+  .nav-rail {
+    background-image: linear-gradient(180deg, var(--nav-bg) 0%, var(--nav-bg-2) 100%);
+  }
+
+  .surface-glow {
+    background-image:
+      radial-gradient(120% 90% at 8% -10%, color-mix(in oklab, var(--brand) 18%, transparent) 0%, transparent 58%),
+      radial-gradient(100% 80% at 100% 0%, color-mix(in oklab, var(--secondary) 16%, transparent) 0%, transparent 60%);
+  }
+
+  .hairline {
+    border-color: var(--line);
+  }
 }
 
 @keyframes fade-slide-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(5px);
   }
   to {
     opacity: 1;
@@ -404,6 +560,15 @@ html.theme-switching *::after {
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
   }
 }
 

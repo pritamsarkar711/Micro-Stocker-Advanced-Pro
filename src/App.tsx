@@ -7,6 +7,7 @@ import { AuthProvider } from '@/state/AuthState';
 import { AuthGate } from '@/components/auth/AuthGate';
 import { AccountGate } from '@/components/auth/AccountGate';
 import { PremiumGate } from '@/components/auth/PremiumGate';
+import { AdminGate } from '@/components/auth/AdminGate';
 import { LicenseProvider } from '@/state/LicenseState';
 import { ToastProvider } from '@/state/ToastState';
 import { LibraryProvider } from '@/state/library';
@@ -29,6 +30,7 @@ const PlatformsPage = lazy(() => import('@/pages/PlatformsPage').then((m) => ({ 
 const ReleasesPage = lazy(() => import('@/pages/ReleasesPage').then((m) => ({ default: m.ReleasesPage })));
 const BankPage = lazy(() => import('@/pages/BankPage').then((m) => ({ default: m.BankPage })));
 const CloudPage = lazy(() => import('@/pages/CloudPage').then((m) => ({ default: m.CloudPage })));
+const AdminPage = lazy(() => import('@/pages/AdminPage').then((m) => ({ default: m.AdminPage })));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const ContactPage = lazy(() => import('@/pages/ContactPage').then((m) => ({ default: m.ContactPage })));
 const ReportPage = lazy(() => import('@/pages/ReportPage').then((m) => ({ default: m.ReportPage })));
@@ -65,7 +67,8 @@ export default function App() {
                         <Route path="platforms" element={<PlatformsPage />} />
                         <Route path="releases" element={<ReleasesPage />} />
                         <Route path="bank" element={<BankPage />} />
-                        <Route path="cloud" element={<CloudPage />} />
+                        <Route path="admin" element={<AdminGate><AdminPage /></AdminGate>} />
+                        <Route path="cloud" element={<AdminGate><CloudPage /></AdminGate>} />
                         <Route path="settings" element={<SettingsPage />} />
                         <Route path="contact" element={<ContactPage />} />
                         <Route path="report" element={<ReportPage />} />

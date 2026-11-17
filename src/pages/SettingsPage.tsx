@@ -103,11 +103,12 @@ export function SettingsPage() {
 
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs font-medium text-ink">Primary color</span>
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className="flex flex-wrap gap-1.5">
                 {(
                   [
-                    { id: 'blue', label: 'Material Blue', swatch: '#1565c0' },
-                    { id: 'green', label: 'Deep Green', swatch: '#1b5e20' },
+                    { id: 'crimson', label: 'Crimson', swatch: '#b3294e' },
+                    { id: 'indigo', label: 'Indigo', swatch: '#4829b2' },
+                    { id: 'emerald', label: 'Emerald', swatch: '#146c46' },
                   ] as const
                 ).map((opt) => (
                   <button

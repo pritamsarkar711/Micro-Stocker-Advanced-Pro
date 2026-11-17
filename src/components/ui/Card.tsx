@@ -43,16 +43,16 @@ export interface CardHeaderProps {
 
 export function CardHeader({ title, subtitle, icon, action, className }: CardHeaderProps) {
   return (
-    <div className={clsx('mb-3.5 flex flex-wrap items-start justify-between gap-2.5', className)}>
+    <div className={clsx('mb-4 flex flex-wrap items-start justify-between gap-2.5', className)}>
       <div className="flex min-w-0 items-center gap-2.5">
         {icon && (
-          <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-[var(--r-control)] bg-accent-soft text-accent">
+          <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-[var(--r-control)] bg-brand-soft text-brand">
             {icon}
           </span>
         )}
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold tracking-tight text-ink">{title}</h2>
-          {subtitle && <p className="mt-0.5 text-xs text-ink-muted">{subtitle}</p>}
+          <h2 className="text-[0.9375rem] leading-snug font-bold tracking-tight text-ink">{title}</h2>
+          {subtitle && <p className="mt-0.5 text-[0.75rem] text-ink-muted">{subtitle}</p>}
         </div>
       </div>
       {action && <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div>}

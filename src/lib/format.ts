@@ -62,6 +62,12 @@ export function dateTime(iso: string | number | Date): string {
   });
 }
 
+export function date(iso: string | number | Date): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'Unknown';
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' });
+}
+
 export function truncate(value: string, max = 40): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }

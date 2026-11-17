@@ -8,13 +8,15 @@ export interface NavItem {
   group: 'workspace' | 'tools' | 'catalog' | 'system';
   keywords?: string[];
   mobileTab?: boolean;
+  /** Only rendered for accounts with the administrator role. */
+  adminOnly?: boolean;
 }
 
 export const NAV_GROUPS: Array<{ id: NavItem['group']; label: string }> = [
   { id: 'workspace', label: 'Workspace' },
   { id: 'tools', label: 'Studio Tools' },
   { id: 'catalog', label: 'Catalog' },
-  { id: 'system', label: 'System & Help' },
+  { id: 'system', label: 'Account & System' },
 ];
 
 export const NAV_ITEMS: NavItem[] = [
@@ -89,8 +91,20 @@ export const NAV_ITEMS: NavItem[] = [
   },
 
   /* Catalog */
-  { to: '/plan', label: 'Submission Tracker', icon: 'assignment_turned_in', group: 'catalog', keywords: ['queue', 'submission', 'status'] },
-  { to: '/earnings', label: 'Earnings', icon: 'table_chart', group: 'catalog', keywords: ['sales', 'royalties', 'revenue'] },
+  {
+    to: '/plan',
+    label: 'Submission Tracker',
+    icon: 'assignment_turned_in',
+    group: 'catalog',
+    keywords: ['queue', 'submission', 'status'],
+  },
+  {
+    to: '/earnings',
+    label: 'Earnings',
+    icon: 'table_chart',
+    group: 'catalog',
+    keywords: ['sales', 'royalties', 'revenue'],
+  },
   {
     to: '/planner',
     label: 'Planner',
@@ -121,14 +135,29 @@ export const NAV_ITEMS: NavItem[] = [
     keywords: ['synonyms', 'vocabulary', 'translations'],
   },
 
-  /* System & Help */
-  { to: '/subscription', label: 'Subscription', icon: 'workspace_premium', group: 'system', keywords: ['activation', 'premium', 'licence', 'subscription'] },
+  /* Account & system */
+  {
+    to: '/subscription',
+    label: 'Subscription',
+    icon: 'workspace_premium',
+    group: 'system',
+    keywords: ['activation', 'premium', 'licence', 'license', 'code', 'plan'],
+  },
+  {
+    to: '/admin',
+    label: 'Admin Console',
+    icon: 'admin_panel_settings',
+    group: 'system',
+    keywords: ['codes', 'tokens', 'licenses', 'users', 'subscriptions', 'manage'],
+    adminOnly: true,
+  },
   {
     to: '/cloud',
     label: 'Cloud Sync',
     icon: 'cloud_sync',
     group: 'system',
     keywords: ['supabase', 'backup', 'sync', 'database'],
+    adminOnly: true,
   },
   {
     to: '/settings',
@@ -145,13 +174,6 @@ export const NAV_ITEMS: NavItem[] = [
     keywords: ['telegram', 'support', 'creator', 'message', 'joegoldberg2025'],
   },
   {
-    to: '/report',
-    label: 'Report Issue',
-    icon: 'bug_report',
-    group: 'system',
-    keywords: ['bug', 'feedback', 'problem', 'report'],
-  },
-  {
     to: '/about',
     label: 'About',
     icon: 'info',
@@ -160,4 +182,18 @@ export const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-export const MOBILE_TABS = NAV_ITEMS.filter((item) => item.mobileTab);
+/** Navigation visible to a given role. Admin-only entries are never rendered
+ * for regular users – role checks are repeated on the route level too. */
+export function navItemsFor(isAdmin: boolean): NavItem[] {
+  return NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
+}
+
+export function navGroupsFor(isAdmin: boolean) {
+  const items = navItemsFor(isAdmin);
+  return NAV_GROUPS.map((group) => ({
+    ...group,
+    items: items.filter((item) => item.group === group.id),
+  })).filter((group) => group.items.length > 0);
+}
+
+export const MOBILE_TABS = NAV_ITEMS.filter((item) => item.mobileTab && !item.adminOnly);

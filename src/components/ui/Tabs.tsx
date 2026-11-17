@@ -34,7 +34,7 @@ export function Tabs<T extends string>({ items, value, onChange, className }: Ta
             aria-selected={active}
             onClick={() => onChange(item.id)}
             className={clsx(
-              'inline-flex h-7 items-center gap-1.5 rounded-[5px] px-2.5 text-xs font-medium whitespace-nowrap transition-colors',
+              'inline-flex h-9 items-center gap-2 rounded-[var(--r-chip)] px-3 text-[0.8125rem] font-semibold whitespace-nowrap transition-colors',
               active
                 ? 'bg-accent text-on-brand shadow-2xs'
                 : 'text-ink-muted hover:bg-surface hover:text-ink',

@@ -22,12 +22,13 @@ below. Their licences continue to govern those components.
 
 | Asset | Licence | Use |
 | --- | --- | --- |
-| Inter (variable, latin) | SIL Open Font License 1.1 | UI body text, self-hosted in `public/fonts/` |
-| Manrope (variable, latin) | SIL Open Font License 1.1 | Display/headings, self-hosted in `public/fonts/` |
+| Telenor (Light/Regular/Medium/Bold + italics) | Telenor brand font, redistributed for Grameenphone-branded use | Entire UI, self-hosted in `src/assets/fonts/` |
+| Noto Sans Bengali (subset) + Noto Sans Latin Ext (subset) | SIL Open Font License 1.1 | Fallback glyphs only: `৳` and `₹`, which the Telenor family does not contain |
 
-Both font files are unmodified latin subsets redistributed under the OFL; the
-licence text ships with the packages published on npm as
-`@fontsource-variable/inter` and `@fontsource-variable/manrope`. No font is
+The Telenor faces are unmodified WOFF2 conversions of the vendor OTF files. The
+two Noto subsets are generated with `fontTools` from `@fontsource/noto-sans-bengali`
+and `@fontsource/noto-sans` and are restricted by `unicode-range` to the single
+currency glyph each provides, so they never affect Latin text. No font is
 fetched from a third-party server at runtime.
 
 ## Bundled upscaling engine (downloaded on request)

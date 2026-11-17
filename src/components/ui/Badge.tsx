@@ -32,7 +32,7 @@ export function Badge({
     <span
       className={clsx(
         'inline-flex items-center gap-1.5 font-medium whitespace-nowrap r-chip',
-        size === 'sm' ? 'px-2 py-0.5 text-[0.6875rem]' : 'px-2.5 py-0.5 text-xs',
+        size === 'sm' ? 'px-2 py-0.5 text-[0.75rem]' : 'px-2.5 py-1 text-[0.8125rem]',
         TONES[tone],
         className,
       )}

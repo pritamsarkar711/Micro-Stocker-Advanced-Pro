@@ -3,6 +3,62 @@
 All notable changes to Micro Stocker Advanced Pro are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.4.0] - 2026-11-17
+
+### Added
+- **New interface built on the Telenor brand font.** The whole app — body copy,
+  labels, tables, the wordmark and the numeric UI — now uses self-hosted Telenor
+  WOFF2 faces (Light/Regular/Medium/Bold plus italics). Two tiny Noto subsets fill
+  the only gaps in the family (`৳` and `₹`) through `unicode-range`, so currency
+  text never falls back to a random system face. Type and icon sizes moved up one
+  step across the board, and every icon now comes from one Material Symbols set so
+  weights and optical sizes match.
+- **Full-width, responsive layouts.** Removed the narrow centred columns and the
+  dead space under the tool pages. Image Upscaler, Video Upscaler, Background
+  Remover and Image Converter are genuine two-pane workspaces: controls on the
+  left, a drop zone that fills the remaining width and height on the right, and a
+  full-width model catalogue underneath. Verified at 375, 768, 1280 and 1680 px
+  with no horizontal overflow on 21 routes (`scripts/qa/audit-layout.mjs`).
+- **Redesigned logo.** A new monogram with the brand gradient, tuned for the
+  sidebar, topbar, auth screen and window icon.
+- **Admin console and RBAC.** Administrators get code generation, user tables,
+  grants, expiry changes, blocking and an audit trail. Those routes (Admin
+  Console, Cloud Sync) and the admin badge are hidden from ordinary accounts, and
+  every admin RPC re-checks `msap_is_admin()` on the server.
+- **Subscription gate for new accounts.** A workspace route requires a verified,
+  unexpired entitlement or an administrator role; the activation form is part of
+  the gate so a new user can unlock the studio without hunting through menus.
+- **Local AI (Ollama) is a first-class provider.** Free, unlimited and offline:
+  pick a local model, pull it from inside the app, and generate titles,
+  descriptions and keyword sets on the machine's own GPU. Cloud providers stay
+  optional and keep their own keys.
+- **`scripts/qa/audit-layout.mjs`** — a repeatable layout audit that walks 21 routes at four widths,
+  reports console errors and horizontal overflow, and records screenshots.
+
+### Changed
+- README and About page describe the studio without pushing users to a GitHub
+  repository; the About page now links Telegram, the in-app issue reporter and
+  settings instead.
+- Font licence notes in `THIRD-PARTY-NOTICES.md` record the Telenor faces and the
+  two Noto fallback subsets.
+
+### Fixed
+- **Email verification no longer sends users to `localhost:3000`.** Sign-up and
+  password recovery only pass a redirect when the app knows its own public origin,
+  and the desktop build (where a `file://` redirect can never work) verifies with
+  a 6-digit code typed into the app. Expired or reused links surface a readable
+  message instead of a browser error page.
+- **Background licensing checks no longer eject the workspace.** A re-check used
+  to unmount the whole app (losing a half-typed activation code, an upload queue
+  or a mask), and a slow answer could drop an active user to the gate. The last
+  confirmed answer now holds until the local countdown expires, so activated
+  accounts also keep working offline; a blocked or expired account still locks on
+  the next successful check.
+- **The entitlement countdown re-rendered the app every second.** It now updates
+  four times a minute, which removes the typing latency it caused on long forms.
+- **`npm test` failed on every page.** The SSR smoke test rendered routes without
+  `LicenseProvider`; the harness now mirrors the real provider stack.
+
 ## [1.2.1] - 2026-11-16
 
 ### Added
