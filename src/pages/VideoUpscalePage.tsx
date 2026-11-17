@@ -313,8 +313,8 @@ export function VideoUpscalePage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
-        <div className="space-y-4 xl:col-span-5">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,21rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,23rem)_minmax(0,1fr)]">
+        <div className="space-y-4">
           <Card>
             <CardHeader title="Resolution & Codec" icon={<GIcon name="theaters" size={17} />} />
 
@@ -432,61 +432,9 @@ export function VideoUpscalePage() {
               </div>
             </div>
           </Card>
-
-          <Card>
-            <CardHeader
-              title="Video presets"
-              icon={<GIcon name="memory" size={17} />}
-              action={<Badge tone="neutral">{filteredModels.length}</Badge>}
-            />
-
-            <p className="mb-3 text-xs text-ink-muted">Built-in presets use a shared resize and sharpening filter, not AI or specialized shader algorithms. Neural models and frame interpolation are not yet supported by video rendering. Check each model and asset licence before commercial use.</p>
-
-            <div className="mb-3 flex flex-wrap gap-1">
-              {VIDEO_PURPOSES.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setPurpose(p.id)}
-                  className={clsx(
-                    'inline-flex h-7 items-center gap-1 rounded-[var(--r-xs)] border px-2 text-2xs font-medium',
-                    purpose === p.id
-                      ? 'border-accent bg-accent text-on-brand'
-                      : 'border-line bg-surface text-ink-muted hover:text-ink',
-                  )}
-                >
-                  <GIcon name={p.icon} size={13} />
-                  <span>{p.label}</span>
-                </button>
-              ))}
-            </div>
-
-            <div className="max-h-[400px] space-y-1.5 overflow-y-auto pr-1">
-              {filteredModels.map((model) => (
-                <ModelTile
-                  key={model.id}
-                  name={model.name}
-                  icon={model.icon}
-                  badge={model.badge}
-                  license={model.license}
-                  sizeMB={model.sizeMB}
-                  selected={modelId === model.id}
-                  builtin={model.runtime === 'builtin'}
-                  installed={Boolean(installed[model.id])}
-                  desktopOnly={model.runtime !== 'builtin'}
-                  isDesktop={desktop.isDesktop}
-                  progress={dlProgress[model.id]}
-                  onSelect={() => selectModel(model)}
-                  onInstall={() => void handleInstall(model)}
-                  onCancel={() => void cancelModelInstall(model.id)}
-                  onUninstall={() => void handleUninstall(model)}
-                />
-              ))}
-            </div>
-          </Card>
         </div>
 
-        <div className="space-y-4 xl:col-span-7">
+        <div className="flex min-h-[30rem] min-w-0 flex-col gap-4">
           {activeJob ? (
             <Card>
               <CardHeader
@@ -519,7 +467,7 @@ export function VideoUpscalePage() {
                 if (e.dataTransfer.files?.length) void addVideos(e.dataTransfer.files);
               }}
               onClick={() => fileRef.current?.click()}
-              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--r-card)] border border-dashed border-line-strong bg-surface px-6 py-10 text-center hover:border-accent hover:bg-accent-soft/25"
+              className="flex min-h-[18rem] flex-1 cursor-pointer flex-col items-center justify-center gap-3 rounded-[var(--r-card)] border border-dashed border-line-strong bg-surface px-6 py-10 text-center transition-colors hover:border-brand hover:bg-brand-soft/30"
             >
               <span className="inline-flex size-10 items-center justify-center rounded-[var(--r-control)] bg-accent-soft text-accent">
                 <GIcon name="videocam" size={22} />
@@ -619,6 +567,58 @@ export function VideoUpscalePage() {
           )}
         </div>
       </div>
+
+      <Card className="mt-5">
+            <CardHeader
+              title="Video presets"
+              icon={<GIcon name="memory" size={17} />}
+              action={<Badge tone="neutral">{filteredModels.length}</Badge>}
+            />
+
+            <p className="mb-3 text-xs text-ink-muted">Built-in presets use a shared resize and sharpening filter, not AI or specialized shader algorithms. Neural models and frame interpolation are not yet supported by video rendering. Check each model and asset licence before commercial use.</p>
+
+            <div className="mb-3 flex flex-wrap gap-1">
+              {VIDEO_PURPOSES.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setPurpose(p.id)}
+                  className={clsx(
+                    'inline-flex h-7 items-center gap-1 rounded-[var(--r-xs)] border px-2 text-2xs font-medium',
+                    purpose === p.id
+                      ? 'border-accent bg-accent text-on-brand'
+                      : 'border-line bg-surface text-ink-muted hover:text-ink',
+                  )}
+                >
+                  <GIcon name={p.icon} size={13} />
+                  <span>{p.label}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="grid max-h-[26rem] gap-2 overflow-y-auto pr-1 md:grid-cols-2 2xl:grid-cols-3">
+              {filteredModels.map((model) => (
+                <ModelTile
+                  key={model.id}
+                  name={model.name}
+                  icon={model.icon}
+                  badge={model.badge}
+                  license={model.license}
+                  sizeMB={model.sizeMB}
+                  selected={modelId === model.id}
+                  builtin={model.runtime === 'builtin'}
+                  installed={Boolean(installed[model.id])}
+                  desktopOnly={model.runtime !== 'builtin'}
+                  isDesktop={desktop.isDesktop}
+                  progress={dlProgress[model.id]}
+                  onSelect={() => selectModel(model)}
+                  onInstall={() => void handleInstall(model)}
+                  onCancel={() => void cancelModelInstall(model.id)}
+                  onUninstall={() => void handleUninstall(model)}
+                />
+              ))}
+            </div>
+      </Card>
     </div>
   );
 }

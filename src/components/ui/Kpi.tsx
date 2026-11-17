@@ -24,21 +24,21 @@ export function Kpi({ label, value, icon, unit, trend, tone = 'default', to }: K
   const body = (
     <>
       <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-[0.75rem] font-semibold text-fg-muted">{label}</span>
+        <span className="truncate text-[0.8125rem] font-semibold text-fg-muted">{label}</span>
         <span
           className={clsx(
-            'flex size-8 shrink-0 items-center justify-center r-control',
+            'flex size-9 shrink-0 items-center justify-center r-control',
             ICON_BOX[tone],
           )}
         >
-          <GIcon name={icon} size={18} />
+          <GIcon name={icon} size={19} />
         </span>
       </div>
       <div className="mt-2.5 flex items-baseline gap-1.5">
-        <span className="nums display text-[1.625rem] leading-none font-extrabold tracking-[-0.025em] text-fg">
+        <span className="nums display text-[1.75rem] leading-none font-bold tracking-[-0.02em] text-fg">
           {value}
         </span>
-        {unit && <span className="text-[0.75rem] font-medium text-fg-subtle">{unit}</span>}
+        {unit && <span className="text-[0.8125rem] font-medium text-fg-subtle">{unit}</span>}
         {trend !== undefined && (
           <span
             className={clsx(
@@ -55,7 +55,7 @@ export function Kpi({ label, value, icon, unit, trend, tone = 'default', to }: K
   );
 
   const cls = clsx(
-    'card group block px-4 py-3.5 transition-[border-color,box-shadow] duration-150',
+    'card group block px-4 py-4 transition-[border-color,box-shadow] duration-150',
     to && 'hover:border-brand/40 hover:shadow-[var(--elev-2)]',
   );
 

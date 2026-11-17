@@ -18,13 +18,13 @@ const VARIANTS: Record<ButtonVariant, string> = {
 };
 
 const SIZES: Record<ButtonSize, string> = {
-  xs: 'h-7 gap-1.5 px-2.5 text-[0.75rem]',
-  sm: 'h-8.5 gap-1.5 px-3 text-[0.8125rem]',
-  md: 'h-9.5 gap-2 px-4 text-[0.8125rem]',
-  lg: 'h-11 gap-2 px-5 text-sm',
-  icon: 'size-9',
-  'icon-sm': 'size-8',
-  'icon-lg': 'size-11',
+  xs: 'h-8 gap-1.5 px-2.5 text-[0.8125rem]',
+  sm: 'h-9 gap-2 px-3.5 text-[0.8125rem]',
+  md: 'h-10 gap-2 px-4 text-[0.875rem]',
+  lg: 'h-12 gap-2.5 px-5 text-[0.9375rem]',
+  icon: 'size-10',
+  'icon-sm': 'size-9',
+  'icon-lg': 'size-12',
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

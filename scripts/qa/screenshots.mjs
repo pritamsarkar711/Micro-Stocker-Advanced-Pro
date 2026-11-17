@@ -1,0 +1,32 @@
+import { chromium } from 'playwright-core';
+import chromiumBinary from '@sparticuz/chromium';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { brotliDecompressSync } from 'node:zlib';
+const scratch = mkdtempSync(path.join(tmpdir(), 'shot-'));
+writeFileSync(path.join(scratch,'libs.tar'), brotliDecompressSync(readFileSync('node_modules/@sparticuz/chromium/bin/al2023.tar.br')));
+spawnSync('tar',['xf',path.join(scratch,'libs.tar'),'-C',scratch]);
+process.env.LD_LIBRARY_PATH = `${path.join(scratch,'lib')}:${process.env.LD_LIBRARY_PATH||''}`;
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || await chromiumBinary.executablePath(), args: chromiumBinary.args, headless: true });
+const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+const page = await ctx.newPage();
+const errors=[];
+page.on('pageerror', e=>errors.push('PAGEERROR '+e.message));
+page.on('console', m=>{ if(m.type()==='error') errors.push('CONSOLE '+m.text()+' @ '+JSON.stringify(m.location())); });
+await page.goto('http://127.0.0.1:5173/', { waitUntil: 'networkidle' });
+await page.screenshot({ path: '/tmp/shots/01-auth.png', fullPage: false });
+await page.getByPlaceholder('you@example.com').fill('admin@demo.local');
+await page.getByPlaceholder('Enter password').fill('demo-password');
+await page.getByRole('button', { name: 'Sign in', exact: true }).last().click();
+await page.waitForTimeout(1200);
+await page.screenshot({ path: '/tmp/shots/02-overview.png' });
+for (const [name, route] of [['03-admin','admin'],['04-subscription','subscription'],['05-upscale','upscale'],['06-bg','bg-remove'],['07-convert','convert'],['08-library','library'],['09-settings','settings'],['10-video','video-upscale'],['11-about','about'],['12-overview','']]) {
+  await page.goto(`http://127.0.0.1:5173/#/${route}`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(700);
+  await page.screenshot({ path: `/tmp/shots/${name}.png`, fullPage: false });
+}
+console.log('ERRORS:', JSON.stringify(errors.slice(0,10), null, 1));
+await browser.close();
+rmSync(scratch,{recursive:true,force:true});

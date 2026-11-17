@@ -7,26 +7,33 @@ export function PageHeader({
   actions,
   children,
   className,
+  eyebrow,
 }: {
   title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
   children?: ReactNode;
   className?: string;
+  eyebrow?: ReactNode;
 }) {
   return (
-    <div className={clsx('mb-4 flex flex-col gap-3', className)}>
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+    <div className={clsx('mb-5 flex flex-col gap-3.5', className)}>
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
         <div className="min-w-0">
-          <h1 className="display truncate text-[1.4375rem] leading-tight font-extrabold tracking-[-0.02em] text-fg">
+          {eyebrow && (
+            <div className="mb-1 text-[0.6875rem] font-semibold tracking-[0.14em] text-brand-fg uppercase">
+              {eyebrow}
+            </div>
+          )}
+          <h1 className="display text-[1.5rem] leading-tight font-bold tracking-[-0.018em] text-ink sm:text-[1.625rem]">
             {title}
           </h1>
           {description && (
-            <p className="mt-0.5 text-[0.8125rem] text-fg-muted">{description}</p>
+            <p className="mt-1 max-w-3xl text-[0.8125rem] leading-relaxed text-ink-muted">{description}</p>
           )}
         </div>
         {actions && (
-          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
             {actions}
           </div>
         )}

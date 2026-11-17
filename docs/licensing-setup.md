@@ -31,17 +31,27 @@ constitute centrally verified accounts and are not automatically migrated.
 5. For GitHub Actions, set repository variables `MSAP_LICENSE_SUPABASE_URL`
    and `MSAP_LICENSE_SUPABASE_ANON_KEY` to the public project URL and public
    publishable key. The workflow maps these to the `VITE_` build variables.
-   Never use a secret/service-role key here. Verify that the email confirmation
-   redirect URL is appropriate for the desktop flow; Supabase's default
-   `localhost` redirect is not a production-ready end-user experience. Configure
-   an SMTP provider for production email delivery before admitting users.
-6. Sign in, open Subscription, and generate a trial or premium code. Copy the
+   Never use a secret/service-role key here. Configure an SMTP provider for
+   production email delivery before admitting users.
+6. Point the confirmation links at a real URL. In **Authentication → URL
+   Configuration** set **Site URL** to the hosted web build (for example
+   `https://studio.example.com`), and add every origin you ship to **Redirect
+   URLs**. A Supabase project still on the default `http://localhost:3000` sends
+   every confirmation and recovery email to a dead address — that is the
+   `localhost refused to connect` report. The app never invents a redirect: it
+   uses `VITE_AUTH_REDIRECT_URL` when the build sets one, otherwise the current
+   page origin, and for the packaged desktop app (`file://`, where an email link
+   can never land) it asks the user to type the 6-digit code from the same email
+   instead. Deploy the web build if you want link-based confirmation.
+7. Sign in, open Subscription, and generate a trial or premium code. Copy the
    code immediately; only its hash is stored. Test redemption, reuse, revocation,
    simultaneous redemption, expiry, network failures, and admin authorization
    with separate ordinary and admin accounts before distributing a release.
 
-The app periodically revalidates premium access and disables it after expiry or
-when validation is unavailable. UI checks in a locally controlled desktop
+The app revalidates premium access every thirty seconds. The last confirmed
+answer is kept until the local countdown runs out, so a dropped connection does
+not eject a paying contributor mid-session while an expired or blocked account
+still locks on the next successful check. UI checks in a locally controlled desktop
 application are not tamper-proof. They do not prevent patching, redistribution,
 or reverse engineering; protect valuable server-side operations on the server.
 The backend hostname is visible to a determined user through network inspection.

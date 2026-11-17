@@ -203,7 +203,7 @@ export function SubmissionsPage() {
                 toast.info('Marked submitted', 'Update to accepted/rejected once review finishes.');
               }}
             >
-              Queued → submitted
+              Queued to submitted
             </Button>
           </div>
         </Card>

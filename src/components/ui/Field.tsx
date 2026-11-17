@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import type {
   InputHTMLAttributes,
   ReactNode,
+  Ref,
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from 'react';
@@ -12,9 +13,9 @@ const CONTROL =
   'disabled:cursor-not-allowed disabled:opacity-55 disabled:bg-surface-2';
 
 const SIZES = {
-  sm: 'h-8 px-2.5 text-[0.8125rem]',
-  md: 'h-9.5 px-3 text-[0.8125rem]',
-  lg: 'h-11 px-3.5 text-sm',
+  sm: 'h-9 px-3 text-[0.8125rem]',
+  md: 'h-10 px-3 text-[0.875rem]',
+  lg: 'h-12 px-3.5 text-[0.9375rem]',
 };
 
 export function Field({
@@ -39,7 +40,7 @@ export function Field({
       {label && (
         <label
           htmlFor={htmlFor}
-          className="text-[0.75rem] leading-none font-semibold text-fg-muted"
+          className="text-[0.8125rem] leading-none font-semibold text-fg-muted"
         >
           {label}
           {required && <span className="ml-0.5 text-danger">*</span>}
@@ -47,9 +48,9 @@ export function Field({
       )}
       {children}
       {error ? (
-        <p className="text-[0.6875rem] font-medium text-danger">{error}</p>
+        <p className="text-[0.75rem] font-medium text-danger">{error}</p>
       ) : hint ? (
-        <p className="text-[0.6875rem] leading-relaxed text-fg-subtle">{hint}</p>
+        <p className="text-[0.75rem] leading-relaxed text-fg-subtle">{hint}</p>
       ) : null}
     </div>
   );
@@ -62,6 +63,7 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
   suffix?: ReactNode;
   leading?: ReactNode;
   trailing?: ReactNode;
+  ref?: Ref<HTMLInputElement>;
 }
 
 export function Input({
@@ -72,6 +74,7 @@ export function Input({
   leading,
   trailing,
   className,
+  ref,
   ...rest
 }: InputProps) {
   const pre = prefix ?? leading;
@@ -85,12 +88,13 @@ export function Input({
           </span>
         )}
         <input
+          ref={ref}
           className={clsx(
             CONTROL,
             SIZES[size],
             invalid && 'border-danger focus:border-danger focus:ring-danger/20',
-            pre && 'pl-9',
-            suf && 'pr-9',
+            pre && 'pl-10',
+            suf && 'pr-10',
             className,
           )}
           {...rest}
@@ -101,6 +105,7 @@ export function Input({
   }
   return (
     <input
+      ref={ref}
       className={clsx(
         CONTROL,
         SIZES[size],
@@ -121,7 +126,7 @@ export function Textarea({ invalid, className, ...rest }: TextareaProps) {
     <textarea
       className={clsx(
         CONTROL,
-        'min-h-20 resize-y px-3 py-2 text-[0.8125rem] leading-relaxed',
+        'min-h-24 resize-y px-3 py-2.5 text-[0.875rem] leading-relaxed',
         invalid && 'border-danger focus:border-danger focus:ring-danger/20',
         className,
       )}
@@ -178,11 +183,11 @@ export function Switch({
       {(label || description) && (
         <div className="min-w-0">
           {label && (
-            <label htmlFor={id} className="block cursor-pointer text-[0.8125rem] font-medium text-fg">
+            <label htmlFor={id} className="block cursor-pointer text-[0.875rem] font-medium text-fg">
               {label}
             </label>
           )}
-          {description && <p className="mt-0.5 text-[0.6875rem] text-fg-muted">{description}</p>}
+          {description && <p className="mt-0.5 text-[0.75rem] text-fg-muted">{description}</p>}
         </div>
       )}
       <button
@@ -193,7 +198,7 @@ export function Switch({
         disabled={disabled}
         onClick={() => onChange(!checked)}
         className={clsx(
-          'relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-150',
+          'relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-150',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand',
           'disabled:cursor-not-allowed disabled:opacity-50',
           checked ? 'bg-brand' : 'bg-line-strong',
@@ -201,8 +206,8 @@ export function Switch({
       >
         <span
           className={clsx(
-            'inline-block size-4 transform rounded-full bg-white shadow-sm transition-transform duration-150',
-            checked ? 'translate-x-[1.125rem]' : 'translate-x-0.5',
+            'inline-block size-5 transform rounded-full bg-white shadow-sm transition-transform duration-150',
+            checked ? 'translate-x-[1.375rem]' : 'translate-x-0.5',
           )}
         />
       </button>
@@ -242,7 +247,7 @@ export function SegmentedControl<T extends string>({
             onClick={() => onChange(option.value)}
             className={clsx(
               'r-chip inline-flex cursor-pointer items-center gap-1.5 font-semibold whitespace-nowrap',
-              size === 'sm' ? 'px-2.5 py-1 text-[0.75rem]' : 'px-3 py-1.5 text-[0.8125rem]',
+              size === 'sm' ? 'px-2.5 py-1.5 text-[0.75rem]' : 'px-3.5 py-2 text-[0.8125rem]',
               active
                 ? 'bg-brand text-white shadow-[0_1px_2px_rgb(15_23_42/0.16)]'
                 : 'text-fg-muted hover:text-fg',

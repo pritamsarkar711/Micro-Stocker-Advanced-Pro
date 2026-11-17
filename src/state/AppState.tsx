@@ -21,7 +21,7 @@ import {
 } from '@/lib/cloud/config';
 
 export type ThemeSetting = 'light' | 'dark' | 'system';
-export type AccentSetting = 'blue' | 'green';
+export type AccentSetting = 'crimson' | 'indigo' | 'emerald';
 
 export interface Settings {
   theme: ThemeSetting;
@@ -34,7 +34,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'dark',
-  accent: 'blue',
+  accent: 'crimson',
   density: 'comfortable',
   currency: 'BDT',
   sidebarCollapsed: false,
@@ -94,6 +94,14 @@ function resolveDark(theme: ThemeSetting): boolean {
   return theme === 'dark' || (theme === 'system' && systemPrefersDark());
 }
 
+/** Accept legacy accent names so existing installations keep their choice. */
+export function normalizeAccent(value: unknown): AccentSetting {
+  if (value === 'indigo' || value === 'emerald' || value === 'crimson') return value;
+  if (value === 'green') return 'emerald';
+  if (value === 'blue') return 'crimson';
+  return DEFAULT_SETTINGS.accent;
+}
+
 /**
  * Synchronously switch light and dark paint in a single frame with CSS
  * transitions temporarily paused so every surface updates immediately.
@@ -105,8 +113,8 @@ function paintThemeDom(dark: boolean, accent: AccentSetting, theme: ThemeSetting
   root.classList.toggle('dark', dark);
   root.style.colorScheme = dark ? 'dark' : 'light';
   root.dataset.accent = accent;
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', dark ? '#0f1318' : '#f5f7fa');
+  const color = dark ? '#121619' : '#f4f6f9';
+  document.querySelectorAll('meta[name="theme-color"]').forEach((el) => el.setAttribute('content', color));
   // Flush style recalculation before restoring control transitions.
   void root.offsetHeight;
   requestAnimationFrame(() => {
@@ -127,7 +135,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return {
         ...DEFAULT_SETTINGS,
         ...parsed,
-        accent: parsed.accent === 'green' ? 'green' : 'blue',
+        accent: normalizeAccent(parsed.accent),
         theme: parsed.theme ?? (systemPrefersDark() ? 'dark' : 'light'),
       };
     } catch {
@@ -162,7 +170,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const mergedSettings: Settings = {
         ...DEFAULT_SETTINGS,
         ...storedSettings,
-        accent: storedSettings.accent === 'green' ? 'green' : 'blue',
+        accent: normalizeAccent(storedSettings.accent),
         theme: storedSettings.theme ?? (systemPrefersDark() ? 'dark' : 'light'),
       };
       const mergedCloud = mergeEnvConfig(storedCloud);

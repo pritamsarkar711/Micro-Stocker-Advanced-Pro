@@ -42,6 +42,7 @@ import { createElement as h } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { AppProvider } from '@/state/AppState';
 import { AuthProvider } from '@/state/AuthState';
+import { LicenseProvider } from '@/state/LicenseState';
 import { LibraryProvider } from '@/state/library';
 import { ToastProvider } from '@/state/ToastState';
 import { ReleasesProvider } from '@/state/releases';
@@ -80,10 +81,11 @@ const PAGES = {
         h(ToastProvider, null,
           h(AppProvider, null,
             h(AuthProvider, null,
-              h(BankProvider, null,
-                h(ReleasesProvider, null,
-                  h(LibraryProvider, null,
-                    h(AppShell, null, h(Page)))))))));
+              h(LicenseProvider, null,
+                h(BankProvider, null,
+                  h(ReleasesProvider, null,
+                    h(LibraryProvider, null,
+                      h(AppShell, null, h(Page))))))))));
       const html = renderToString(tree);
       const textOnly = html.replace(/<[^>]+>/g, ' ');
       const badValue = /NaN|undefined<|>undefined|\\[object Object\\]/.test(html);
