@@ -19,7 +19,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-bg text-ink">
       <Sidebar />
-      <Sidebar mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
+      {mobileOpen && <Sidebar mobileOpen onCloseMobile={() => setMobileOpen(false)} />}
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar onOpenMobileNav={() => setMobileOpen(true)} />

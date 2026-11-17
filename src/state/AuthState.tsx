@@ -7,15 +7,11 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { kv } from '@/lib/kv';
-import { getSupabase, isConfigured, type CloudConfig } from '@/lib/cloud/config';
-import { useApp } from './AppState';
+import type { User } from '@supabase/supabase-js';
+import { licensingClient } from '@/lib/cloud/licensing';
 
-/**
- * Direct email & password account system with immediate sign in.
- * No email confirmation link or verification code is ever required.
- * Passwords are salted and hashed with PBKDF2 SHA256 via Web Crypto.
- */
+/** Legacy local-account helpers are retained for migration only. New sessions
+ * are authenticated and verified by the centralized licensing service. */
 
 export interface StoredAccount {
   id: string;
@@ -36,8 +32,6 @@ export interface UserSession {
   syncedToCloud?: boolean;
 }
 
-const ACCOUNTS_KEY = 'msap:accounts';
-const SESSION_KEY = 'msap:auth-session';
 const PBKDF2_ITERATIONS = 120_000;
 
 function toHex(bytes: Uint8Array): string {
@@ -80,8 +74,8 @@ export function validateCredentials(
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(clean)) {
     return { ok: false, error: 'Enter a valid email address.' };
   }
-  if (!password || password.length < 6) {
-    return { ok: false, error: 'Password must be at least 6 characters.' };
+  if (!password || password.length < 8) {
+    return { ok: false, error: 'Password must be at least 8 characters.' };
   }
   if (password.length > 128) {
     return { ok: false, error: 'Password must be 128 characters or fewer.' };
@@ -189,54 +183,6 @@ export async function authenticateAccountRecord(
   };
 }
 
-async function syncAccountToCloud(cfg: CloudConfig, account: StoredAccount): Promise<boolean> {
-  if (!isConfigured(cfg)) return false;
-  try {
-    const client = await getSupabase(cfg);
-    if (!client) return false;
-    const { error } = await client.from('user_accounts').upsert(
-      {
-        id: account.id,
-        email: account.email,
-        display_name: account.displayName,
-        password_hash: account.passwordHash,
-        password_salt: account.passwordSalt,
-        created_at: account.createdAt,
-        last_login_at: account.lastLoginAt,
-      },
-      { onConflict: 'email' },
-    );
-    return !error;
-  } catch {
-    return false;
-  }
-}
-
-async function fetchAccountFromCloud(cfg: CloudConfig, email: string): Promise<StoredAccount | null> {
-  if (!isConfigured(cfg)) return null;
-  try {
-    const client = await getSupabase(cfg);
-    if (!client) return null;
-    const { data, error } = await client
-      .from('user_accounts')
-      .select('id,email,display_name,password_hash,password_salt,created_at,last_login_at')
-      .eq('email', normalizeEmail(email))
-      .maybeSingle();
-    if (error || !data) return null;
-    return {
-      id: String(data.id),
-      email: String(data.email),
-      displayName: String(data.display_name || ''),
-      passwordHash: String(data.password_hash),
-      passwordSalt: String(data.password_salt),
-      createdAt: String(data.created_at),
-      lastLoginAt: String(data.last_login_at),
-    };
-  } catch {
-    return null;
-  }
-}
-
 export type AuthModalMode = 'login' | 'register' | 'account';
 
 interface AuthState {
@@ -262,156 +208,85 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | null>(null);
 
+function toUser(user: User): UserSession {
+  return {
+    id: user.id,
+    email: user.email ?? '',
+    displayName: String(user.user_metadata?.display_name || user.email?.split('@')[0] || 'Contributor'),
+    createdAt: user.created_at,
+    loggedInAt: user.last_sign_in_at || user.created_at,
+    syncedToCloud: true,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { cloud } = useApp();
   const [ready, setReady] = useState(false);
-  const [accounts, setAccounts] = useState<StoredAccount[]>([]);
   const [user, setUser] = useState<UserSession | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<AuthModalMode>('login');
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const [savedAccounts, savedSession] = await Promise.all([
-        kv.get<StoredAccount[]>(ACCOUNTS_KEY, []),
-        kv.get<UserSession | null>(SESSION_KEY, null),
-      ]);
-      if (cancelled) return;
-      setAccounts(Array.isArray(savedAccounts) ? savedAccounts : []);
-      setUser(savedSession);
-      setReady(true);
-    })();
-    return () => {
-      cancelled = true;
+    const client = licensingClient();
+    if (!client) { setReady(true); return; }
+    let active = true;
+    let authRevision = 0;
+    // Do not trust a session copied into local storage: verify it with Auth.
+    const refresh = async () => {
+      const revision = ++authRevision;
+      const { data, error } = await client.auth.getUser();
+      if (active && revision === authRevision) { setUser(!error && data.user ? toUser(data.user) : null); setReady(true); }
     };
+    void refresh();
+    const { data: listener } = client.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') { ++authRevision; if (active) { setUser(null); setReady(true); } }
+      else if (event !== 'INITIAL_SESSION') { ++authRevision; setTimeout(() => { if (active) void refresh(); }, 0); }
+    });
+    return () => { active = false; listener.subscription.unsubscribe(); };
   }, []);
 
-  const openAuth = useCallback(
-    (mode?: AuthModalMode) => {
-      setModalMode(mode ?? (user ? 'account' : 'login'));
-      setModalOpen(true);
-    },
-    [user],
-  );
-
+  const openAuth = useCallback((mode?: AuthModalMode) => { setModalMode(mode ?? (user ? 'account' : 'login')); setModalOpen(true); }, [user]);
   const closeAuth = useCallback(() => setModalOpen(false), []);
-
-  const register = useCallback<AuthState['register']>(
-    async (email, password, displayName) => {
-      const current = await kv.get<StoredAccount[]>(ACCOUNTS_KEY, accounts);
-      const remoteExisting = await fetchAccountFromCloud(cloud, email);
-      const pool = remoteExisting && !current.some((a) => a.email === remoteExisting.email)
-        ? [...current, remoteExisting]
-        : current;
-
-      const created = await createAccountRecord(pool, email, password, displayName);
-      if (!created.ok) return created;
-
-      const synced = await syncAccountToCloud(cloud, created.account);
-      const session: UserSession = { ...created.session, syncedToCloud: synced };
-      const nextAccounts = [...pool, created.account];
-
-      setAccounts(nextAccounts);
-      setUser(session);
-      await Promise.all([kv.set(ACCOUNTS_KEY, nextAccounts), kv.set(SESSION_KEY, session)]);
-      return { ok: true, user: session };
-    },
-    [accounts, cloud],
-  );
-
-  const login = useCallback<AuthState['login']>(
-    async (email, password) => {
-      const current = await kv.get<StoredAccount[]>(ACCOUNTS_KEY, accounts);
-      let pool = current;
-      const normalized = normalizeEmail(email);
-      if (!pool.some((a) => a.email === normalized)) {
-        const remote = await fetchAccountFromCloud(cloud, normalized);
-        if (remote) pool = [...pool, remote];
-      }
-
-      const result = await authenticateAccountRecord(pool, email, password);
-      if (!result.ok) return result;
-
-      const synced = await syncAccountToCloud(cloud, result.account);
-      const session: UserSession = { ...result.session, syncedToCloud: synced };
-      const nextAccounts = pool.map((a) => (a.email === result.account.email ? result.account : a));
-
-      setAccounts(nextAccounts);
-      setUser(session);
-      await Promise.all([kv.set(ACCOUNTS_KEY, nextAccounts), kv.set(SESSION_KEY, session)]);
-      return { ok: true, user: session };
-    },
-    [accounts, cloud],
-  );
-
-  const updateDisplayName = useCallback(
-    async (name: string) => {
-      const clean = name.trim();
-      if (!user || !clean) return;
-      const nextUser = { ...user, displayName: clean };
-      const nextAccounts = accounts.map((a) => (a.id === user.id ? { ...a, displayName: clean } : a));
-      setUser(nextUser);
-      setAccounts(nextAccounts);
-      await Promise.all([kv.set(SESSION_KEY, nextUser), kv.set(ACCOUNTS_KEY, nextAccounts)]);
-      const updated = nextAccounts.find((a) => a.id === user.id);
-      if (updated) void syncAccountToCloud(cloud, updated);
-    },
-    [accounts, cloud, user],
-  );
-
-  const logout = useCallback(async () => {
-    setUser(null);
-    await kv.del(SESSION_KEY);
+  const register = useCallback<AuthState['register']>(async (email, password, displayName) => {
+    const check = validateCredentials(email, password);
+    if (!check.ok) return check;
+    const client = licensingClient();
+    if (!client) return { ok: false, error: 'This build is not connected to the licensing service. Contact the administrator.' };
+    const { data, error } = await client.auth.signUp({ email: normalizeEmail(email), password, options: { data: { display_name: displayName?.trim() || '' } } });
+    if (error) return { ok: false, error: error.message };
+    if (!data.session || !data.user) return { ok: false, error: 'Check your email to confirm your account, then sign in.' };
+    const verified = await client.auth.getUser();
+    if (verified.error || !verified.data.user) return { ok: false, error: 'Unable to verify your session. Please sign in.' };
+    const session = toUser(verified.data.user); setUser(session);
+    return { ok: true, user: session };
   }, []);
-
-  const deleteAccount = useCallback(async () => {
-    if (!user) return;
-    const nextAccounts = accounts.filter((a) => a.id !== user.id);
-    setAccounts(nextAccounts);
+  const login = useCallback<AuthState['login']>(async (email, password) => {
+    const client = licensingClient();
+    if (!client) return { ok: false, error: 'This build is not connected to the licensing service. Contact the administrator.' };
+    const { error } = await client.auth.signInWithPassword({ email: normalizeEmail(email), password });
+    if (error) return { ok: false, error: error.message };
+    const verified = await client.auth.getUser();
+    if (verified.error || !verified.data.user) return { ok: false, error: 'Unable to verify your session. Please try again.' };
+    const session = toUser(verified.data.user); setUser(session);
+    return { ok: true, user: session };
+  }, []);
+  const updateDisplayName = useCallback(async (name: string) => {
+    const client = licensingClient();
+    if (!client || !name.trim()) return;
+    const { data, error } = await client.auth.updateUser({ data: { display_name: name.trim() } });
+    if (error) throw error;
+    if (data.user) setUser(toUser(data.user));
+  }, []);
+  const logout = useCallback(async () => {
+    const client = licensingClient();
+    if (client) await client.auth.signOut();
     setUser(null);
-    await Promise.all([kv.set(ACCOUNTS_KEY, nextAccounts), kv.del(SESSION_KEY)]);
-    if (isConfigured(cloud)) {
-      const client = await getSupabase(cloud);
-      if (client) {
-        try {
-          await client.from('user_accounts').delete().eq('id', user.id);
-        } catch {
-          /* ignore remote removal errors */
-        }
-      }
-    }
-  }, [accounts, cloud, user]);
-
-  const value = useMemo<AuthState>(
-    () => ({
-      ready,
-      user,
-      modalOpen,
-      modalMode,
-      openAuth,
-      closeAuth,
-      register,
-      login,
-      updateDisplayName,
-      logout,
-      deleteAccount,
-    }),
-    [
-      ready,
-      user,
-      modalOpen,
-      modalMode,
-      openAuth,
-      closeAuth,
-      register,
-      login,
-      updateDisplayName,
-      logout,
-      deleteAccount,
-    ],
-  );
-
+  }, []);
+  const deleteAccount = useCallback(async () => {
+    // Account deletion requires an administrative endpoint; never claim a local
+    // deletion removed a centralized account.
+    throw new Error('Contact the administrator to delete your account.');
+  }, []);
+  const value = useMemo<AuthState>(() => ({ ready, user, modalOpen, modalMode, openAuth, closeAuth, register, login, updateDisplayName, logout, deleteAccount }), [ready, user, modalOpen, modalMode, openAuth, closeAuth, register, login, updateDisplayName, logout, deleteAccount]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

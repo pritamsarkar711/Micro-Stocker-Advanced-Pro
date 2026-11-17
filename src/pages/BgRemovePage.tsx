@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
+import { MaskEditor } from '@/components/tools/MaskEditor';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -61,6 +62,7 @@ export function BgRemovePage() {
   const [activePreviewId, setActivePreviewId] = useState<string | null>(null);
   const [splitPos, setSplitPos] = useState(50);
   const [running, setRunning] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const queueRef = useRef<CutoutEntry[]>([]);
   queueRef.current = queue;
@@ -247,10 +249,23 @@ export function BgRemovePage() {
   }
 
   const previewItem = queue.find((i) => i.id === activePreviewId) ?? queue[0];
+  const editingItem = queue.find((i) => i.id === editingId);
   const doneItems = queue.filter((i) => i.status === 'done' && i.result);
 
   return (
     <div className="space-y-5">
+      {editingItem?.result && (
+        <MaskEditor key={editingItem.id} source={editingItem.blob} result={editingItem.result} onClose={() => setEditingId(null)} onSave={(result) => {
+          const url = URL.createObjectURL(result.blob);
+          setQueue((prev) => prev.map((item) => {
+            if (item.id !== editingItem.id) return item;
+            if (item.outUrl) URL.revokeObjectURL(item.outUrl);
+            return { ...item, result, outUrl: url };
+          }));
+          setEditingId(null);
+          toast.success('Cutout updated', 'Saved as a transparent PNG.');
+        }} />
+      )}
       <PageHeader
         title="Background Remover"
         actions={
@@ -399,7 +414,7 @@ export function BgRemovePage() {
 
           <Card>
             <CardHeader
-              title="Open source models"
+              title="Background removal models"
               icon={<GIcon name="memory" size={17} />}
               action={<Badge tone="neutral">{filteredModels.length}</Badge>}
             />
@@ -412,7 +427,7 @@ export function BgRemovePage() {
                   className={clsx(
                     'inline-flex h-7 items-center gap-1 rounded-[var(--r-xs)] border px-2 text-2xs font-medium',
                     purpose === p.id
-                      ? 'border-accent bg-accent text-accent-fg'
+                      ? 'border-accent bg-accent text-on-brand'
                       : 'border-line bg-surface text-ink-muted hover:text-ink',
                   )}
                 >
@@ -421,6 +436,8 @@ export function BgRemovePage() {
                 </button>
               ))}
             </div>
+
+            <p className="mb-3 text-xs text-ink-muted">Model weights may have separate terms from their source code. Review the <a href="https://github.com/danielgatis/rembg#models" target="_blank" rel="noreferrer" className="text-brand-fg underline">model sources and licences</a> before commercial use.</p>
 
             <div className="max-h-[400px] space-y-1.5 overflow-y-auto pr-1">
               {filteredModels.map((model) => (
@@ -454,8 +471,9 @@ export function BgRemovePage() {
                 icon={<GIcon name="compare" size={17} />}
                 action={
                   <div className="flex items-center gap-2 text-2xs text-ink-muted">
-                    <span>Split</span>
-                    <input
+                    <Button size="xs" variant="secondary" disabled={running} onClick={() => setEditingId(previewItem.id)}>Edit mask</Button>
+                    <label htmlFor="bg-split">Split</label>
+                    <input id="bg-split"
                       type="range"
                       min={0}
                       max={100}

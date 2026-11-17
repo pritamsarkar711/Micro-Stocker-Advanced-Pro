@@ -122,6 +122,7 @@ export const NAV_ITEMS: NavItem[] = [
   },
 
   /* System & Help */
+  { to: '/subscription', label: 'Subscription', icon: 'workspace_premium', group: 'system', keywords: ['activation', 'premium', 'licence', 'subscription'] },
   {
     to: '/cloud',
     label: 'Cloud Sync',

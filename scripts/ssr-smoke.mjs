@@ -87,6 +87,7 @@ const PAGES = {
       const html = renderToString(tree);
       const textOnly = html.replace(/<[^>]+>/g, ' ');
       const badValue = /NaN|undefined<|>undefined|\\[object Object\\]/.test(html);
+      if ((html.match(/aria-label="Main navigation"/g) || []).length !== 1) throw new Error('Expected exactly one closed desktop navigation');
       const hasDash = false; // Existing pages legitimately use punctuation in their copy.
       void textOnly;
       const status = badValue ? 'SUSPECT' : hasDash ? 'DASH' : 'ok';

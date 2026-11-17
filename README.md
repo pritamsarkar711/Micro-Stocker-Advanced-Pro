@@ -7,11 +7,10 @@
 **One desktop workspace for every microstock portal.**
 Metadata, keywording, exact per-platform CSV, IPTC/XMP embedding, local AI
 upscaling to 8K, validation, submission tracking and earnings analytics for
-**14 marketplaces** — offline, on your own machine.
+**14 marketplaces**. The desktop studio runs locally; account and subscription verification require an internet connection.
 
 [![latest](https://img.shields.io/github/v/release/pritamsarkar711/Micro-Stocker-Advanced-Pro?style=for-the-badge&label=release&color=1d4ed8)](https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro/releases)
 [![platforms](https://img.shields.io/badge/marketplaces-14-1d4ed8?style=for-the-badge)](#-supported-marketplaces)
-[![tests](https://img.shields.io/badge/tests-73%20passing-15803d?style=for-the-badge)](#testing)
 [![licence](https://img.shields.io/badge/licence-source--available-575e6b?style=for-the-badge)](LICENSE)
 
 [Download](#-download) · [Marketplaces](#-supported-marketplaces) · [Features](#-whats-inside) · [Build](#-build-from-source) · [Support](#-support)
@@ -22,24 +21,11 @@ upscaling to 8K, validation, submission tracking and earnings analytics for
 
 ## 📥 Download
 
-**No installers are published yet** — the
-**[Releases page](https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro/releases)**
-currently carries tags only, with no binaries attached. To run the app today,
-build it from source (below). To start publishing installers, activate
-`docs/ci/build-desktop-installers.yml` as `.github/workflows/build.yml` and push
-a `v*.*.*` tag; it produces the artifacts below on GitHub's runners.
+Downloads for published versions are available on the [Releases page](https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro/releases). Windows installers are unsigned unless the release notes say otherwise.
 
-| Platform | Artifact name (when built) |
-| --- | --- |
-| Windows 10/11 (x64) | `Micro-Stocker-Advanced-Pro-Setup-<version>-win-x64.exe` |
-| Windows (no install) | `Micro-Stocker-Advanced-Pro-<version>-portable-win-x64.exe` |
-| macOS (Apple silicon + Intel) | `.dmg` |
-| Linux (x64) | `.AppImage`, `.deb` |
+The current development branch requires an account and a configured licensing backend. It is not ready for distribution until the backend has been deployed and verified. See [licensing setup](docs/licensing-setup.md). The Windows NSIS installer allows users to select the installation directory.
 
-No account, no subscription, no telemetry, and **no paid AI required**. The app
-runs fully offline; the only connections it ever makes are the ones you start —
-the optional one-time Real-ESRGAN download, the optional Supabase sync, and the
-AI provider you pick (none by default).
+**Security notice:** older cloud setup instructions exposed account hashes and workspace data to anonymous clients. See [legacy project remediation](docs/licensing-setup.md#urgent-legacy-projects). Legacy cloud sync is disabled pending a secure replacement.
 
 ## 🌍 Supported marketplaces
 
@@ -73,13 +59,15 @@ copy-paste sheet with the exact fields in the right order.
 | **Metadata AI** | Free by design, three routes: the built-in offline generator, a model on your own machine (Ollama or any OpenAI-compatible server), or a free-tier cloud key (OpenRouter, Gemini, Mistral, NVIDIA, Groq, Cerebras, Together). Live connection test, real error messages, keys stored locally. |
 | **Library** | Import JPG, PNG, WebP, EPS, AI, SVG. Existing IPTC/XMP is read on import. Grid or list, search, format filters, batch generate, batch embed, metadata templates, near-duplicate scan (64-bit dHash), folder watching on desktop. |
 | **Prepare** | Strip EXIF/GPS and Photoshop blocks, re-encode through sRGB to any portal's size budget, sanitise SVG (scripts, handlers, `@import`, editor namespaces) and report on EPS/AI internals (CMYK, live fonts, rasters, Illustrator version). |
-| **Upscale** | Built-in resampler plus one-click Real-ESRGAN (BSD-3, commercial-safe) running locally on your GPU. Four commercially usable models, six researched targets up to 8K (7680×4320), tiled passes for big output. Images are never uploaded. |
+| **Upscale** | Built-in resampling and selectable local GPU models. Review each model and weights licence before commercial use. |
 | **Export** | Exact CSV dialects for every portal above, UTF-8 BOM, platform-safe renaming, batch embedding, planner hand-off, plus re-import of existing metadata CSVs. |
 | **Platforms** | A dense reference for all 14 marketplaces: formats, resolution windows, file caps, keyword rules, title caps, CSV layout and AI policy. |
 | **Planner** | Per-portal queues (todo → queued → submitted → accepted / rejected) with real publishing caps, including Freepik's first-batch window and monthly limit. |
 | **Releases** | Model and property release registry with expiry tracking and per-file linking; validation warns when commercial work shows people without a release. |
 | **Earnings** | Import each portal's sales CSV with automatic column detection, get one ledger, a monthly trend, per-platform totals and best sellers. |
-| **Cloud** | Optional Supabase sync of metadata descriptors, plus a one-file JSON backup/restore of the whole workspace. |
+| **Cloud** | Legacy sync is disabled for security. Local backup and restore remain available. |
+| **Background remover** | Local cutout with a full-resolution erase/restore mask editor; edited results export as transparent PNG. |
+| **Video** | Basic resize/sharpen presets only. Neural video models and frame interpolation are not yet connected. |
 
 ## 🚀 Build from source
 
@@ -90,7 +78,7 @@ npm install
 
 npm run dev        # Electron window + hot reload
 npm run dev:web    # browser-only preview
-npm run verify     # typecheck + 73 tests + production build
+npm run verify     # typecheck + tests + production build
 npm run dist:win   # Windows installer + portable exe into ./release
 ```
 
@@ -103,8 +91,7 @@ and `npm run dist:mac`; a macOS `.dmg` needs to be produced on macOS.
 npm test
 ```
 
-The suite bundles the pure domain layer with esbuild and runs **73 assertions**
-on Node: every CSV dialect, validators, the metadata engine, binary IPTC/XMP
+The suite tests licensing SQL with an embedded PostgreSQL instance, renders each page on the server, and runs domain checks on Node: every CSV dialect, validators, the metadata engine, binary IPTC/XMP
 round-trips through real PNG/JPEG/SVG/EPS fixtures, SVG/EPS analysis, sales
 parsing, planner maths, and a completeness check that all 14 marketplaces carry
 a brand mark, a colour and a workflow.
@@ -129,9 +116,9 @@ Renderer routes are code-split; the shell plus first page is ~150 kB gzipped.
 
 ## 🔒 Privacy
 
-- Artwork is processed only on your machine — the upscaler is a local binary.
-- Cloud sync stores descriptors (names, metadata, statuses), never pixels.
-- No analytics, no telemetry, no accounts.
+- Local image and video tools process artwork on your machine. Optional cloud AI services may receive content you choose to send.
+- Account and subscription verification require a network connection. Legacy cloud sync is disabled.
+- The backend URL is visible to users; security relies on authorization, not hiding infrastructure.
 
 ## 📄 Licence
 

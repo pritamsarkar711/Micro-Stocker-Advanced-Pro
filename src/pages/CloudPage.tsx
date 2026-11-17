@@ -83,6 +83,7 @@ export function CloudPage() {
 
   return (
     <div className="space-y-5">
+      <div role="status" className="rounded border border-line bg-surface p-4 text-sm text-ink">Legacy cloud sync is disabled because its previous access policies exposed data. Apply the safety SQL below to every existing workspace project; this retains data but blocks anonymous access.</div>
       <PageHeader
         title="Cloud Sync"
         actions={

@@ -1,14 +1,19 @@
 import { lazy, Suspense } from 'react';
-import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { HashRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { PageLoading } from '@/components/layout/PageLoading';
 import { AppProvider } from '@/state/AppState';
 import { AuthProvider } from '@/state/AuthState';
+import { AuthGate } from '@/components/auth/AuthGate';
+import { AccountGate } from '@/components/auth/AccountGate';
+import { PremiumGate } from '@/components/auth/PremiumGate';
+import { LicenseProvider } from '@/state/LicenseState';
 import { ToastProvider } from '@/state/ToastState';
 import { LibraryProvider } from '@/state/library';
 import { BankProvider } from '@/state/bank';
 import { ReleasesProvider } from '@/state/releases';
 
+const SubscriptionPage = lazy(() => import('@/pages/SubscriptionPage').then((m) => ({ default: m.SubscriptionPage })));
 const OverviewPage = lazy(() => import('@/pages/OverviewPage').then((m) => ({ default: m.OverviewPage })));
 const LibraryPage = lazy(() => import('@/pages/LibraryPage').then((m) => ({ default: m.LibraryPage })));
 const PreparePage = lazy(() => import('@/pages/PreparePage').then((m) => ({ default: m.PreparePage })));
@@ -35,6 +40,9 @@ export default function App() {
     <AppProvider>
       <ToastProvider>
         <AuthProvider>
+          <AuthGate>
+          <LicenseProvider>
+          <AccountGate>
           <LibraryProvider>
             <BankProvider>
               <ReleasesProvider>
@@ -42,6 +50,8 @@ export default function App() {
                   <Suspense fallback={<PageLoading />}>
                     <Routes>
                       <Route element={<AppShell />}>
+                        <Route path="subscription" element={<SubscriptionPage />} />
+                        <Route element={<PremiumGate><Outlet /></PremiumGate>}>
                         <Route index element={<OverviewPage />} />
                         <Route path="library" element={<LibraryPage />} />
                         <Route path="prepare" element={<PreparePage />} />
@@ -63,6 +73,7 @@ export default function App() {
                         <Route path="earnings" element={<EarningsPage />} />
                         <Route path="404" element={<NotFoundPage />} />
                         <Route path="*" element={<Navigate to="/404" replace />} />
+                        </Route>
                       </Route>
                     </Routes>
                   </Suspense>
@@ -70,6 +81,9 @@ export default function App() {
               </ReleasesProvider>
             </BankProvider>
           </LibraryProvider>
+          </AccountGate>
+          </LicenseProvider>
+          </AuthGate>
         </AuthProvider>
       </ToastProvider>
     </AppProvider>

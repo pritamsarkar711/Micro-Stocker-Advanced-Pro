@@ -13,8 +13,8 @@ const VARIANTS: Record<ButtonVariant, string> = {
   outline:
     'bg-surface text-fg border border-line-strong hover:bg-surface-2 hover:border-fg-subtle/60 active:scale-[0.99]',
   ghost: 'bg-transparent text-fg-muted hover:bg-surface-2 hover:text-fg',
-  danger: 'bg-danger text-white shadow-[0_1px_2px_rgb(15_23_42/0.14)] hover:brightness-95 active:scale-[0.99]',
-  success: 'bg-ok text-white shadow-[0_1px_2px_rgb(15_23_42/0.14)] hover:brightness-95 active:scale-[0.99]',
+  danger: 'bg-danger dark:bg-[#b42318] text-white shadow-[0_1px_2px_rgb(15_23_42/0.14)] hover:brightness-95 active:scale-[0.99]',
+  success: 'bg-ok dark:bg-[#1b5e20] text-white shadow-[0_1px_2px_rgb(15_23_42/0.14)] hover:brightness-95 active:scale-[0.99]',
 };
 
 const SIZES: Record<ButtonSize, string> = {

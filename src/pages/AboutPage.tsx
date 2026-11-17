@@ -25,8 +25,8 @@ export function AboutPage() {
 
         <p className="text-xs leading-relaxed text-ink-muted">
           {APP_NAME} is an all in one microstock contributor studio for AI metadata generation,
-          lossless IPTC and XMP embedding, agency CSV exports, open source image and video
-          upscaling, background removal and multi format image conversion.
+          lossless IPTC and XMP embedding, agency CSV exports, local image upscaling,
+          video resizing, background removal and multi format image conversion.
         </p>
 
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 text-xs">

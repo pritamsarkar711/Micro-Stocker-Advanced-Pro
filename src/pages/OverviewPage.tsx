@@ -28,13 +28,13 @@ const STUDIO_TOOLS: Array<{
   {
     to: '/upscale',
     title: 'Image Upscaler',
-    sub: '30 open source models up to 8K and 25 MP',
+    sub: 'Choose local models and resolution presets',
     icon: 'photo_size_select_large',
   },
   {
     to: '/video-upscale',
     title: 'Video Upscaler',
-    sub: '4K and 8K stock footage plus 60 FPS boost',
+    sub: 'Resize and sharpen stock footage',
     icon: 'videocam',
   },
   {

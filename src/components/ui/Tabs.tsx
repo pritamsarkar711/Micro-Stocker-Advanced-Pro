@@ -36,7 +36,7 @@ export function Tabs<T extends string>({ items, value, onChange, className }: Ta
             className={clsx(
               'inline-flex h-7 items-center gap-1.5 rounded-[5px] px-2.5 text-xs font-medium whitespace-nowrap transition-colors',
               active
-                ? 'bg-accent text-accent-fg shadow-2xs'
+                ? 'bg-accent text-on-brand shadow-2xs'
                 : 'text-ink-muted hover:bg-surface hover:text-ink',
             )}
           >

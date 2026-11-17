@@ -12,6 +12,7 @@ export interface ModalProps {
   children: ReactNode;
   footer?: ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  dismissible?: boolean;
 }
 
 const SIZES = {
@@ -21,13 +22,13 @@ const SIZES = {
   xl: 'max-w-4xl',
 };
 
-export function Modal({ open, onClose, title, description, children, footer, size = 'md' }: ModalProps) {
+export function Modal({ open, onClose, title, description, children, footer, size = 'md', dismissible = true }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (dismissible && event.key === 'Escape') {
         event.stopPropagation();
         onClose();
       }
@@ -48,7 +49,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
       document.body.style.overflow = previousOverflow;
       clearTimeout(timer);
     };
-  }, [open, onClose]);
+  }, [open, onClose, dismissible]);
 
   if (!open) return null;
 
@@ -80,9 +81,9 @@ export function Modal({ open, onClose, title, description, children, footer, siz
                 <p className="mt-0.5 text-[0.75rem] text-fg-muted">{description}</p>
               )}
             </div>
-            <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close dialog">
+            {dismissible && <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close dialog">
               <GIcon name="close" size={18} />
-            </Button>
+            </Button>}
           </header>
         )}
 

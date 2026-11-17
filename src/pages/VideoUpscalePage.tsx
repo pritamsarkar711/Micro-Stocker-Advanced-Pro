@@ -99,9 +99,7 @@ export function VideoUpscalePage() {
 
   const filteredModels = useMemo(
     () =>
-      purpose === 'all'
-        ? VIDEO_MODELS
-        : VIDEO_MODELS.filter((m) => m.purposes.includes(purpose)),
+      VIDEO_MODELS.filter((m) => m.runtime === 'builtin' && (purpose === 'all' || m.purposes.includes(purpose))),
     [purpose],
   );
   const activeModel = VIDEO_MODELS.find((m) => m.id === modelId) ?? VIDEO_MODELS[0];
@@ -429,7 +427,7 @@ export function VideoUpscalePage() {
                   />
                 </Field>
                 <div className="flex items-end pb-1">
-                  <Switch checked={keepAudio} onChange={setKeepAudio} label="Preserve audio" />
+                  <div><Switch checked={keepAudio} onChange={setKeepAudio} label="Preserve audio" /><p className="mt-1 text-2xs text-ink-muted">Audio may play while recording. Turn this off for silent clips.</p></div>
                 </div>
               </div>
             </div>
@@ -437,10 +435,12 @@ export function VideoUpscalePage() {
 
           <Card>
             <CardHeader
-              title="Video models"
+              title="Video presets"
               icon={<GIcon name="memory" size={17} />}
               action={<Badge tone="neutral">{filteredModels.length}</Badge>}
             />
+
+            <p className="mb-3 text-xs text-ink-muted">Built-in presets use a shared resize and sharpening filter, not AI or specialized shader algorithms. Neural models and frame interpolation are not yet supported by video rendering. Check each model and asset licence before commercial use.</p>
 
             <div className="mb-3 flex flex-wrap gap-1">
               {VIDEO_PURPOSES.map((p) => (
@@ -451,7 +451,7 @@ export function VideoUpscalePage() {
                   className={clsx(
                     'inline-flex h-7 items-center gap-1 rounded-[var(--r-xs)] border px-2 text-2xs font-medium',
                     purpose === p.id
-                      ? 'border-accent bg-accent text-accent-fg'
+                      ? 'border-accent bg-accent text-on-brand'
                       : 'border-line bg-surface text-ink-muted hover:text-ink',
                   )}
                 >

@@ -349,7 +349,7 @@ export function AiPanel({ compact = false, onChange }: AiPanelProps) {
                 className={clsx(
                   'h-8 rounded-[5px] text-xs font-medium capitalize',
                   settings.tone === tone
-                    ? 'bg-accent text-accent-fg'
+                    ? 'bg-accent text-on-brand'
                     : 'text-ink-muted hover:text-ink',
                 )}
               >

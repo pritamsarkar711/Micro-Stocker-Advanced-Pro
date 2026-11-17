@@ -10,7 +10,6 @@ import { useApp } from '@/state/AppState';
 import { useAuth } from '@/state/AuthState';
 import { useToast } from '@/state/ToastState';
 import { kv } from '@/lib/kv';
-import { getSupabase, isConfigured } from '@/lib/cloud/config';
 import { dateTime } from '@/lib/format';
 
 export interface IssueReport {
@@ -58,7 +57,7 @@ function makeReportId(): string {
 }
 
 export function ReportPage() {
-  const { cloud, runtime } = useApp();
+  const { runtime } = useApp();
   const { user } = useAuth();
   const toast = useToast();
 
@@ -103,36 +102,12 @@ export function ReportPage() {
         createdAt: new Date().toISOString(),
       };
 
-      if (isConfigured(cloud)) {
-        try {
-          const client = await getSupabase(cloud);
-          if (client) {
-            const { error } = await client.from('issue_reports').insert({
-              id: report.id,
-              category: report.category,
-              area: report.area,
-              subject: report.subject,
-              details: report.details,
-              contact: report.contact,
-              user_email: report.userEmail,
-              app_version: report.appVersion,
-              platform: report.platform,
-              status: 'submitted',
-              created_at: report.createdAt,
-            });
-            if (!error) report.status = 'synced';
-          }
-        } catch {
-          /* stored locally */
-        }
-      }
-
       const next = [report, ...reports];
       setReports(next);
       await kv.set(REPORTS_KEY, next);
       setSubject('');
       setDetails('');
-      toast.success('Report submitted', `Reference #${report.id.slice(0, 8).toUpperCase()}`);
+      toast.success('Report saved on this device', `Reference #${report.id.slice(0, 8).toUpperCase()}`);
     } finally {
       setSubmitting(false);
     }
@@ -150,7 +125,8 @@ export function ReportPage() {
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
         <Card className="xl:col-span-7">
-          <CardHeader title="Submit a report" icon={<GIcon name="flag" size={17} />} />
+          <p className="mb-3 text-xs text-ink-muted">Reports are saved on this device only and are not sent to support.</p>
+          <CardHeader title="Save a report locally" icon={<GIcon name="flag" size={17} />} />
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -221,7 +197,7 @@ export function ReportPage() {
                 loading={submitting}
                 icon={<GIcon name="send" size={15} />}
               >
-                Submit report
+                Save report
               </Button>
             </div>
           </form>
@@ -229,13 +205,13 @@ export function ReportPage() {
 
         <Card className="xl:col-span-5">
           <CardHeader
-            title={`Submitted reports (${reports.length})`}
+            title={`Saved reports (${reports.length})`}
             icon={<GIcon name="history" size={17} />}
           />
 
           {reports.length === 0 ? (
             <div className="py-10 text-center text-xs text-ink-muted">
-              No reports submitted yet.
+              No reports saved yet.
             </div>
           ) : (
             <div className="max-h-[460px] divide-y divide-line overflow-y-auto">
@@ -250,7 +226,7 @@ export function ReportPage() {
                     </div>
                     <div className="flex items-center gap-1">
                       <Badge tone="brand">
-                        {rep.status === 'synced' ? 'Synced' : 'Submitted'}
+                        {rep.status === 'synced' ? 'Previously synced' : 'Saved locally'}
                       </Badge>
                       <button
                         type="button"

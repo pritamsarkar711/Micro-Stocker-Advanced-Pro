@@ -3,7 +3,7 @@ import type { ModelInstallSpec } from '@/lib/desktop';
 import { installModelInApp, readInstalledModelBytes } from '@/lib/modelStore';
 
 /**
- * Open source in app background removal engine.
+ * Local background removal engine. Model weights have separate terms.
  *
  * Includes two instant zero download algorithms (Smart Border Flood Matting and
  * Chroma Spill Cutout) plus 14 free open source ONNX neural segmentation models
@@ -71,7 +71,7 @@ export const BG_MODELS: BgModel[] = [
     purpose: 'fast',
     purposes: ['fast', 'general', 'product'],
     icon: 'speed',
-    license: 'Apache 2.0',
+    license: 'Check model terms',
     inputSize: 320,
     sizeMB: 4.4,
     fileName: 'u2netp.onnx',
@@ -85,7 +85,7 @@ export const BG_MODELS: BgModel[] = [
     purpose: 'general',
     purposes: ['general', 'fast', 'portrait'],
     icon: 'person',
-    license: 'Apache 2.0',
+    license: 'Check model terms',
     inputSize: 320,
     sizeMB: 42,
     fileName: 'silueta.onnx',
@@ -99,7 +99,7 @@ export const BG_MODELS: BgModel[] = [
     purpose: 'general',
     purposes: ['general', 'product'],
     icon: 'layers',
-    license: 'Apache 2.0',
+    license: 'Check model terms',
     inputSize: 320,
     sizeMB: 168,
     fileName: 'u2net.onnx',
@@ -113,7 +113,7 @@ export const BG_MODELS: BgModel[] = [
     purpose: 'product',
     purposes: ['product', 'general', 'precision'],
     icon: 'inventory_2',
-    license: 'Apache 2.0',
+    license: 'Check model terms',
     inputSize: 1024,
     sizeMB: 170,
     fileName: 'isnet-general-use.onnx',
@@ -127,7 +127,7 @@ export const BG_MODELS: BgModel[] = [
     purpose: 'anime',
     purposes: ['anime', 'precision'],
     icon: 'brush',
-    license: 'Apache 2.0',
+    license: 'Check model terms',
     inputSize: 1024,
     sizeMB: 168,
     fileName: 'isnet-anime.onnx',
@@ -141,7 +141,7 @@ export const BG_MODELS: BgModel[] = [
     purpose: 'portrait',
     purposes: ['portrait'],
     icon: 'face',
-    license: 'Apache 2.0',
+    license: 'Check model terms',
     inputSize: 320,
     sizeMB: 168,
     fileName: 'u2net_human_seg.onnx',
@@ -155,7 +155,7 @@ export const BG_MODELS: BgModel[] = [
     purpose: 'portrait',
     purposes: ['portrait', 'precision'],
     icon: 'auto_fix_high',
-    license: 'Apache 2.0',
+    license: 'Check model terms',
     inputSize: 512,
     sizeMB: 168,
     fileName: 'u2net-portrait-matting.onnx',
@@ -169,7 +169,7 @@ export const BG_MODELS: BgModel[] = [
     purpose: 'product',
     purposes: ['product'],
     icon: 'sell',
-    license: 'Apache 2.0',
+    license: 'Check model terms',
     inputSize: 768,
     sizeMB: 168,
     fileName: 'u2net_cloth_seg.onnx',
@@ -183,7 +183,7 @@ export const BG_MODELS: BgModel[] = [
     purpose: 'precision',
     purposes: ['precision', 'general', 'product', 'fast'],
     icon: 'workspace_premium',
-    license: 'MIT',
+    license: 'Check model terms',
     inputSize: 1024,
     sizeMB: 214,
     fileName: 'BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx',
@@ -197,7 +197,7 @@ export const BG_MODELS: BgModel[] = [
     purpose: 'precision',
     purposes: ['precision', 'general', 'product'],
     icon: 'high_quality',
-    license: 'MIT',
+    license: 'Check model terms',
     inputSize: 1024,
     sizeMB: 928,
     fileName: 'BiRefNet-general-epoch_244.onnx',
@@ -211,7 +211,7 @@ export const BG_MODELS: BgModel[] = [
     purpose: 'portrait',
     purposes: ['portrait', 'precision'],
     icon: 'account_circle',
-    license: 'MIT',
+    license: 'Check model terms',
     inputSize: 1024,
     sizeMB: 928,
     fileName: 'BiRefNet-portrait-epoch_150.onnx',
@@ -225,7 +225,7 @@ export const BG_MODELS: BgModel[] = [
     purpose: 'precision',
     purposes: ['precision', 'product'],
     icon: 'center_focus_strong',
-    license: 'MIT',
+    license: 'Check model terms',
     inputSize: 1024,
     sizeMB: 928,
     fileName: 'BiRefNet-DIS-epoch_590.onnx',
@@ -239,7 +239,7 @@ export const BG_MODELS: BgModel[] = [
     purpose: 'precision',
     purposes: ['precision', 'general'],
     icon: '4k',
-    license: 'MIT',
+    license: 'Check model terms',
     inputSize: 2048,
     sizeMB: 1048,
     fileName: 'BiRefNet_HR-general-epoch_130.onnx',
@@ -253,7 +253,7 @@ export const BG_MODELS: BgModel[] = [
     purpose: 'precision',
     purposes: ['precision', 'portrait', 'product'],
     icon: 'filter_center_focus',
-    license: 'MIT',
+    license: 'Check model terms',
     inputSize: 2048,
     sizeMB: 1048,
     fileName: 'BiRefNet_HR-matting-epoch_135.onnx',
@@ -297,6 +297,8 @@ export interface BgRemoveResult {
   height: number;
   sizeBytes: number;
   usedNeural: boolean;
+  /** Uncomposited PNG retained for non-destructive mask editing. */
+  transparentBlob: Blob;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -553,30 +555,51 @@ async function runOnnxMask(
   const firstOut = outputs[session.outputNames[0]];
   const raw = firstOut.data;
 
-  // Apply sigmoid when the model emits raw logits (BiRefNet) then min max normalize.
-  let minVal = Infinity;
-  let maxVal = -Infinity;
+  const mask = postprocessBgMask(model, raw, firstOut.dims);
+  return { mask, size };
+}
+
+/** Convert model-specific ONNX outputs into a single alpha plane. */
+export function postprocessBgMask(model: BgModel, raw: Float32Array, dims: readonly number[]): Uint8ClampedArray {
+  const size = model.inputSize;
+  const plane = size * size;
+  if (dims.length !== 4 || dims[0] !== 1 || dims[2] !== size || dims[3] !== size || raw.length < plane * dims[1]) {
+    throw new Error(`Unexpected output shape from ${model.name}: ${dims.join(' × ')}`);
+  }
+  if (model.id === 'u2net-cloth-seg') {
+    if (dims[1] !== 4) throw new Error('Unexpected clothing segmentation output');
+    // Channel zero is background, channels one to three are apparel classes.
+    const mask = new Uint8ClampedArray(plane);
+    for (let p = 0; p < plane; p++) {
+      let label = 0;
+      let best = raw[p];
+      for (let channel = 1; channel < 4; channel++) {
+        const value = raw[channel * plane + p];
+        if (value > best) { best = value; label = channel; }
+      }
+      mask[p] = label === 0 ? 0 : 255;
+    }
+    return mask;
+  }
+  let minVal = Infinity, maxVal = -Infinity;
   for (let i = 0; i < plane; i++) {
-    const v = raw[i];
-    if (v < minVal) minVal = v;
-    if (v > maxVal) maxVal = v;
+    if (!Number.isFinite(raw[i])) throw new Error(`${model.name} returned invalid mask values`);
+    minVal = Math.min(minVal, raw[i]); maxVal = Math.max(maxVal, raw[i]);
   }
   const needsSigmoid = minVal < -0.05 || maxVal > 1.05;
   const probs = new Float32Array(plane);
-  minVal = Infinity;
-  maxVal = -Infinity;
+  minVal = Infinity; maxVal = -Infinity;
   for (let i = 0; i < plane; i++) {
     const v = needsSigmoid ? 1 / (1 + Math.exp(-raw[i])) : raw[i];
-    probs[i] = v;
-    if (v < minVal) minVal = v;
-    if (v > maxVal) maxVal = v;
+    probs[i] = v; minVal = Math.min(minVal, v); maxVal = Math.max(maxVal, v);
   }
-  const span = Math.max(1e-6, maxVal - minVal);
   const mask = new Uint8ClampedArray(plane);
-  for (let i = 0; i < plane; i++) {
-    mask[i] = Math.round(((probs[i] - minVal) / span) * 255);
+  if (maxVal - minVal < 1e-6) {
+    mask.fill(Math.round(Math.max(0, Math.min(1, minVal)) * 255));
+  } else {
+    for (let i = 0; i < plane; i++) mask[i] = Math.round((probs[i] - minVal) / (maxVal - minVal) * 255);
   }
-  return { mask, size };
+  return mask;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -624,7 +647,7 @@ export async function removeImageBackground(
       upMask.width = width;
       upMask.height = height;
       const uctx = upMask.getContext('2d')!;
-      uctx.imageSmoothingEnabled = true;
+      uctx.imageSmoothingEnabled = model.id !== 'u2net-cloth-seg';
       uctx.imageSmoothingQuality = 'high';
       if (options.feather > 0) uctx.filter = `blur(${options.feather}px)`;
       uctx.drawImage(maskCanvas, 0, 0, width, height);
@@ -691,6 +714,10 @@ export async function removeImageBackground(
 
     ctx.putImageData(fullImg, 0, 0);
 
+    const transparentBlob = await new Promise<Blob>((resolve, reject) =>
+      fullCanvas.toBlob((b) => b ? resolve(b) : reject(new Error('Failed to encode transparent cutout')), 'image/png'),
+    );
+
     // Composite over chosen backdrop if requested or exporting JPG.
     const needsBackdrop = options.backdrop !== 'transparent' || options.outFormat === 'jpg';
     let exportCanvas = fullCanvas;
@@ -736,6 +763,7 @@ export async function removeImageBackground(
       height,
       sizeBytes: blob.size,
       usedNeural,
+      transparentBlob,
     };
   } finally {
     bitmap.close();

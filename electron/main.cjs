@@ -813,6 +813,17 @@ function createWindow() {
     mainWindow = null;
   });
 
+  // Renderer navigation must never replace the privileged application document.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    try {
+      const next = new URL(url);
+      const allowed = isDev
+        ? next.origin === new URL(DEV_SERVER_URL).origin
+        : next.protocol === 'file:' && path.resolve(require('node:url').fileURLToPath(next)) === path.resolve(__dirname, '..', 'dist', 'index.html');
+      if (!allowed) event.preventDefault();
+    } catch { event.preventDefault(); }
+  });
+
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);
     return { action: 'deny' };

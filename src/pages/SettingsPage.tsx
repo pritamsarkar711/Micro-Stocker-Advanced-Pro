@@ -151,7 +151,7 @@ export function SettingsPage() {
                     className={clsx(
                       'h-7 rounded-[5px] px-3 text-xs font-medium capitalize',
                       settings.density === d
-                        ? 'bg-accent text-accent-fg'
+                        ? 'bg-accent text-on-brand'
                         : 'text-ink-muted hover:text-ink',
                     )}
                   >

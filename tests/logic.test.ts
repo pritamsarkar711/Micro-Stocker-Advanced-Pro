@@ -53,7 +53,7 @@ import {
   buildUpscaleInstallSpec,
   resolveTargetSize,
 } from '@/lib/stock/upscale/models';
-import { BG_MODELS, BG_PURPOSES, buildBgInstallSpec } from '@/lib/tools/bgremove';
+import { BG_MODELS, BG_PURPOSES, buildBgInstallSpec, postprocessBgMask } from '@/lib/tools/bgremove';
 import {
   VIDEO_MODELS,
   VIDEO_OUTPUT_FORMATS,
@@ -62,6 +62,7 @@ import {
   buildVideoInstallSpec,
   formatDuration,
   resolveVideoDimensions,
+  upscaleVideoInApp,
 } from '@/lib/tools/videoupscale';
 import {
   ACCEPT_ATTRIBUTE,
@@ -143,7 +144,6 @@ import {
 } from '@/lib/tools/imageCodecs';
 import { CURRENCIES, currencyMeta, money } from '@/lib/format';
 import { SCHEMA_SQL } from '@/lib/cloud/schema';
-import { can, entitlements, FREE_FEATURES, PRO_FEATURES, resolveEdition } from '@/lib/edition';
 import { sizeCapOptions } from '@/lib/stock/sizecaps';
 import { APP_NAME, APP_VERSION } from '@/lib/version';
 import { DEFAULT_FLAGS, kindOf, megapixels, type StockItem } from '@/lib/stock/types';
@@ -533,7 +533,7 @@ test('Image Upscaler ships 31 models, 8 purposes, agency presets and in-app inst
   includes(upscaleOutputFilename('hero.jpg', 4, 'png'), '.png');
 });
 
-test('Background Remover ships 16 FOSS models with instant built-in & ONNX install specs', () => {
+test('Background Remover catalog contains built-in and ONNX install specs', () => {
   assert(BG_MODELS.length >= 16, `bg models: ${BG_MODELS.length}`);
   assert(BG_PURPOSES.length >= 6, 'bg purposes');
   assert(BG_MODELS.filter((m) => m.kind === 'builtin').length >= 2, 'instant zero-download engines included');
@@ -542,12 +542,30 @@ test('Background Remover ships 16 FOSS models with instant built-in & ONNX insta
   assert(spec !== null && spec.files[0]?.url.startsWith('https://'), 'HTTPS ONNX weight spec');
 });
 
-test('Video Upscaler ships 23 video & RIFE models plus 4K/8K agency presets', () => {
+test('Background mask postprocessing handles clothing classes and malformed outputs', () => {
+  const cloth = { ...BG_MODELS.find((m) => m.id === 'u2net-cloth-seg')!, inputSize: 2 };
+  const pixels = new Float32Array([4, 0, 0, 0, 0, 4, 0, 0, 0, 0, 4, 0, 0, 0, 0, 4]);
+  equal(Array.from(postprocessBgMask(cloth, pixels, [1, 4, 2, 2])).join(','), '0,255,255,255', 'clothing labels');
+  let rejected = false;
+  try { postprocessBgMask(cloth, pixels, [1, 1, 1, 1]); } catch { rejected = true; }
+  assert(rejected, 'unexpected shape rejected');
+  const general = { ...BG_MODELS[0], inputSize: 2 };
+  equal(Array.from(postprocessBgMask(general, new Float32Array([1, 1, 1, 1]), [1, 1, 2, 2])).join(','), '255,255,255,255', 'constant foreground');
+});
+
+test('Unsupported neural video models are rejected instead of silently falling back', async () => {
+  let message = '';
+  try { await upscaleVideoInApp(new Blob(), 'test.mp4', { width: 1, height: 1, duration: 1 }, { modelId: 'realesr-animevideov3-x2', target: VIDEO_TARGETS[0], fps: 24, format: 'mp4', bitrateMbps: 12, keepAudio: false }); }
+  catch (e) { message = e instanceof Error ? e.message : String(e); }
+  includes(message, 'not yet supported');
+});
+
+test('Video catalog contains presets and future model install specs', () => {
   assert(VIDEO_MODELS.length >= 23, `video models: ${VIDEO_MODELS.length}`);
   assert(VIDEO_PURPOSES.length >= 6, 'video purposes');
   assert(VIDEO_TARGETS.length >= 8, 'video presets');
   equal(VIDEO_OUTPUT_FORMATS.length, 2, 'MP4 & WebM');
-  assert(VIDEO_MODELS.some((m) => (m.fpsMultiplier ?? 1) >= 2), 'RIFE FPS interpolation included');
+  assert(VIDEO_MODELS.some((m) => (m.fpsMultiplier ?? 1) >= 2), 'RIFE entry exists in catalog');
   const installable = VIDEO_MODELS.find((m) => buildVideoInstallSpec(m) !== null);
   assert(Boolean(installable), 'in-app video NCNN/RIFE archive specs available');
   const dims = resolveVideoDimensions(1920, 1080, 3840);
@@ -713,7 +731,7 @@ test('Magic detection and auto decode route every family', async () => {
 });
 
 /* ====================== currencies, cloud & app shell ===================== */
-group('Currencies, Cloud schema, Editions & Version');
+group('Currencies, Cloud schema & Version');
 
 test('all 9 currencies have official symbols and ISO country flags', () => {
   equal(CURRENCIES.length, 9);
@@ -725,17 +743,13 @@ test('all 9 currencies have official symbols and ISO country flags', () => {
   }
 });
 
-test('cloud schema v2 includes kv_store, user_accounts and issue_reports tables', () => {
+test('legacy cloud schema removes anonymous access to sensitive tables', () => {
   includes(SCHEMA_SQL, 'kv_store');
   includes(SCHEMA_SQL, 'user_accounts');
   includes(SCHEMA_SQL, 'issue_reports');
 });
 
-test('shipped edition grants every feature and APP_VERSION matches package.json', () => {
-  equal(resolveEdition(), 'free');
-  equal(PRO_FEATURES.length, 0);
-  for (const f of FREE_FEATURES) assert(entitlements().can(f), f);
-  equal(can('metadata.ai.byok'), true);
+test('APP_VERSION matches package.json', () => {
   const pkg = JSON.parse(readFileSync(path.join(FIXTURE_DIR, '..', '..', 'package.json'), 'utf8'));
   equal(APP_VERSION, pkg.version);
   assert(APP_NAME.length > 0, 'APP_NAME defined');

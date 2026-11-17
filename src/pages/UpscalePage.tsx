@@ -469,7 +469,7 @@ export function UpscalePage() {
                     className={clsx(
                       'inline-flex h-7 items-center gap-1 rounded-[var(--r-xs)] border px-2 text-2xs font-medium transition-colors',
                       active
-                        ? 'border-accent bg-accent text-accent-fg'
+                        ? 'border-accent bg-accent text-on-brand'
                         : 'border-line bg-surface text-ink-muted hover:text-ink',
                     )}
                   >
