@@ -1,5 +1,6 @@
 import clsx from 'clsx';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { Link, type LinkProps } from 'react-router-dom';
 import { GIcon } from './GoogleIcon';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success';
@@ -36,6 +37,26 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   block?: boolean;
 }
 
+interface ClassOptions {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  block?: boolean;
+  className?: string;
+}
+
+/** Shared classes so links and buttons look and measure identically. */
+function buttonClass({ variant = 'primary', size = 'md', block, className }: ClassOptions) {
+  return clsx(
+    'r-control inline-flex shrink-0 cursor-pointer select-none items-center justify-center font-semibold whitespace-nowrap',
+    'transition-[background-color,border-color,color,transform] duration-100 ease-[var(--ease-standard)]',
+    'disabled:pointer-events-none disabled:opacity-45',
+    VARIANTS[variant],
+    SIZES[size],
+    block && 'w-full',
+    className,
+  );
+}
+
 export function Button({
   variant = 'primary',
   size = 'md',
@@ -53,20 +74,47 @@ export function Button({
     <button
       type={type}
       disabled={disabled || loading}
-      className={clsx(
-        'r-control inline-flex shrink-0 cursor-pointer select-none items-center justify-center font-semibold whitespace-nowrap',
-        'transition-[background-color,border-color,color,transform] duration-100 ease-[var(--ease-standard)]',
-        'disabled:pointer-events-none disabled:opacity-45',
-        VARIANTS[variant],
-        SIZES[size],
-        block && 'w-full',
-        className,
-      )}
+      className={buttonClass({ variant, size, block, className })}
       {...rest}
     >
       {loading ? <GIcon name="progress_activity" size={16} className="animate-spin" /> : icon}
       {children}
       {iconRight}
     </button>
+  );
+}
+
+export interface ButtonLinkProps extends Omit<LinkProps, 'className'> {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  icon?: ReactNode;
+  iconRight?: ReactNode;
+  block?: boolean;
+  className?: string;
+}
+
+/**
+ * Router link that is visually a button.
+ *
+ * Never nest a Button inside a Link: two interactive elements inside each other
+ * break the accessibility tree and keyboard order, so this renders a single
+ * anchor with the button surface.
+ */
+export function ButtonLink({
+  variant = 'primary',
+  size = 'md',
+  icon,
+  iconRight,
+  block,
+  className,
+  children,
+  ...rest
+}: ButtonLinkProps) {
+  return (
+    <Link className={buttonClass({ variant, size, block, className })} {...rest}>
+      {icon}
+      {children}
+      {iconRight}
+    </Link>
   );
 }

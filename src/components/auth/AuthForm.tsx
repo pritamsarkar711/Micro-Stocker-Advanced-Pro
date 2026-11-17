@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import clsx from 'clsx';
 import { Field, Input } from '@/components/ui/Field';
+import { PasswordMeter } from './PasswordMeter';
 import { Button } from '@/components/ui/Button';
 import { GIcon } from '@/components/ui/GoogleIcon';
 import { useAuth } from '@/state/AuthState';
@@ -403,6 +404,7 @@ export function AuthForm({
               placeholder="Enter a new password"
               leading={inputLeading('lock')}
             />
+            <PasswordMeter value={newPassword} className="mt-1.5" />
           </Field>
           {errorBox}
           <Button type="submit" block loading={busy}>Update password</Button>
@@ -486,13 +488,14 @@ export function AuthForm({
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="pointer-events-auto text-ink-muted hover:text-ink"
+                className="pointer-events-auto inline-flex size-8 items-center justify-center rounded-[var(--r-xs)] text-ink-muted hover:bg-surface-2 hover:text-ink"
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
                 <GIcon name={showPassword ? 'visibility_off' : 'visibility'} size={18} />
               </button>
             }
           />
+          {view === 'create' && <PasswordMeter value={password} className="mt-1.5" />}
         </Field>
 
         {errorBox}

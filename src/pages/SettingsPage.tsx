@@ -108,7 +108,6 @@ export function SettingsPage() {
                 value={settings.currency}
                 options={currencyOptions}
                 onChange={(code) => updateSettings({ currency: code as CurrencyCode })}
-                ariaLabel="Currency"
               />
             </Field>
 
@@ -138,13 +137,13 @@ export function SettingsPage() {
                 Scale ({Math.round(zoom * 100)}%)
               </span>
               <div className="flex items-center gap-1">
-                <Button size="xs" variant="secondary" onClick={() => nudgeZoom(-0.1)}>
+                <Button size="xs" variant="secondary" onClick={() => nudgeZoom(-0.1)} aria-label="Zoom out">
                   <GIcon name="zoom_out" size={15} />
                 </Button>
                 <Button size="xs" variant="ghost" onClick={() => setZoom(1)}>
                   100%
                 </Button>
-                <Button size="xs" variant="secondary" onClick={() => nudgeZoom(0.1)}>
+                <Button size="xs" variant="secondary" onClick={() => nudgeZoom(0.1)} aria-label="Zoom in">
                   <GIcon name="zoom_in" size={15} />
                 </Button>
               </div>
@@ -209,7 +208,8 @@ export function SettingsPage() {
             )}
           </Card>
 
-          <Card>
+          {/* Security needs the full row: it holds a password form and a QR code. */}
+          <Card className="lg:col-span-2">
             <CardHeader title="Security" icon={<GIcon name="lock" size={17} />} />
             <SecurityPanel />
           </Card>

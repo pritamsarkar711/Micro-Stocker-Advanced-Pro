@@ -1,4 +1,5 @@
 import clsx from 'clsx';
+import { createContext, useContext, useEffect, useRef } from 'react';
 import type {
   InputHTMLAttributes,
   ReactNode,
@@ -6,6 +7,13 @@ import type {
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from 'react';
+
+/** Lets Input, Select, Textarea and Switch pick up the Field label. */
+const FieldLabelContext = createContext<string | undefined>(undefined);
+
+export function useFieldLabel(): string | undefined {
+  return useContext(FieldLabelContext);
+}
 
 const CONTROL =
   'w-full r-control border bg-surface text-fg placeholder:text-fg-subtle ' +
@@ -35,8 +43,21 @@ export function Field({
   className?: string;
   htmlFor?: string;
 }) {
+  const labelText = typeof label === 'string' ? label : undefined;
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // Raw controls (a range slider, a native select) get the label text too, so
+  // every input inside a Field has an accessible name.
+  useEffect(() => {
+    if (!labelText || !wrapRef.current) return;
+    const field = wrapRef.current.querySelector<HTMLElement>('input, select, textarea');
+    if (!field) return;
+    if (field.getAttribute('aria-label') || field.getAttribute('aria-labelledby') || field.id) return;
+    field.setAttribute('aria-label', labelText);
+  }, [labelText]);
+
   return (
-    <div className={clsx('flex flex-col gap-1.5', className)}>
+    <div ref={wrapRef} className={clsx('flex flex-col gap-1.5', className)}>
       {label && (
         <label
           htmlFor={htmlFor}
@@ -46,7 +67,7 @@ export function Field({
           {required && <span className="ml-0.5 text-danger">*</span>}
         </label>
       )}
-      {children}
+      <FieldLabelContext.Provider value={labelText}>{children}</FieldLabelContext.Provider>
       {error ? (
         <p className="text-[0.75rem] font-medium text-danger">{error}</p>
       ) : hint ? (
@@ -77,8 +98,11 @@ export function Input({
   ref,
   ...rest
 }: InputProps) {
+  const fieldLabel = useFieldLabel();
   const pre = prefix ?? leading;
   const suf = suffix ?? trailing;
+  const accessibleName = rest['aria-label'] ?? (rest.id ? undefined : fieldLabel);
+  const nameProp = accessibleName ? { 'aria-label': accessibleName } : {};
   if (pre || suf) {
     return (
       <div className="relative flex items-center">
@@ -98,6 +122,7 @@ export function Input({
             className,
           )}
           {...rest}
+          {...nameProp}
         />
         {suf && <span className="absolute right-3 flex items-center text-fg-subtle">{suf}</span>}
       </div>
@@ -113,6 +138,7 @@ export function Input({
         className,
       )}
       {...rest}
+      {...nameProp}
     />
   );
 }
@@ -122,6 +148,8 @@ export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElemen
 }
 
 export function Textarea({ invalid, className, ...rest }: TextareaProps) {
+  const fieldLabel = useFieldLabel();
+  const accessibleName = rest['aria-label'] ?? (rest.id ? undefined : fieldLabel);
   return (
     <textarea
       className={clsx(
@@ -131,6 +159,7 @@ export function Textarea({ invalid, className, ...rest }: TextareaProps) {
         className,
       )}
       {...rest}
+      {...(accessibleName ? { 'aria-label': accessibleName } : {})}
     />
   );
 }
@@ -141,6 +170,8 @@ export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement
 }
 
 export function Select({ size = 'md', options, className, children, ...rest }: SelectProps) {
+  const fieldLabel = useFieldLabel();
+  const accessibleName = rest['aria-label'] ?? (rest.id ? undefined : fieldLabel);
   return (
     <select
       className={clsx(CONTROL, SIZES[size], 'cursor-pointer appearance-none pr-8', className)}
@@ -151,6 +182,7 @@ export function Select({ size = 'md', options, className, children, ...rest }: S
         backgroundPosition: 'right 0.55rem center',
       }}
       {...rest}
+      {...(accessibleName ? { 'aria-label': accessibleName } : {})}
     >
       {options
         ? options.map((option) => (
@@ -195,10 +227,11 @@ export function Switch({
         type="button"
         role="switch"
         aria-checked={checked}
+        aria-label={typeof label === 'string' ? label : id ? undefined : 'Toggle setting'}
         disabled={disabled}
         onClick={() => onChange(!checked)}
         className={clsx(
-          'relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-150',
+          'relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-150',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand',
           'disabled:cursor-not-allowed disabled:opacity-50',
           checked ? 'bg-brand' : 'bg-line-strong',
@@ -207,7 +240,7 @@ export function Switch({
         <span
           className={clsx(
             'inline-block size-5 transform rounded-full bg-white shadow-sm transition-transform duration-150',
-            checked ? 'translate-x-[1.375rem]' : 'translate-x-0.5',
+            checked ? 'translate-x-[1.5rem]' : 'translate-x-1',
           )}
         />
       </button>

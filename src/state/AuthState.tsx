@@ -1,3 +1,4 @@
+import { checkPassword } from '@/lib/auth/password';
 import {
   createContext,
   useCallback,
@@ -60,6 +61,7 @@ function makeUuid(): string {
   const h = toHex(b);
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
+
 
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -521,8 +523,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updatePassword = useCallback<AuthState['updatePassword']>(async (password) => {
     const client = licensingClient();
     if (!client) return { ok: false, error: 'Licensing service unavailable.' };
-    if (!password || password.length < 8) return { ok: false, error: 'Password must be at least 8 characters.' };
-    if (password.length > 128) return { ok: false, error: 'Password must be 128 characters or fewer.' };
+    const policy = checkPassword(password);
+    if (!policy.ok) return { ok: false, error: policy.error ?? 'Choose a stronger password.' };
     const { error } = await client.auth.updateUser({ password });
     if (error) return { ok: false, error: friendlyAuthError(error.message) };
     setRecovery(false);
@@ -564,8 +566,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const email = sessionUser?.email;
     if (!email) return { ok: false, error: 'Sign in again to change your password.' };
     if (!current) return { ok: false, error: 'Enter your current password.' };
-    if (next.length < 8) return { ok: false, error: 'New password must be at least 8 characters.' };
-    if (next.length > 128) return { ok: false, error: 'New password must be 128 characters or fewer.' };
+    const policy = checkPassword(next);
+    if (!policy.ok) return { ok: false, error: policy.error ?? 'Choose a stronger password.' };
     if (next === current) return { ok: false, error: 'Choose a password you have not used here.' };
     const reauth = await client.auth.signInWithPassword({ email, password: current });
     if (reauth.error) return { ok: false, error: 'Current password is incorrect.' };

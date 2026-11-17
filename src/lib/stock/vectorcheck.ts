@@ -11,6 +11,8 @@ export interface SvgReport {
   ok: boolean;
   hasScript: boolean;
   eventHandlers: number;
+  hasForeignObject: boolean;
+  scriptUrls: number;
   externalRefs: string[];
   embeddedRasters: number;
   fonts: string[];
@@ -36,6 +38,13 @@ export interface EpsReport {
 
 const SVG_EVENT_RE = /\son[a-z]+\s*=/gi;
 const EXTERNAL_REF_RE = /(xlink:href|href)\s*=\s*["'](https?:)?\/\//gi;
+const SCRIPT_URL_RE = /(xlink:href|href|src)\s*=\s*["']\s*(javascript|vbscript|data:text\/html|data:image\/svg)/gi;
+const SCRIPT_URL_TEST = /(xlink:href|href|src)\s*=\s*["']\s*(javascript|vbscript|data:text\/html|data:image\/svg)/i;
+const DANGEROUS_ELEMENTS = ['script', 'foreignObject', 'iframe', 'embed', 'object', 'handler', 'listener'];
+const CSS_URL_RE = /url\(\s*["']?\s*(?!#)(?:https?:)?\/\//gi;
+const CSS_URL_TEST = /url\(\s*["']?\s*(?!#)(?:https?:)?\/\//i;
+const EVENT_TEST = /\son[a-z]+\s*=/i;
+const FOREIGN_OBJECT_TEST = /<foreignObject[\s/>]/i;
 const FONT_RE = /font-family\s*[:=]\s*["']?([^;"'>]+)/gi;
 const EDITOR_NS = ['sodipodi', 'inkscape', 'illustrator', 'graph', 'sketch'];
 
@@ -53,9 +62,19 @@ export function analyzeSvg(text: string): SvgReport {
   const hasImportCss = /@import/i.test(text);
   return {
     /* Submission-clean: no scripting, no external references, no editor junk. */
-    ok: !hasScript && eventHandlers === 0 && externalRefs.length === 0 && !hasImportCss && editorJunk.length === 0,
+    ok:
+      !hasScript &&
+      eventHandlers === 0 &&
+      externalRefs.length === 0 &&
+      !hasImportCss &&
+      editorJunk.length === 0 &&
+      !FOREIGN_OBJECT_TEST.test(text) &&
+      !SCRIPT_URL_TEST.test(text) &&
+      !CSS_URL_TEST.test(text),
     hasScript,
     eventHandlers,
+    hasForeignObject: FOREIGN_OBJECT_TEST.test(text),
+    scriptUrls: (text.match(SCRIPT_URL_RE) ?? []).length,
     externalRefs,
     embeddedRasters: (text.match(/<image[\s>]/gi) ?? []).length,
     fonts,
@@ -72,36 +91,65 @@ export interface SvgSanitizeResult {
   removed: string[];
 }
 
-/** Removes scripts, inline event handlers, editor namespaces and CSS @import. */
+/**
+ * Removes everything that can execute, phone home or leak the user's machine:
+ * scripts, event handlers, embedded HTML, script and data URLs, remote CSS
+ * references, editor namespaces and PHP blocks.
+ */
 export function sanitizeSvg(text: string): SvgSanitizeResult {
   const removed: string[] = [];
   let out = text;
 
   if (/<script[\s>]/i.test(out)) {
-    out = out.replace(/<script[\s\S]*?<\/script\s*>/gi, '');
+    out = out.replace(/<script[\s\S]*?<\/script\s*>/gi, '').replace(/<script[^>]*\/?>/gi, '');
     removed.push('<script> blocks');
   }
-  if (SVG_EVENT_RE.test(out)) {
+
+  for (const tag of DANGEROUS_ELEMENTS.filter((name) => name !== 'script')) {
+    const paired = new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*?</${tag}\\s*>`, 'gi');
+    if (paired.test(out)) {
+      out = out.replace(paired, '');
+      removed.push(`<${tag}> elements`);
+    }
+    const selfClosing = new RegExp(`<${tag}\\b[^>]*\\/>`, 'gi');
+    if (selfClosing.test(out)) {
+      out = out.replace(selfClosing, '');
+      removed.push(`<${tag}> elements`);
+    }
+  }
+
+  if (EVENT_TEST.test(out)) {
     out = out.replace(SVG_EVENT_RE, ' data-removed=');
     removed.push('inline event handlers (onclick…)');
   }
+
+  if (SCRIPT_URL_TEST.test(out)) {
+    out = out.replace(SCRIPT_URL_RE, ' data-blocked="url"');
+    removed.push('script or inline SVG URLs');
+  }
+
   if (/@import/i.test(out)) {
     out = out.replace(/@import[^;]+;/gi, '');
     removed.push('CSS @import rules');
   }
+
+  if (CSS_URL_TEST.test(out)) {
+    out = out.replace(CSS_URL_RE, 'url(#');
+    out = out.replace(/url\(#\s*\)/g, 'none');
+    removed.push('remote CSS references');
+  }
+
   for (const ns of EDITOR_NS) {
     const attr = new RegExp(`\\s${ns}:[a-zA-Z-]+\\s*=\\s*"[^"]*"`, 'g');
     if (attr.test(out)) {
       out = out.replace(attr, '');
       removed.push(`${ns}:* editor attributes`);
     }
-    /* xmlns:sodipodi="…" style namespace declarations (and their URLs) */
     const decl = new RegExp(`\\sxmlns:${ns}\\s*=\\s*"[^"]*"`, 'gi');
     if (decl.test(out)) {
       out = out.replace(decl, '');
       removed.push(`xmlns:${ns} declaration`);
     }
-    /* <sodipodi:namedview … /> editor elements */
     const element = new RegExp(`<${ns}:[a-zA-Z-]+[^>]*?/>`, 'gi');
     if (element.test(out)) {
       out = out.replace(element, '');

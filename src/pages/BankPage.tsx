@@ -107,7 +107,7 @@ export function BankPage() {
                 <button
                   type="button"
                   onClick={() => deleteSynonymKey(key)}
-                  className="inline-flex size-6 items-center justify-center text-ink-faint hover:text-danger"
+                  className="inline-flex size-7 items-center justify-center rounded-[var(--r-xs)] text-ink-faint hover:bg-surface-2 hover:text-danger"
                   aria-label={`Delete ${key}`}
                 >
                   <GIcon name="delete" size={14} />
@@ -169,7 +169,7 @@ export function BankPage() {
                       void navigator.clipboard.writeText(list.join(', '));
                       toast.success('Copied pack keywords');
                     }}
-                    className="inline-flex size-6 items-center justify-center text-ink-faint hover:text-accent"
+                    className="inline-flex size-7 items-center justify-center rounded-[var(--r-xs)] text-ink-faint hover:bg-surface-2 hover:text-accent"
                     aria-label={`Copy ${key}`}
                   >
                     <GIcon name="content_copy" size={14} />
@@ -177,7 +177,7 @@ export function BankPage() {
                   <button
                     type="button"
                     onClick={() => deleteCategory(key)}
-                    className="inline-flex size-6 items-center justify-center text-ink-faint hover:text-danger"
+                    className="inline-flex size-7 items-center justify-center rounded-[var(--r-xs)] text-ink-faint hover:bg-surface-2 hover:text-danger"
                     aria-label={`Delete ${key}`}
                   >
                     <GIcon name="delete" size={14} />

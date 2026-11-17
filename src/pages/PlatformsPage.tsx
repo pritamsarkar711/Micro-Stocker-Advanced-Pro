@@ -23,7 +23,7 @@ function Stat({ icon, label, value }: { icon: 'aspect_ratio' | 'save' | 'sell' |
     <div className="flex items-center gap-2">
       <GIcon name={icon} size={15} className="shrink-0 text-ink-faint" />
       <div className="min-w-0">
-        <div className="text-[0.6875rem] text-ink-faint">{label}</div>
+        <div className="text-2xs text-ink-faint">{label}</div>
         <div className="truncate text-[0.8125rem] font-semibold text-ink tabular-nums">{value}</div>
       </div>
     </div>
@@ -85,7 +85,7 @@ export function PlatformsPage() {
               )}
             >
               {item.label}
-              <span className={clsx('tabular-nums', active ? 'text-white/75' : 'text-ink-faint')}>{count}</span>
+              <span className={clsx('tabular-nums', active ? 'text-white/90' : 'text-ink-faint')}>{count}</span>
             </button>
           );
         })}
@@ -133,7 +133,7 @@ export function PlatformsPage() {
                 type="button"
                 onClick={() => setOpen(expanded ? null : p.id)}
                 aria-expanded={expanded}
-                className="flex items-center justify-between gap-2 text-[0.75rem] font-medium text-ink-muted transition-colors hover:text-ink"
+                className="flex items-center justify-between gap-2 py-1 text-[0.75rem] font-medium text-ink-muted transition-colors hover:text-ink"
               >
                 <span>{expanded ? 'Hide rules' : 'Rules and formats'}</span>
                 <GIcon name={expanded ? 'keyboard_arrow_up' : 'keyboard_arrow_down'} size={17} />
@@ -159,7 +159,7 @@ export function PlatformsPage() {
                   {p.csv && (
                     <div>
                       <dt className="font-semibold text-ink">CSV columns</dt>
-                      <dd className="font-mono text-[0.6875rem] break-words text-ink-muted">
+                      <dd className="font-mono text-2xs break-words text-ink-muted">
                         {p.csv.columns.join(` ${p.csv.delimiter} `)}
                       </dd>
                     </div>

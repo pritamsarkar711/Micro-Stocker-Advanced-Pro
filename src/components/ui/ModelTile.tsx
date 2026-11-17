@@ -114,7 +114,7 @@ export function ModelTile({
               <button
                 type="button"
                 onClick={onUninstall}
-                className="inline-flex size-6 items-center justify-center rounded-[var(--r-xs)] text-ink-faint hover:bg-surface-2 hover:text-danger"
+                className="inline-flex size-7 items-center justify-center rounded-[var(--r-xs)] text-ink-faint hover:bg-surface-2 hover:text-danger"
                 aria-label={`Uninstall ${name}`}
                 title="Uninstall model"
               >

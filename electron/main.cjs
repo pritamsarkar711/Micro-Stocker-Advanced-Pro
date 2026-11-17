@@ -49,6 +49,84 @@ const safeSegment = (value) => {
 
 const filePathFor = (key) => path.join(dataDir(), safeKey(key));
 
+/* -------------------------------------------------------------------------- */
+/* Path approval                                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The renderer may only read or write files the user actually chose: picked
+ * through a native dialog, dropped into a watched folder, or saved through the
+ * save dialog. A compromised renderer cannot turn that into arbitrary disk IO.
+ */
+const approvedFiles = new Set();
+const approvedDirs = new Set();
+const approvalsPath = () => path.join(app.getPath('userData'), 'approved-paths.json');
+let approvalsTimer = null;
+
+function persistApprovals() {
+  if (approvalsTimer) clearTimeout(approvalsTimer);
+  approvalsTimer = setTimeout(() => {
+    const payload = {
+      files: Array.from(approvedFiles).slice(-5000),
+      dirs: Array.from(approvedDirs).slice(-500),
+    };
+    fs.mkdir(app.getPath('userData'), { recursive: true })
+      .then(() => fs.writeFile(approvalsPath(), JSON.stringify(payload), 'utf8'))
+      .catch(() => {});
+  }, 400);
+}
+
+/** Paths the user picked in an earlier session stay readable for the library. */
+async function loadApprovals() {
+  try {
+    const raw = await fs.readFile(approvalsPath(), 'utf8');
+    const parsed = JSON.parse(raw);
+    for (const file of parsed.files || []) approvedFiles.add(String(file));
+    for (const dir of parsed.dirs || []) approvedDirs.add(String(dir));
+  } catch {
+    /* first run */
+  }
+}
+
+function approveFile(target) {
+  if (!target) return;
+  const resolved = path.resolve(String(target));
+  approvedFiles.add(resolved);
+  approvedDirs.add(path.dirname(resolved));
+  persistApprovals();
+}
+
+function approveDir(target) {
+  if (!target) return;
+  approvedDirs.add(path.resolve(String(target)));
+  persistApprovals();
+}
+
+function isInside(parent, child) {
+  const rel = path.relative(parent, child);
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+function assertApproved(target, { write = false } = {}) {
+  const raw = String(target || '');
+  if (!raw || raw.includes('\0')) throw new Error('Invalid path');
+  const resolved = path.resolve(raw);
+  const ok = approvedFiles.has(resolved) || Array.from(approvedDirs).some((dir) => isInside(dir, resolved));
+  if (!ok) throw new Error('Path was not chosen in this session');
+  if (write && approvedFiles.has(resolved)) return resolved;
+  if (write && !Array.from(approvedDirs).some((dir) => isInside(dir, resolved))) {
+    throw new Error('Path is outside the folders this session may write');
+  }
+  return resolved;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Network policy                                                             */
+/* -------------------------------------------------------------------------- */
+
+const { assertNetTarget, assertModelUrl } = require('./net-policy.cjs');
+
+
 async function readKey(key) {
   try {
     const raw = await fs.readFile(filePathFor(key), 'utf8');
@@ -61,8 +139,10 @@ async function readKey(key) {
 
 async function writeKey(key, value) {
   try {
+    const payload = JSON.stringify(value, null, 2);
+    if (payload.length > 64 * 1024 * 1024) throw new Error('Stored value is larger than 64 MB');
     await fs.mkdir(dataDir(), { recursive: true });
-    await fs.writeFile(filePathFor(key), JSON.stringify(value, null, 2), 'utf8');
+    await fs.writeFile(filePathFor(key), payload, 'utf8');
     return { ok: true };
   } catch (error) {
     return { ok: false, error: String(error && error.message ? error.message : error) };
@@ -300,22 +380,33 @@ function registerIpc() {
   ipcMain.handle('net:request', async (_event, payload) => {
     try {
       const { url, method = 'GET', headers = {}, body, timeoutMs = 60000 } = payload || {};
-      const target = String(url || '');
-      if (!/^https?:\/\//i.test(target)) {
-        return { ok: false, status: 0, error: 'Invalid URL protocol' };
-      }
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), Math.min(Math.max(Number(timeoutMs) || 60000, 1000), 180000));
       try {
-        const res = await fetch(target, {
-          method: String(method || 'GET'),
-          headers,
-          body: body !== undefined && body !== null ? String(body) : undefined,
-          signal: controller.signal,
-          redirect: 'follow',
-        });
-        const text = await res.text();
-        return { ok: res.ok, status: res.status, text };
+        let target = assertNetTarget(url);
+        let response = null;
+        // Follow redirects manually so every hop is validated again.
+        for (let hop = 0; hop < 5; hop += 1) {
+          response = await fetch(target, {
+            method: String(method || 'GET'),
+            headers,
+            body: body !== undefined && body !== null ? String(body) : undefined,
+            signal: controller.signal,
+            redirect: 'manual',
+          });
+          if (response.status < 300 || response.status >= 400) break;
+          const location = response.headers.get('location');
+          if (!location) break;
+          target = assertNetTarget(new URL(location, target).toString());
+          if (String(method || 'GET').toUpperCase() !== 'GET' && String(method || 'GET').toUpperCase() !== 'HEAD') {
+            throw new Error('Redirects are not allowed for requests with a body');
+          }
+        }
+        const declared = Number(response.headers.get('content-length') || 0);
+        if (declared > 32 * 1024 * 1024) throw new Error('Response is larger than 32 MB');
+        const text = await response.text();
+        if (text.length > 32 * 1024 * 1024) throw new Error('Response is larger than 32 MB');
+        return { ok: response.ok, status: response.status, text };
       } finally {
         clearTimeout(timer);
       }
@@ -342,6 +433,7 @@ function registerIpc() {
             : [{ name: 'All files', extensions: ['*'] }],
       });
       if (canceled || !filePath) return { ok: false, canceled: true };
+      approveFile(filePath);
       await fs.writeFile(filePath, String(text), 'utf8');
       return { ok: true, filePath };
     } catch (error) {
@@ -351,7 +443,7 @@ function registerIpc() {
 
   ipcMain.handle('fs:read-base64', async (_event, targetPath) => {
     try {
-      const buffer = await fs.readFile(String(targetPath));
+      const buffer = await fs.readFile(assertApproved(targetPath));
       return { ok: true, base64: buffer.toString('base64'), size: buffer.length };
     } catch (error) {
       return { ok: false, error: String(error && error.message ? error.message : error) };
@@ -360,7 +452,7 @@ function registerIpc() {
 
   ipcMain.handle('fs:write-base64', async (_event, targetPath, base64) => {
     try {
-      await fs.writeFile(String(targetPath), Buffer.from(String(base64), 'base64'));
+      await fs.writeFile(assertApproved(targetPath, { write: true }), Buffer.from(String(base64), 'base64'));
       return { ok: true };
     } catch (error) {
       return { ok: false, error: String(error && error.message ? error.message : error) };
@@ -386,6 +478,7 @@ function registerIpc() {
     const files = [];
     for (const filePath of filePaths) {
       try {
+        approveFile(filePath);
         const stat = await fs.stat(filePath);
         files.push({ path: filePath, name: path.basename(filePath), size: stat.size });
       } catch {
@@ -397,7 +490,7 @@ function registerIpc() {
 
   ipcMain.handle('fs:rename', async (_event, from, to) => {
     try {
-      await fs.rename(String(from), String(to));
+      await fs.rename(assertApproved(from), assertApproved(to, { write: true }));
       return { ok: true };
     } catch (error) {
       return { ok: false, error: String(error && error.message ? error.message : error) };
@@ -416,6 +509,7 @@ function registerIpc() {
     });
     if (canceled || !filePaths || !filePaths[0]) return { ok: false, error: 'canceled' };
     const dir = filePaths[0];
+    approveDir(dir);
     const EXT = new Set(['.jpg', '.jpeg', '.png', '.eps', '.ai', '.svg', '.webp', '.avif', '.tif', '.tiff']);
     const pending = new Map();
     try {
@@ -494,7 +588,7 @@ function registerIpc() {
       for (let idx = 0; idx < files.length; idx++) {
         const file = files[idx];
         const url = String(file.url || '');
-        if (!/^https:\/\//i.test(url)) throw new Error('Model URL must use HTTPS');
+        assertModelUrl(url);
         const subDir = file.subDir ? path.join(targetDir, safeSegment(file.subDir)) : targetDir;
         await fs.mkdir(subDir, { recursive: true });
         const name = safeSegment(file.name || path.basename(new URL(url).pathname));
@@ -629,6 +723,7 @@ function registerIpc() {
 
   ipcMain.handle('upscaler:ensure', async (_event, { url, binary, models, engineGroup }) => {
     try {
+      assertModelUrl(url);
       const dir = engineGroup
         ? path.join(modelsRoot(), safeSegment(engineGroup))
         : upscalerDir();
@@ -667,14 +762,15 @@ function registerIpc() {
 
       const found = [];
       for (const model of models || []) {
-        const candidates = [`${model}.bin`, `${model}-x4.bin`, `${model}.param`];
+        const stem = safeSegment(model);
+        const candidates = [`${stem}.bin`, `${stem}-x4.bin`, `${stem}.param`];
         for (const c of candidates) {
           const ok = await fs
             .access(path.join(modelsDir, c))
             .then(() => true)
             .catch(() => false);
           if (ok) {
-            found.push(model);
+            found.push(stem);
             break;
           }
         }
@@ -697,7 +793,7 @@ function registerIpc() {
       const family = String(args.engineFamily || 'realesrgan');
       const outFmt = String(args.outFormat || 'png');
 
-      let inputPath = args.inPath;
+      let inputPath = args.inPath ? assertApproved(args.inPath) : null;
       if (!inputPath) {
         inputPath = path.join(workDir, `input.${outFmt === 'jpg' ? 'jpg' : outFmt}`);
         await fs.writeFile(inputPath, Buffer.from(String(args.inBase64), 'base64'));
@@ -770,6 +866,7 @@ function registerIpc() {
         filters: [{ name: 'JSON', extensions: ['json'] }],
       });
       if (canceled || !filePaths || !filePaths[0]) return { ok: false, canceled: true };
+      approveFile(filePaths[0]);
       const raw = await fs.readFile(filePaths[0], 'utf8');
       return { ok: true, filePath: filePaths[0], value: JSON.parse(raw) };
     } catch (error) {
@@ -803,6 +900,11 @@ function createWindow() {
       sandbox: true,
       spellcheck: false,
       backgroundThrottling: false,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      webviewTag: false,
+      navigateOnDragDrop: false,
+      enableBlinkFeatures: '',
     },
   });
 
@@ -831,6 +933,22 @@ function createWindow() {
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);
     return { action: 'deny' };
+  });
+
+  // The renderer never needs camera, microphone, geolocation, notifications or
+  // clipboard read. Deny every permission request instead of prompting.
+  mainWindow.webContents.session.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
+  mainWindow.webContents.session.setPermissionCheckHandler(() => false);
+
+  // A dropped file must never navigate the privileged document.
+  mainWindow.webContents.on('will-attach-webview', (event) => event.preventDefault());
+
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    const mod = process.platform === 'darwin' ? input.meta : input.control;
+    // Block devtools shortcuts in production builds.
+    if (!isDev && mod && input.shift && input.key.toLowerCase() === 'i') event.preventDefault();
+    // Block remote debugging of the packaged app.
+    if (!isDev && mod && input.alt && input.key.toLowerCase() === 'i') event.preventDefault();
   });
 
   if (isDev) {
@@ -898,8 +1016,9 @@ if (!gotLock) {
     }
   });
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
+    await loadApprovals();
     registerIpc();
     buildMenu();
     createWindow();

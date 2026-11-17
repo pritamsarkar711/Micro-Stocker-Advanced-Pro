@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Kpi } from '@/components/ui/Kpi';
-import { Button } from '@/components/ui/Button';
+import { Button, ButtonLink } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { GIcon, type GoogleIconName } from '@/components/ui/GoogleIcon';
 import { PlatformLogo } from '@/components/stock/PlatformLogo';
@@ -102,6 +102,42 @@ export function OverviewPage() {
     });
   }, [items]);
 
+  /** One clear next action, derived from what the library already contains. */
+  const nextStep = useMemo(() => {
+    if (!items.length) {
+      return {
+        title: 'Start with your first asset',
+        body: 'Import a photo or vector. Everything else in the studio builds on the library.',
+        action: 'Import files',
+        to: null as string | null,
+      };
+    }
+    const untagged = items.filter((it) => !it.metadata.title.trim() || it.metadata.keywords.length < 7).length;
+    if (untagged) {
+      return {
+        title: `Finish metadata for ${untagged} file${untagged === 1 ? '' : 's'}`,
+        body: 'Titles and keywords decide whether buyers ever see the file. Batch generate, then review.',
+        action: 'Open Library',
+        to: '/library',
+      };
+    }
+    const notEmbedded = items.filter((it) => !it.embeddedAt).length;
+    if (notEmbedded) {
+      return {
+        title: `Embed metadata in ${notEmbedded} file${notEmbedded === 1 ? '' : 's'}`,
+        body: 'Portal uploads read embedded IPTC and XMP. Embed once, then export.',
+        action: 'Open Export',
+        to: '/export',
+      };
+    }
+    return {
+      title: 'Everything is ready to submit',
+      body: 'Assets are tagged and embedded. Queue them on the portals you sell on.',
+      action: 'Open Planner',
+      to: '/planner',
+    };
+  }, [items]);
+
   async function handleQuickImport(files: FileList) {
     const added = await importFiles(files);
     if (added.length) {
@@ -135,11 +171,9 @@ export function OverviewPage() {
             >
               Import files
             </Button>
-            <Link to="/library">
-              <Button size="sm" variant="primary" icon={<GIcon name="photo_library" size={16} />}>
-                Open Library
-              </Button>
-            </Link>
+            <ButtonLink to="/library" size="sm" variant="primary" icon={<GIcon name="photo_library" size={16} />}>
+              Open Library
+            </ButtonLink>
           </>
         }
       />
@@ -147,9 +181,43 @@ export function OverviewPage() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi label="Library Assets" value={String(stats.total)} icon="photo_library" />
         <Kpi label="Tagged & Ready" value={String(stats.titled)} icon="check_circle" />
-        <Kpi label="IPTC & XMP Embedded" value={String(stats.embedded)} icon="bookmark" />
-        <Kpi label="Average Keywords" value={String(stats.avgKeywords)} icon="local_offer" />
+        <Kpi label="Embedded" value={String(stats.embedded)} icon="bookmark" />
+        <Kpi label="Keywords avg" value={String(stats.avgKeywords)} icon="local_offer" />
       </div>
+
+      <Card padding="sm" className="border-brand/25 bg-brand-soft/40">
+        <div className="flex items-start gap-3 sm:items-center">
+          <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-[var(--r-control)] bg-brand text-on-brand">
+            <GIcon name="tune" size={18} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold text-ink">{nextStep.title}</div>
+            <div className="text-xs leading-relaxed text-ink-muted">{nextStep.body}</div>
+          </div>
+          <div className="hidden shrink-0 sm:block">
+            {nextStep.to ? (
+              <ButtonLink to={nextStep.to} size="sm" variant="secondary">
+                {nextStep.action}
+              </ButtonLink>
+            ) : (
+              <Button size="sm" variant="secondary" icon={<GIcon name="upload_file" size={15} />} onClick={() => fileRef.current?.click()}>
+                {nextStep.action}
+              </Button>
+            )}
+          </div>
+        </div>
+        <div className="mt-2.5 sm:hidden">
+          {nextStep.to ? (
+            <ButtonLink to={nextStep.to} size="sm" variant="secondary" block>
+              {nextStep.action}
+            </ButtonLink>
+          ) : (
+            <Button size="sm" variant="secondary" block icon={<GIcon name="upload_file" size={15} />} onClick={() => fileRef.current?.click()}>
+              {nextStep.action}
+            </Button>
+          )}
+        </div>
+      </Card>
 
       <div>
         <h2 className="mb-2.5 text-xs font-semibold tracking-wider text-ink-muted uppercase">
@@ -178,11 +246,9 @@ export function OverviewPage() {
           title="Marketplace Readiness"
           icon={<GIcon name="storefront" size={17} />}
           action={
-            <Link to="/platforms">
-              <Button size="xs" variant="ghost" iconRight={<GIcon name="arrow_forward" size={13} />}>
-                All rules
-              </Button>
-            </Link>
+            <ButtonLink to="/platforms" size="xs" variant="ghost" iconRight={<GIcon name="arrow_forward" size={13} />}>
+              All rules
+            </ButtonLink>
           }
         />
 

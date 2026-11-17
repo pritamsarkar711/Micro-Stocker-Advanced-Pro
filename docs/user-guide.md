@@ -10,6 +10,11 @@ An account, an internet connection and an active subscription are required to ac
 
 ## 1. Library
 
+The Overview page opens with one suggested next step derived from the library:
+import a first file, finish metadata, embed IPTC and XMP, or move on to the
+planner. The button in the card does exactly that step.
+
+
 - **Import files** — desktop build opens a native multi-select dialog; the
   browser preview uses the standard file picker. Existing IPTC/XMP in JPEG/PNG
   is read automatically and becomes the item's metadata.
@@ -108,9 +113,16 @@ Drop JPG, PNG, WebP, AVIF, SVG, EPS or AI files before uploading them.
 - Vector checks also flag hairline strokes that vanish when printed large.
 - Every issue carries a one-line fix, and each agency is marked pass or fail with
   the reason. **Report** downloads the whole run as JSON.
+- The report opens with the single most useful next step and a button that takes
+  you to the tool that fixes it (Upscaler for resolution or focus, Optimizer for
+  weight, Prepare for colour and vector hygiene).
 
 ## 6. Image Optimizer
 
+- The first file you add is inspected and a format is suggested with its reason
+  (for example "Transparency detected. WebP keeps the alpha channel at a
+  fraction of PNG size"). Accept it or pick your own; a **Suggested** chip stays
+  visible either way.
 - Choose the output format (keep, JPEG, WebP, AVIF, PNG), then **Auto** (the
   format's visually-lossless sweet spot), **Target KB** (binary-searched) or an
   explicit quality.
@@ -122,6 +134,16 @@ Drop JPG, PNG, WebP, AVIF, SVG, EPS or AI files before uploading them.
   lower-quality pass runs before the original is returned.
 
 ## 7. Upscale studio
+
+### Suggested setup
+
+Add an image and the studio inspects it (size, aspect, compression and
+transparency) before choosing a model and a marketplace preset. **Suggested for
+this image** explains the pick in one sentence, for example "Edge Guided Sharp
+for this artwork" or "Lanczos Pro now, RealESRGAN x4plus adds more detail once
+installed". Change anything and **Use suggestion** restores the recommendation.
+The output format follows the source: transparent artwork stays PNG, photos stay
+JPEG.
 
 Three fields: **source**, **target**, **engine**.
 
@@ -200,12 +222,14 @@ Open **Settings → Security**.
 
 - **Password** — change it with the current password as confirmation, or send
   yourself a reset link. The sign-in screen also has a **Forgot password?**
-  link that emails a recovery link.
+  link that emails a recovery link. A four step strength meter tells you how the
+  password scores, and the most common passwords are refused.
 - **Two step verification** — add an authenticator app (Google Authenticator,
   Authy, 1Password, Microsoft Authenticator). Scan the QR code or copy the key,
   then enter the 6 digit code to switch it on. From then on every sign-in asks
   for a code as well as the password. **Turn off** removes the factor after a
-  confirmation.
+  confirmation. Five wrong codes lock the factor for five minutes, so a six digit
+  code cannot be guessed by hand.
 - **Sign out everywhere** closes every session for the account, including other
   devices.
 - Administrators use the same panel; there is no separate admin override.

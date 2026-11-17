@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -31,6 +31,7 @@ import {
   type UpscalePurpose,
 } from '@/lib/stock/upscale/models';
 import { runUpscale } from '@/lib/stock/upscale/engine';
+import { recommendUpscale, type UpscaleRecommendation } from '@/lib/stock/upscale/recommend';
 
 interface QueueEntry {
   id: string;
@@ -49,6 +50,33 @@ interface QueueEntry {
   outW?: number;
   outH?: number;
   outMP?: number;
+}
+
+/** Dimensions plus a cheap transparency probe, used by the recommender. */
+async function inspectImage(blob: Blob): Promise<{ width: number; height: number; hasAlpha: boolean }> {
+  try {
+    const bmp = await createImageBitmap(blob);
+    const { width, height } = bmp;
+    let hasAlpha = false;
+    if (/png|webp|avif/i.test(blob.type) && typeof OffscreenCanvas !== 'undefined') {
+      const canvas = new OffscreenCanvas(48, 48);
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(bmp, 0, 0, 48, 48);
+        const data = ctx.getImageData(0, 0, 48, 48).data;
+        for (let i = 3; i < data.length; i += 4) {
+          if (data[i] < 250) {
+            hasAlpha = true;
+            break;
+          }
+        }
+      }
+    }
+    bmp.close();
+    return { width, height, hasAlpha };
+  } catch {
+    return { width: 0, height: 0, hasAlpha: false };
+  }
 }
 
 async function readImageDims(blob: Blob): Promise<{ width: number; height: number }> {
@@ -77,6 +105,8 @@ export function UpscalePage() {
   const [dlProgress, setDlProgress] = useState<Record<string, ModelProgressEvent>>({});
   const [queue, setQueue] = useState<QueueEntry[]>([]);
   const [running, setRunning] = useState(false);
+  const [manualPick, setManualPick] = useState(false);
+  const [autoNote, setAutoNote] = useState<UpscaleRecommendation | null>(null);
 
   const queueRef = useRef<QueueEntry[]>([]);
   queueRef.current = queue;
@@ -121,7 +151,33 @@ export function UpscalePage() {
     [purpose],
   );
 
+  const autoApply = useCallback(
+    async (entry: QueueEntry) => {
+      const inspected = await inspectImage(entry.blob);
+      const next = recommendUpscale(
+        {
+          width: entry.width,
+          height: entry.height,
+          bytes: entry.blob.size,
+          hasAlpha: inspected.hasAlpha,
+          filename: entry.name,
+          format: entry.name.split('.').pop(),
+        },
+        { installed, isDesktop: desktop.isDesktop },
+      );
+      setAutoNote(next);
+      if (!manualPick) {
+        setModelId(next.modelId);
+        setTargetId(next.targetId);
+        const preset = UPSCALE_TARGETS.find((t) => t.id === next.targetId);
+        setOutFormat(next.format === 'png' || inspected.hasAlpha ? 'png' : (preset?.recommendedFormat ?? next.format));
+      }
+    },
+    [installed, manualPick],
+  );
+
   function pickTarget(id: string) {
+    setManualPick(true);
     setTargetId(id);
     const t = UPSCALE_TARGETS.find((x) => x.id === id);
     if (!t) return;
@@ -179,7 +235,11 @@ export function UpscalePage() {
         progress: 0,
       });
     }
-    if (entries.length) setQueue((prev) => [...entries, ...prev]);
+    if (entries.length) {
+      setQueue((prev) => [...prev, ...entries]);
+      const first = queueRef.current.length === 0 ? entries[0] : null;
+      if (first) void autoApply(first);
+    }
   }
 
   async function importFromLibrary() {
@@ -451,6 +511,43 @@ export function UpscalePage() {
             </div>
           </Card>
 
+          {autoNote && (
+            <Card>
+              <CardHeader
+                title="Suggested for this image"
+                icon={<GIcon name="tune" size={17} />}
+                action={<Badge tone="brand">Auto</Badge>}
+              />
+              <div className="space-y-2">
+                <p className="text-xs leading-relaxed text-ink-muted">{autoNote.reason}</p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Badge tone="neutral">{UPSCALE_MODELS.find((m) => m.id === autoNote.modelId)?.name}</Badge>
+                  <Badge tone="neutral">
+                    {UPSCALE_TARGETS.find((t) => t.id === autoNote.targetId)?.label}
+                  </Badge>
+                  {!autoNote.readyNow && autoNote.needsDownload && (
+                    <Badge tone="warn">Best model needs a download</Badge>
+                  )}
+                </div>
+                {(manualPick || modelId !== autoNote.modelId || targetId !== autoNote.targetId) && (
+                  <Button
+                    size="xs"
+                    variant="secondary"
+                    icon={<GIcon name="restart_alt" size={14} />}
+                    onClick={() => {
+                      setModelId(autoNote.modelId);
+                      setTargetId(autoNote.targetId);
+                      const preset = UPSCALE_TARGETS.find((t) => t.id === autoNote.targetId);
+                      setOutFormat(autoNote.format === 'png' ? 'png' : (preset?.recommendedFormat ?? autoNote.format));
+                      setManualPick(false);
+                    }}
+                  >
+                    Use suggestion
+                  </Button>
+                )}
+              </div>
+            </Card>
+          )}
 
         </div>
 
@@ -463,13 +560,23 @@ export function UpscalePage() {
               if (e.dataTransfer.files?.length) void addFiles(e.dataTransfer.files);
             }}
             onClick={() => fileRef.current?.click()}
-            className="flex min-h-[18rem] flex-1 cursor-pointer flex-col items-center justify-center gap-3 rounded-[var(--r-card)] border border-dashed border-line-strong bg-surface px-6 py-10 text-center transition-colors hover:border-brand hover:bg-brand-soft/30"
+            className={clsx(
+              'flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--r-card)] border border-dashed border-line-strong bg-surface px-6 text-center transition-colors hover:border-brand hover:bg-brand-soft/30',
+              queue.length ? 'min-h-[5.5rem] py-4' : 'min-h-[18rem] flex-1 gap-3 py-10',
+            )}
           >
-            <span className="inline-flex size-10 items-center justify-center rounded-[var(--r-control)] bg-accent-soft text-accent">
-              <GIcon name="add_photo_alternate" size={22} />
+            <span
+              className={clsx(
+                'inline-flex items-center justify-center rounded-[var(--r-control)] bg-accent-soft text-accent',
+                queue.length ? 'size-8' : 'size-10',
+              )}
+            >
+              <GIcon name="add_photo_alternate" size={queue.length ? 17 : 22} />
             </span>
-            <div className="text-sm font-semibold text-ink">Drop images</div>
-            <div className="text-xs text-ink-muted">JPG, PNG, WebP, AVIF, BMP and TIFF supported</div>
+            <div className="text-sm font-semibold text-ink">{queue.length ? 'Drop more images' : 'Drop images'}</div>
+            {!queue.length && (
+              <div className="text-xs text-ink-muted">JPG, PNG, WebP, AVIF, BMP and TIFF</div>
+            )}
           </div>
 
           {queue.length > 0 && (
@@ -630,7 +737,10 @@ export function UpscalePage() {
                   desktopOnly={model.family !== 'builtin'}
                   isDesktop={desktop.isDesktop}
                   progress={dlProgress[model.id]}
-                  onSelect={() => setModelId(model.id)}
+                  onSelect={() => {
+                    setModelId(model.id);
+                    setManualPick(true);
+                  }}
                   onInstall={() => void handleInstallModel(model)}
                   onCancel={() => void cancelModelInstall(model.id)}
                   onUninstall={() => void handleUninstallModel(model)}

@@ -270,7 +270,6 @@ export function AiPanel({ compact = false, onChange }: AiPanelProps) {
               value={settings.model}
               options={modelOptions}
               onChange={selectModel}
-              ariaLabel="AI model"
             />
           ) : (
             <Input

@@ -48,7 +48,6 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
           to="/"
           onClick={onCloseMobile}
           className="min-w-0 rounded-[var(--r-control)]"
-          aria-label="Micro Stocker Advanced Pro home"
         >
           <Logo size={30} showWordmark={!collapsed} tone="onDark" />
         </NavLink>
@@ -80,7 +79,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
         {groups.map((group) => (
           <div key={group.id}>
             {!collapsed && (
-              <div className="mb-1 px-2.5 text-[0.6875rem] font-semibold tracking-[0.12em] text-nav-fg-muted uppercase">
+              <div className="mb-1 px-2.5 text-2xs font-semibold tracking-[0.12em] text-nav-fg-muted uppercase">
                 {group.label}
               </div>
             )}
@@ -121,7 +120,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
                             {item.to === '/library' && items.length > 0 && (
                               <span
                                 className={clsx(
-                                  'rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold tabular-nums',
+                                  'rounded-full px-2 py-0.5 text-2xs font-semibold tabular-nums',
                                   isActive ? 'bg-white/25 text-white' : 'bg-white/10 text-nav-fg',
                                 )}
                               >
@@ -129,7 +128,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
                               </span>
                             )}
                             {item.to === '/admin' && (
-                              <span className="rounded-full bg-white/15 px-2 py-0.5 text-[0.625rem] font-bold tracking-wide text-white uppercase">
+                              <span className="rounded-full bg-white/15 px-2 py-0.5 text-2xs font-bold tracking-wide text-white uppercase">
                                 Admin
                               </span>
                             )}
@@ -159,7 +158,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
               <span className="block truncate text-[0.75rem] font-semibold text-white">
                 {isAdmin ? 'Administrator' : premium ? 'Premium plan' : 'No active plan'}
               </span>
-              <span className="block truncate text-[0.6875rem] text-nav-fg-muted">
+              <span className="block truncate text-2xs text-nav-fg-muted">
                 {isAdmin ? 'Full access' : remainingLabel(remainingMs)}
               </span>
             </span>

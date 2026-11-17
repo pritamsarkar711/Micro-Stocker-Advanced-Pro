@@ -146,6 +146,8 @@ import { CURRENCIES, currencyMeta, money } from '@/lib/format';
 import { SCHEMA_SQL } from '@/lib/cloud/schema';
 import { sizeCapOptions } from '@/lib/stock/sizecaps';
 import { APP_NAME, APP_VERSION } from '@/lib/version';
+import { recommendUpscale } from '@/lib/stock/upscale/recommend';
+import { checkPassword } from '@/lib/auth/password';
 import { DEFAULT_FLAGS, kindOf, megapixels, type StockItem } from '@/lib/stock/types';
 
 declare const FIXTURE_DIR: string;
@@ -890,6 +892,115 @@ test('APP_VERSION matches package.json', () => {
   const pkg = JSON.parse(readFileSync(path.join(FIXTURE_DIR, '..', '..', 'package.json'), 'utf8'));
   equal(APP_VERSION, pkg.version);
   assert(APP_NAME.length > 0, 'APP_NAME defined');
+});
+
+
+group('recommendations, sanitising and account security');
+
+test('upscale recommendation keeps transparency on a built in model', () => {
+  const rec = recommendUpscale(
+    { width: 800, height: 1200, bytes: 90_000, hasAlpha: true, filename: 'cutout.png' },
+    { installed: {}, isDesktop: false },
+  );
+  equal(rec.kind, 'transparent');
+  equal(rec.modelId, 'edge-crisp');
+  equal(rec.readyNow, true);
+  assert(rec.targetId.length > 0, 'target chosen');
+  assert(rec.reason.length > 10, 'reason is human readable');
+});
+
+test('upscale recommendation preselects only an installed model', () => {
+  const rec = recommendUpscale(
+    { width: 900, height: 600, bytes: 60_000, filename: 'soft.jpg' },
+    { installed: {}, isDesktop: true },
+  );
+  assert(['lanczos-pro', 'edge-crisp', 'photo-restore', 'anime4k-shader'].includes(rec.modelId), 'ready model');
+  equal(rec.needsDownload, true);
+});
+
+test('upscale target never picks a preset that would shrink a large photo', () => {
+  const rec = recommendUpscale({ width: 9000, height: 6000, bytes: 9_000_000, filename: 'big.jpg' }, {});
+  const preset = UPSCALE_TARGETS.find((target) => target.id === rec.targetId);
+  assert(preset, 'preset exists');
+  const size = resolveTargetSize(9000, 6000, preset!);
+  assert(size.factor >= 1, 'never downscales');
+});
+
+test('svg sanitiser removes scripts, embedded HTML and script urls', () => {
+  const dirty = '<svg><script>alert(1)</script><foreignObject><body onload="x()"/></foreignObject><a xlink:href="javascript:alert(2)"><rect onclick="bad()" fill="red"/></a></svg>';
+  const clean = sanitizeSvg(dirty);
+  assert(!/script/i.test(clean.text.replace(/data-removed/g, '')), 'script removed');
+  assert(!/foreignObject/i.test(clean.text), 'foreignObject removed');
+  assert(!/javascript:/i.test(clean.text), 'javascript url removed');
+  assert(!/onclick/i.test(clean.text), 'handler removed');
+  assert(clean.removed.length >= 3, 'removals reported');
+});
+
+test('svg analysis flags embedded HTML and script urls', () => {
+  const report = analyzeSvg('<svg><foreignObject/><image href="javascript:alert(1)"/></svg>');
+  equal(report.ok, false);
+  equal(report.hasForeignObject, true);
+  equal(report.scriptUrls, 1);
+});
+
+test('csv export neutralises spreadsheet formulas', () => {
+  const item = {
+    ...({} as StockItem),
+    id: 'x',
+    name: '=cmd|calc.jpg',
+    metadata: { title: '@SUM(1+1)', description: '-2+3', keywords: ['=importxml()'], categories: ['People'] },
+    flags: { aiGenerated: false, editorial: false },
+  } as unknown as StockItem;
+  const csv = generateUniversalCsv([item]).content;
+  assert(csv.includes("'=cmd|calc.jpg"), 'filename prefixed');
+  assert(csv.includes("'@SUM(1+1)"), 'title prefixed');
+  assert(csv.includes("'-2+3"), 'description prefixed');
+  assert(csv.includes("'=importxml()"), 'keyword prefixed');
+});
+
+test('universal csv keeps one column count on every line', () => {
+  const tricky = {
+    ...({} as StockItem),
+    id: 't',
+    name: 'a,b.jpg',
+    metadata: {
+      title: 'Title, with comma',
+      description: 'Line "quoted", and, commas',
+      keywords: ['red, blue', 'plain'],
+      categories: ['People, Places'],
+    },
+    flags: { aiGenerated: true, editorial: false },
+  } as unknown as StockItem;
+  const csv = generateUniversalCsv([tricky, item({ name: 'plain.png' })]).content;
+  const lines = csv.replace('\uFEFF', '').trim().split('\r\n');
+  const fields = (line: string) => {
+    const out: string[] = [];
+    let cell = '';
+    let quoted = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (quoted) {
+        if (ch === '"' && line[i + 1] === '"') { cell += '"'; i++; }
+        else if (ch === '"') quoted = false;
+        else cell += ch;
+      } else if (ch === '"') quoted = true;
+      else if (ch === ',') { out.push(cell); cell = ''; }
+      else cell += ch;
+    }
+    out.push(cell);
+    return out;
+  };
+  equal(lines.length, 3);
+  equal(fields(lines[0]).length, 7);
+  equal(fields(lines[1]).length, 7);
+  equal(fields(lines[2]).length, 7);
+});
+
+test('password policy refuses common and short passwords', () => {
+  equal(checkPassword('password123').ok, false);
+  equal(checkPassword('short').ok, false);
+  equal(checkPassword('correct horse battery').ok, true);
+  equal(checkPassword('Tr0ub4dor&3x').ok, true);
 });
 
 await Promise.all(pending);

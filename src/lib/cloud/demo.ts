@@ -150,6 +150,7 @@ function publicUserRow(user: DemoUser) {
 /* ------------------------------------------------------------------------- */
 
 const MFA_KEY = 'msap.demo.mfa';
+const MFA_ATTEMPTS_KEY = 'msap.demo.mfa.attempts';
 const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
 interface DemoFactor {
@@ -158,6 +159,25 @@ interface DemoFactor {
   createdAt: string;
   secret: string;
   verified: boolean;
+}
+
+function readAttempts(): number[] {
+  try {
+    const raw = localStorage.getItem(MFA_ATTEMPTS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((value) => typeof value === 'number') : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeAttempts(list: number[]): void {
+  try {
+    if (!list.length) localStorage.removeItem(MFA_ATTEMPTS_KEY);
+    else localStorage.setItem(MFA_ATTEMPTS_KEY, JSON.stringify(list.slice(-10)));
+  } catch {
+    /* storage disabled */
+  }
 }
 
 function readFactors(): DemoFactor[] {
@@ -282,12 +302,28 @@ const demoAuth = {
     async verify({ factorId, code }: { factorId: string; code: string }) {
       const factor = readFactors().find((item) => item.id === factorId);
       if (!factor) return { data: null, error: { message: 'Factor not found' } };
+
+      // A six digit code is brute forceable in minutes, so the demo client
+      // throttles like a server would: five misses lock the factor for a while.
+      const now = Date.now();
+      const attempts = readAttempts().filter((time) => now - time < 5 * 60_000);
+      if (attempts.length >= 5) {
+        const waitMinutes = Math.max(1, Math.ceil((5 * 60_000 - (now - attempts[attempts.length - 1])) / 60_000));
+        writeAttempts(attempts);
+        return { data: null, error: { message: `Too many attempts. Try again in ${waitMinutes} minute${waitMinutes === 1 ? '' : 's'}.` } };
+      }
+
       const trimmed = String(code ?? '').replace(/\D/g, '');
-      if (trimmed.length !== 6) return { data: null, error: { message: 'Invalid TOTP code entered' } };
-      const candidates = await Promise.all([totpFor(factor.secret, -1), totpFor(factor.secret, 0), totpFor(factor.secret, 1)]);
-      if (!candidates.includes(trimmed)) {
+      if (trimmed.length !== 6) {
+        writeAttempts([...attempts, now]);
         return { data: null, error: { message: 'Invalid TOTP code entered' } };
       }
+      const candidates = await Promise.all([totpFor(factor.secret, -1), totpFor(factor.secret, 0), totpFor(factor.secret, 1)]);
+      if (!candidates.includes(trimmed)) {
+        writeAttempts([...attempts, now]);
+        return { data: null, error: { message: 'Invalid TOTP code entered' } };
+      }
+      writeAttempts([]);
       writeFactors(readFactors().map((item) => (item.id === factorId ? { ...item, verified: true } : item)));
       demoAal = 'aal2';
       return { data: { access_token: 'demo', token_type: 'bearer' }, error: null };

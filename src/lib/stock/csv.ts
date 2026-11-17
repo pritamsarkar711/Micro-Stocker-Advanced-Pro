@@ -1,8 +1,20 @@
 import { ADOBE_CATEGORIES, PLATFORMS, SHUTTERSTOCK_CATEGORIES, type PlatformSpec } from './platforms';
 import type { PlatformId, StockItem } from './types';
 
+/**
+ * Neutralise spreadsheet formulas.
+ *
+ * Titles, keywords and descriptions come from the file or an AI model, and a
+ * cell that begins with =, +, @, a tab or a carriage return is executed by
+ * Excel and Sheets on open. Leading numbers such as -0.5 stay untouched.
+ */
+function neutralizeFormula(value: string): string {
+  if (/^[=+@\t\r]/.test(value) || /^-(?!\d+(\.\d+)?$)/.test(value)) return `'${value}`;
+  return value;
+}
+
 function escapeCell(raw: string, delimiter: string): string {
-  const cleaned = raw.replace(/\r?\n/g, ' ').trim();
+  const cleaned = neutralizeFormula(raw.replace(/\r?\n/g, ' ').replace(/[\t\r]/g, ' ').trim());
   const needsQuotes = cleaned.includes(delimiter) || cleaned.includes('"') || cleaned.includes('\n');
   if (!needsQuotes) return cleaned;
   return `"${cleaned.replace(/"/g, '""')}"`;

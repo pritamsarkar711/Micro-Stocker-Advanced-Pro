@@ -1,8 +1,8 @@
-import { Link } from 'react-router-dom';
+
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Logo } from '@/components/layout/Logo';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Button, ButtonLink } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { GIcon, type GoogleIconName } from '@/components/ui/GoogleIcon';
@@ -80,16 +80,12 @@ export function AboutPage() {
           >
             Telegram @joegoldberg2025
           </Button>
-          <Link to="/report">
-            <Button size="sm" variant="secondary" icon={<GIcon name="rate_review" size={17} />}>
-              Report issue
-            </Button>
-          </Link>
-          <Link to="/settings">
-            <Button size="sm" variant="ghost" icon={<GIcon name="settings" size={17} />}>
-              Settings
-            </Button>
-          </Link>
+          <ButtonLink to="/report" size="sm" variant="secondary" icon={<GIcon name="rate_review" size={17} />}>
+            Report issue
+          </ButtonLink>
+          <ButtonLink to="/settings" size="sm" variant="ghost" icon={<GIcon name="settings" size={17} />}>
+            Settings
+          </ButtonLink>
         </div>
       </Card>
     </div>

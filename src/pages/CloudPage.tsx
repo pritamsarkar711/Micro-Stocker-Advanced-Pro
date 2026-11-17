@@ -135,7 +135,7 @@ export function CloudPage() {
                   <button
                     type="button"
                     onClick={() => setShowKey((v) => !v)}
-                    className="pointer-events-auto text-ink-muted hover:text-ink"
+                    className="pointer-events-auto inline-flex size-8 items-center justify-center rounded-[var(--r-xs)] text-ink-muted hover:bg-surface-2 hover:text-ink"
                     aria-label={showKey ? 'Hide key' : 'Show key'}
                   >
                     <GIcon name={showKey ? 'visibility_off' : 'visibility'} size={15} />

@@ -131,7 +131,7 @@ export function Topbar({ onOpenMobileNav }: TopbarProps) {
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[0.8125rem] font-medium text-ink">{hit.label}</span>
-                      <span className="block truncate text-[0.6875rem] text-ink-muted">{hit.sub}</span>
+                      <span className="block truncate text-2xs text-ink-muted">{hit.sub}</span>
                     </span>
                     <GIcon name="chevron_right" size={16} className="shrink-0 text-ink-faint" />
                   </button>
@@ -168,6 +168,7 @@ export function Topbar({ onOpenMobileNav }: TopbarProps) {
             onClick={() => openAuth('account')}
             className="inline-flex h-9 items-center gap-2 rounded-[var(--r-control)] border border-line bg-surface pr-2 pl-1 text-[0.8125rem] font-medium text-ink transition-colors hover:border-line-strong hover:bg-surface-2"
             title={user.email}
+            aria-haspopup="dialog"
           >
             <span className="inline-flex size-7 items-center justify-center rounded-full bg-brand text-[0.75rem] font-bold text-on-brand">
               {user.displayName.slice(0, 1).toUpperCase()}

@@ -511,6 +511,7 @@ export function AdminPage() {
                   <Select
                     value={codeFilter}
                     onChange={(e) => setCodeFilter(e.target.value)}
+                    aria-label="Filter codes"
                     size="sm"
                     options={[
                       { value: 'all', label: 'All' },
@@ -638,7 +639,7 @@ export function AdminPage() {
                       <tr key={row.user_id} className="border-t border-line align-middle">
                         <td className="py-2.5 pr-3">
                           <div className="max-w-[16rem] truncate font-medium text-ink">{row.email || 'Not set'}</div>
-                          <div className="font-mono text-[0.6875rem] text-ink-faint">{row.user_id.slice(0, 8)}</div>
+                          <div className="font-mono text-2xs text-ink-faint">{row.user_id.slice(0, 8)}</div>
                         </td>
                         <td className="py-2.5 pr-3 whitespace-nowrap text-ink-muted">{date(row.created_at)}</td>
                         <td className="py-2.5 pr-3 whitespace-nowrap text-ink-muted">

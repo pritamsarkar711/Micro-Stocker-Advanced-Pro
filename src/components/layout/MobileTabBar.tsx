@@ -16,7 +16,7 @@ export function MobileTabBar() {
           end={tab.to === '/'}
           className={({ isActive }) =>
             clsx(
-              'relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-[var(--r-control)] px-1 py-1 text-[0.6875rem] font-semibold transition-colors',
+              'relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-[var(--r-control)] px-1 py-1 text-2xs font-semibold transition-colors',
               isActive ? 'text-brand' : 'text-ink-muted hover:text-ink',
             )
           }

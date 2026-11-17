@@ -122,19 +122,19 @@ export function EarningsPage() {
       >
         <div className="grid-auto-fit gap-3">
           <div className="card p-4">
-            <p className="text-[0.6875rem] text-fg-subtle">Earnings</p>
+            <p className="text-2xs text-fg-subtle">Earnings</p>
             <p className="mt-1 text-2xl font-semibold text-fg tabular-nums">{money(totalEarnings, settings.currency)}</p>
           </div>
           <div className="card p-4">
-            <p className="text-[0.6875rem] text-fg-subtle">Downloads</p>
+            <p className="text-2xs text-fg-subtle">Downloads</p>
             <p className="mt-1 text-2xl font-semibold text-fg tabular-nums">{totalDownloads.toLocaleString()}</p>
           </div>
           <div className="card p-4">
-            <p className="text-[0.6875rem] text-fg-subtle">Platforms</p>
+            <p className="text-2xs text-fg-subtle">Platforms</p>
             <p className="mt-1 text-2xl font-semibold text-fg tabular-nums">{byPlatform.length}</p>
           </div>
           <div className="card p-4">
-            <p className="text-[0.6875rem] text-fg-subtle">Avg / download</p>
+            <p className="text-2xs text-fg-subtle">Avg / download</p>
             <p className="mt-1 text-2xl font-semibold text-fg tabular-nums">{money(totalDownloads ? totalEarnings / totalDownloads : 0, settings.currency)}</p>
           </div>
         </div>

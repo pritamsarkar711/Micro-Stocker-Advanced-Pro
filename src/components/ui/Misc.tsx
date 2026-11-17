@@ -91,7 +91,7 @@ export function CodeBlock({
   return (
     <div className="overflow-hidden r-control border border-line bg-surface-2">
       <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-1.5">
-        <span className="font-mono text-[0.6875rem] tracking-wide text-fg-subtle uppercase">
+        <span className="font-mono text-2xs tracking-wide text-fg-subtle uppercase">
           {language}
         </span>
         <Button

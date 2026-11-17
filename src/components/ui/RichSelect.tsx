@@ -70,7 +70,7 @@ export function RichSelect<T extends string = string>({
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={ariaLabel}
+        aria-label={ariaLabel && selected ? `${ariaLabel}: ${selected.label}` : ariaLabel}
         onClick={() => !disabled && setOpen((v) => !v)}
         className={clsx(
           'r-control flex w-full items-center gap-2 border bg-surface text-left text-fg',
@@ -123,7 +123,7 @@ export function RichSelect<T extends string = string>({
                     <span className="min-w-0 flex-1">
                       <span className="block truncate">{option.label}</span>
                       {option.sublabel && (
-                        <span className="block truncate text-[0.6875rem] font-normal text-fg-subtle">
+                        <span className="block truncate text-2xs font-normal text-fg-subtle">
                           {option.sublabel}
                         </span>
                       )}
