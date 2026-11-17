@@ -186,7 +186,7 @@ export const PLATFORMS: Record<PlatformId, PlatformSpec> = {
     id: 'freepik',
     name: 'Magnific',
     site: 'https://www.magnific.com',
-    color: '#E0218A',
+    color: '#111114',
     formats: { photo: ['jpg'], vector: ['eps', 'svg'] },
     video: { formats: ['mp4', 'mov'], minHeight: 1080, maxHeight: 2160, durationSec: [5, 60], maxFileGB: 1.5 },
     minMP: 4,

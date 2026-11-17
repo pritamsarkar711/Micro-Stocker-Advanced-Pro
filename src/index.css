@@ -1,63 +1,53 @@
 @import 'tailwindcss';
 
 /* ==================================================================== */
-/*  Brand typography — Telenor (Grameenphone brand font family)          */
-/*  Shipped locally so the UI renders identically offline and in the     */
-/*  desktop build. Weights: 300 / 400 / 500 / 700 + italics.            */
+/*  Typography — Plus Jakarta Sans (variable, self-hosted)              */
+/*  A geometric humanist grotesque with a tall x-height and a friendly   */
+/*  editorial rhythm: it reads as premium at small UI sizes and still    */
+/*  feels designed at display sizes. One 200–800 variable file covers    */
+/*  every weight, so the whole app ships ~50 KB of Latin text.           */
 /* ==================================================================== */
 @font-face {
-  font-family: 'Telenor';
-  src: url('./assets/fonts/telenor-300.woff2') format('woff2');
-  font-weight: 300;
+  font-family: 'Plus Jakarta Sans';
+  src: url('./assets/fonts/jakarta-latin.woff2') format('woff2-variations'),
+       url('./assets/fonts/jakarta-latin.woff2') format('woff2');
+  font-weight: 200 800;
   font-style: normal;
   font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: 'Telenor';
-  src: url('./assets/fonts/telenor-400.woff2') format('woff2');
-  font-weight: 400;
+  font-family: 'Plus Jakarta Sans';
+  src: url('./assets/fonts/jakarta-latin-ext.woff2') format('woff2-variations'),
+       url('./assets/fonts/jakarta-latin-ext.woff2') format('woff2');
+  font-weight: 200 800;
   font-style: normal;
   font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: 'Telenor';
-  src: url('./assets/fonts/telenor-500.woff2') format('woff2');
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Telenor';
-  src: url('./assets/fonts/telenor-700.woff2') format('woff2');
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Telenor';
-  src: url('./assets/fonts/telenor-400-italic.woff2') format('woff2');
-  font-weight: 400;
-  font-style: italic;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Telenor';
-  src: url('./assets/fonts/telenor-700-italic.woff2') format('woff2');
-  font-weight: 700;
+  font-family: 'Plus Jakarta Sans';
+  src: url('./assets/fonts/jakarta-italic.woff2') format('woff2-variations'),
+       url('./assets/fonts/jakarta-italic.woff2') format('woff2');
+  font-weight: 200 800;
   font-style: italic;
   font-display: swap;
 }
 
-/* Currency glyph fallbacks: Telenor has no Taka or Rupee signs. */
+/* Currency glyph fallbacks: Jakarta has no Taka or Rupee sign, so two tiny
+   Noto subsets fill exactly those code points and nothing else. */
 @font-face {
-  font-family: 'TelenorTaka';
+  font-family: 'Plus Jakarta Currency';
   src: url('./assets/fonts/currency-taka.woff2') format('woff2');
   unicode-range: U+09F3;
   font-weight: 100 900;
   font-display: swap;
 }
 @font-face {
-  font-family: 'TelenorSymbol';
+  font-family: 'Plus Jakarta Currency';
   src: url('./assets/fonts/currency-rupee.woff2') format('woff2');
   unicode-range: U+20B9;
   font-weight: 100 900;
@@ -85,14 +75,22 @@
 
   --fg: #16181c;
   --fg-muted: #545a63;
-  --fg-subtle: #7c838d;
+  --fg-subtle: #5f6672;
 
-  /* Primary — one pink brand colour, flat across the whole product. */
+  /* Primary — one pink brand colour, flat across the whole product.
+     `--brand` paints text, icons, borders and focus rings.
+     `--brand-solid` paints fills that carry white text, so every surface keeps
+     at least 8:1 contrast instead of the 3.8:1 a bright tint would give. */
   --brand: #c2185b;
   --brand-hover: #a3124c;
+  --brand-solid: #c2185b;
+  --brand-solid-hover: #a3124c;
   --brand-soft: #fce8f0;
+  --brand-soft-2: #fbe1ec;
   --brand-fg: #ad1457;
   --on-brand: #ffffff;
+  --checker-a: #e6e8ec;
+  --checker-b: #f6f7f9;
 
   /* Secondary — deeper plum for emphasis only, never a gradient. */
   --secondary: #7b1a45;
@@ -132,6 +130,8 @@
 
   --accent: var(--brand);
   --accent-hover: var(--brand-hover);
+  --accent-solid: var(--brand-solid);
+  --accent-solid-hover: var(--brand-solid-hover);
   --accent-soft: var(--brand-soft);
   --accent-fg: var(--brand-fg);
 
@@ -159,14 +159,20 @@
   --line-strong: #3c424a;
 
   --fg: #eef1f5;
-  --fg-muted: #a2a9b3;
-  --fg-subtle: #767d87;
+  --fg-muted: #a9b1bb;
+  --fg-subtle: #929aa5;
 
-  --brand: #e6477c;
-  --brand-hover: #f0618e;
-  --brand-soft: #35141f;
-  --brand-fg: #f7a1bd;
+  /* Bright pink reads well as text on charcoal; the deeper tone is the fill. */
+  --brand: #f0608f;
+  --brand-hover: #f884a8;
+  --brand-solid: #cf1a60;
+  --brand-solid-hover: #b31550;
+  --brand-soft: #3a1421;
+  --brand-soft-2: #48192a;
+  --brand-fg: #f8b3c9;
   --on-brand: #ffffff;
+  --checker-a: #23262c;
+  --checker-b: #1a1d22;
 
   --secondary: #f2a9c4;
   --secondary-soft: #2c1520;
@@ -216,6 +222,8 @@ html.theme-switching *::after {
   --color-ink-muted: var(--fg-muted);
   --color-ink-faint: var(--fg-subtle);
   --color-brand: var(--brand);
+  --color-brand-solid: var(--brand-solid);
+  --color-brand-solid-hover: var(--brand-solid-hover);
   --color-brand-hover: var(--brand-hover);
   --color-brand-soft: var(--brand-soft);
   --color-brand-fg: var(--brand-fg);
@@ -242,8 +250,8 @@ html.theme-switching *::after {
   --text-2xs: 0.75rem;
   --text-2xs--line-height: 1.05rem;
 
-  --font-sans: 'Telenor', 'TelenorTaka', 'TelenorSymbol', 'Segoe UI', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-display: 'Telenor', 'TelenorTaka', 'TelenorSymbol', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', 'Plus Jakarta Currency', 'Segoe UI', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: 'Plus Jakarta Sans', 'Plus Jakarta Currency', 'Segoe UI', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', 'Roboto Mono', Menlo, Consolas, monospace;
 
   --radius-card: var(--r-card);
@@ -449,10 +457,14 @@ html.theme-switching *::after {
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 15.5rem), 1fr));
   }
 
+  /* Transparency checkerboard: quiet in light mode, quietly dark in dark mode. */
   .checkerboard {
-    background-color: var(--surface-2);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='8' height='8' fill='%23cfd4db'/%3E%3Crect x='8' y='8' width='8' height='8' fill='%23cfd4db'/%3E%3C/svg%3E");
+    background-color: var(--checker-b);
+    background-image:
+      linear-gradient(45deg, var(--checker-a) 25%, transparent 25%, transparent 75%, var(--checker-a) 75%),
+      linear-gradient(45deg, var(--checker-a) 25%, transparent 25%, transparent 75%, var(--checker-a) 75%);
     background-size: 16px 16px;
+    background-position: 0 0, 8px 8px;
   }
 
   .safe-bottom {
@@ -480,7 +492,7 @@ html.theme-switching *::after {
   }
 
   .brand-gradient {
-    background-color: var(--brand);
+    background-color: var(--brand-solid);
   }
 
   .nav-rail {
@@ -566,4 +578,29 @@ html.reduce-motion *::after {
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ==================================================================== */
+/*  Brand fills                                                         */
+/*  Tailwind maps `bg-brand` / `bg-accent` to the accent tone, which is   */
+/*  tuned for text on dark surfaces and too light to carry white labels.  */
+/*  These unlayered rules (they beat @layer utilities) repoint every      */
+/*  *fill* at the solid tone, while text/border/ring utilities keep the   */
+/*  accent. One rule set, so a new button cannot drift out of contrast.   */
+/* ==================================================================== */
+.bg-brand,
+.bg-accent {
+  background-color: var(--brand-solid);
+}
+.hover\:bg-brand-hover:hover,
+.hover\:bg-accent-hover:hover,
+.hover\:bg-brand:hover,
+.active\:bg-brand:active {
+  background-color: var(--brand-solid-hover);
+}
+.bg-brand\/12 {
+  background-color: color-mix(in srgb, var(--brand-solid) 12%, transparent);
+}
+.bg-brand\/10 {
+  background-color: color-mix(in srgb, var(--brand-solid) 10%, transparent);
 }

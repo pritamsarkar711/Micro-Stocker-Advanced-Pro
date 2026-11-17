@@ -102,7 +102,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
                       )
                     }
                     style={({ isActive }: { isActive: boolean }) =>
-                      isActive ? { backgroundColor: 'var(--brand)' } : undefined
+                      isActive ? { backgroundColor: 'var(--brand-solid)' } : undefined
                     }
                   >
                     {({ isActive }) => (

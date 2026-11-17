@@ -129,7 +129,7 @@ export const PROVIDERS: Record<ProviderKind, ProviderPreset> = {
     baseUrl: 'https://api.groq.com/openai/v1',
     needsKey: true,
     keyUrl: 'https://console.groq.com/keys',
-    badge: 'Free tier',
+    badge: 'Rate-limited',
     models: [
       { id: 'openai/gpt-oss-120b', label: 'GPT OSS 120B', brand: 'openai', free: true },
       { id: 'openai/gpt-oss-20b', label: 'GPT OSS 20B Fast', brand: 'openai', free: true },
