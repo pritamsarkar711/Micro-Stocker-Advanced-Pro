@@ -42,7 +42,7 @@ export function Kpi({ label, value, icon, unit, trend, tone = 'default', to }: K
         {trend !== undefined && (
           <span
             className={clsx(
-              'ml-auto inline-flex items-center gap-0.5 r-chip px-1.5 py-0.5 text-[0.6875rem] font-semibold',
+              'ml-auto inline-flex items-center gap-0.5 r-chip px-1.5 py-0.5 text-2xs font-semibold',
               trend >= 0 ? 'bg-ok-soft text-ok' : 'bg-danger-soft text-danger',
             )}
           >

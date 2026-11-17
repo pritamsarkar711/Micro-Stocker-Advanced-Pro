@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Button, ButtonLink } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Field, Select, Switch } from '@/components/ui/Field';
 import { Tabs } from '@/components/ui/Tabs';
@@ -170,11 +170,9 @@ export function PreparePage() {
             title="No files in Library"
             description="Import images or vectors first to inspect EXIF, file size and vector structure."
             action={
-              <Link to="/library">
-                <Button size="sm" variant="primary" icon={<GIcon name="photo_library" size={15} />}>
-                  Open Library
-                </Button>
-              </Link>
+              <ButtonLink to="/library" size="sm" variant="primary" icon={<GIcon name="photo_library" size={15} />}>
+                Open Library
+              </ButtonLink>
             }
           />
         </Card>

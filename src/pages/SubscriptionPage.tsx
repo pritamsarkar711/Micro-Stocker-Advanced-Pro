@@ -1,8 +1,8 @@
-import { Link } from 'react-router-dom';
+
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
+import { Button, ButtonLink } from '@/components/ui/Button';
 import { GIcon } from '@/components/ui/GoogleIcon';
 import { ActivationCard } from '@/components/auth/ActivationCard';
 import { useLicense } from '@/state/LicenseState';
@@ -48,11 +48,11 @@ export function SubscriptionPage() {
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-[0.75rem] font-semibold tracking-[0.14em] uppercase opacity-80">
+                <div className="text-[0.75rem] font-semibold tracking-[0.14em] uppercase">
                   Current plan
                 </div>
                 <div className="mt-1.5 text-[1.75rem] leading-none font-bold">{status}</div>
-                <div className="mt-2 text-[0.875rem] opacity-90">{user?.email}</div>
+                <div className="mt-2 text-[0.875rem]">{user?.email}</div>
               </div>
               <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-[var(--r-control)] bg-white/18">
                 <GIcon name={isAdmin ? 'admin_panel_settings' : 'workspace_premium'} size={26} />
@@ -61,13 +61,13 @@ export function SubscriptionPage() {
 
             <div className="mt-5 grid grid-cols-2 gap-3 text-[0.8125rem]">
               <div>
-                <div className="opacity-75">Expires</div>
+                <div>Expires</div>
                 <div className="mt-0.5 font-semibold">
                   {isAdmin ? 'Never' : expiresAt ? dateTime(expiresAt) : 'Not set'}
                 </div>
               </div>
               <div>
-                <div className="opacity-75">Time left</div>
+                <div>Time left</div>
                 <div className="mt-0.5 font-semibold">
                   {loading ? 'Checking…' : isAdmin ? 'Unlimited' : remainingMs > 0 ? countdown(remainingMs) : 'Not set'}
                 </div>
@@ -99,17 +99,13 @@ export function SubscriptionPage() {
             </p>
             <div className="flex flex-wrap gap-2 pt-1">
               {isAdmin && (
-                <Link to="/admin">
-                  <Button size="sm" icon={<GIcon name="settings" size={18} />}>
-                    Admin console
-                  </Button>
-                </Link>
+                <ButtonLink to="/admin" size="sm" icon={<GIcon name="settings" size={18} />}>
+                  Admin console
+                </ButtonLink>
               )}
-              <Link to="/contact">
-                <Button size="sm" variant="outline" icon={<GIcon name="support_agent" size={18} />}>
-                  Support
-                </Button>
-              </Link>
+              <ButtonLink to="/contact" size="sm" variant="outline" icon={<GIcon name="support_agent" size={18} />}>
+                Support
+              </ButtonLink>
             </div>
           </div>
         </Card>

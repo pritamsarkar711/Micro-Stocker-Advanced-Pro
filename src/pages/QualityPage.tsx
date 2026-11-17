@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/Card';
@@ -103,8 +104,61 @@ function ScoreRing({ score, verdict }: { score: number; verdict: Verdict }) {
   );
 }
 
+type Issue = { id: string; severity: 'error' | 'warn' | 'info'; title: string; detail: string; fix?: string };
+
+/**
+ * Map the worst findings to the one tool that actually fixes them, so the
+ * report ends with an action instead of a wall of red text.
+ */
+function suggestNextStep(issues: Issue[]): { tool: string; to: string; label: string } {
+  const active = issues.filter((issue) => issue.severity !== 'info');
+  const ids = new Set(active.map((issue) => issue.id));
+  const titles = active.map((issue) => issue.title.toLowerCase()).join(' ');
+  const has = (...prefixes: string[]) => prefixes.some((prefix) => Array.from(ids).some((id) => id.startsWith(prefix)));
+
+  // Resolution and focus are rejection reasons that no encoder can fix, so they
+  // outrank file weight even when both are present.
+  if (has('img-resolution', 'img-soft', 'img-slightly-soft')) {
+    return {
+      tool: 'Upscaler',
+      to: '/upscale',
+      label: 'Reach the agency minimum first: enlarge with the suggested model and detail recovery.',
+    };
+  }
+  if (has('svg-unsafe', 'svg-foreign-object', 'svg-editor-data', 'svg-complex')) {
+    return {
+      tool: 'Prepare',
+      to: '/prepare',
+      label: 'Clean the vector before upload: scripts, editor data and embedded HTML are removed there.',
+    };
+  }
+  if (has('img-weight', 'img-compression') && /\bMB\b|weight|size limit/.test(titles)) {
+    return {
+      tool: 'Optimizer',
+      to: '/optimize',
+      label: 'Re-encode at the visually lossless sweet spot to clear the file size limit.',
+    };
+  }
+  if (has('img-clipping', 'img-dark', 'img-bright', 'img-cast', 'img-saturation', 'img-noise')) {
+    return {
+      tool: 'Prepare',
+      to: '/prepare',
+      label: 'Correct exposure and colour in Prepare, then re-check the file.',
+    };
+  }
+  if (has('img-weight', 'img-compression')) {
+    return {
+      tool: 'Optimizer',
+      to: '/optimize',
+      label: 'Re-encode at the visually lossless sweet spot to recover detail lost to heavy compression.',
+    };
+  }
+  return { tool: 'Library', to: '/library', label: 'Fix the flagged items, then run the check again.' };
+}
+
 export function QualityPage() {
   const toast = useToast();
+  const navigate = useNavigate();
   const { items, getBlob } = useLibrary();
   const fileRef = useRef<HTMLInputElement>(null);
   const [checks, setChecks] = useState<CheckItem[]>([]);
@@ -276,6 +330,7 @@ export function QualityPage() {
                   <button
                     type="button"
                     onClick={() => setOpenId(expanded ? null : check.id)}
+                    aria-expanded={expanded}
                     className="flex w-full items-center gap-3 px-3.5 py-3 text-left transition-colors hover:bg-surface-2/60"
                   >
                     <div className="checkerboard grid size-11 shrink-0 place-items-center overflow-hidden rounded-[var(--r-sm)] border border-line">
@@ -320,6 +375,21 @@ export function QualityPage() {
                     <div className="border-t border-line px-3.5 py-3.5">
                       <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
                         <div className="space-y-2">
+                          {issues.some((issue) => issue.severity !== 'info') && (
+                            <div className="flex flex-wrap items-center gap-2 rounded-[var(--r-control)] border border-line bg-brand-soft/40 px-3 py-2">
+                              <GIcon name="tune" size={14} className="shrink-0 text-brand" />
+                              <span className="min-w-0 flex-1 text-[0.75rem] text-ink">
+                                {suggestNextStep(issues).label}
+                              </span>
+                              <Button
+                                size="xs"
+                                variant="secondary"
+                                onClick={() => navigate(suggestNextStep(issues).to)}
+                              >
+                                Open {suggestNextStep(issues).tool}
+                              </Button>
+                            </div>
+                          )}
                           {issues.map((issue) => (
                             <div key={issue.id} className="flex items-start gap-2.5">
                               <span
@@ -350,7 +420,7 @@ export function QualityPage() {
                           <div className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-[var(--r-control)] border border-line bg-surface-2/50 px-3 py-2.5">
                             {report.metrics.map((metric) => (
                               <div key={metric.label} className="min-w-0">
-                                <div className="text-[0.6875rem] text-ink-faint">{metric.label}</div>
+                                <div className="text-2xs text-ink-faint">{metric.label}</div>
                                 <div className="truncate text-[0.8125rem] font-semibold text-ink tabular-nums">
                                   {metric.value}
                                 </div>
@@ -359,7 +429,7 @@ export function QualityPage() {
                           </div>
 
                           <div className="space-y-1">
-                            <div className="text-[0.6875rem] font-semibold tracking-wide text-ink-faint uppercase">
+                            <div className="text-2xs font-semibold tracking-wide text-ink-faint uppercase">
                               Agency readiness
                             </div>
                             <ul className="space-y-1">

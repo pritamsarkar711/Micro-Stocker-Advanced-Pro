@@ -29,7 +29,7 @@
         "operatingSystem": "Windows, macOS, Linux",
         "description": "Desktop microstock studio: AI metadata, quality checks, image optimisation, upscaling, background removal, vector editing and agency-ready CSV/IPTC exports for 14 marketplaces.",
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-        "softwareVersion": "1.5.0"
+        "softwareVersion": "1.8.0"
       }
     </script>
     <meta property="og:image" content="./icon-512.png" />
@@ -38,27 +38,7 @@
     <link rel="icon" type="image/png" sizes="256x256" href="./icon-256.png" />
     <link rel="apple-touch-icon" href="./icon-256.png" />
     <title>Micro Stocker Advanced Pro, contributor studio</title>
-    <script>
-      (function () {
-        try {
-          var raw =
-            localStorage.getItem('msap:data:msap:settings') ||
-            localStorage.getItem('msap:data:settings');
-          var parsed = raw ? JSON.parse(raw) : {};
-          var theme = parsed && parsed.theme ? parsed.theme : null;
-          var isDark =
-            theme === 'dark'
-              ? true
-              : theme === 'light'
-                ? false
-                : window.matchMedia('(prefers-color-scheme: dark)').matches;
-          document.documentElement.classList.toggle('dark', isDark);
-          document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
-        } catch (e) {
-          /* keep default */
-        }
-      })();
-    </script>
+    <script src="./theme-boot.js"></script>
   </head>
   <body>
     <div id="root"></div>

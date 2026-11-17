@@ -1796,7 +1796,7 @@ export function VectorPage() {
               <button
                 type="button"
                 onClick={() => setPresent(true)}
-                className="text-2xs font-semibold text-brand hover:text-brand-hover"
+                className="inline-flex h-7 items-center rounded-[var(--r-xs)] px-2 text-2xs font-semibold text-brand hover:bg-brand-soft hover:text-brand-hover"
               >
                 Present
               </button>
@@ -1902,7 +1902,7 @@ export function VectorPage() {
                           onClick={() => setBackground(option.id as 'none' | '#ffffff' | '#f5f6f8' | '#16181c')}
                           title={option.label}
                           aria-label={option.label}
-                          className={clsx('size-6 rounded-[var(--r-xs)] border border-black/10', option.id === 'none' && 'checkerboard')}
+                          className={clsx('size-7 rounded-[var(--r-xs)] border border-black/10', option.id === 'none' && 'checkerboard')}
                           style={{ backgroundColor: option.color }}
                         />
                       ))}

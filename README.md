@@ -92,13 +92,35 @@ and `npm run dist:mac`; a macOS `.dmg` needs to be produced on macOS.
 ## 🧪 Testing
 
 ```bash
-npm test
+npm test          # 38 unit and integration checks, plus licensing SQL
+npm run test:browser   # auth gate, mask editor and video encoder in Chromium
 ```
 
-The suite tests licensing SQL with an embedded PostgreSQL instance, renders each page on the server, and runs domain checks on Node: every CSV dialect, validators, the metadata engine, binary IPTC/XMP
-round-trips through real PNG/JPEG/SVG/EPS fixtures, SVG/EPS analysis, sales
-parsing, planner maths, and a completeness check that all 14 marketplaces carry
-a brand mark, a colour and a workflow.
+The unit suite tests licensing SQL with an embedded PostgreSQL instance, renders
+each page on the server, and runs domain checks on Node: every CSV dialect,
+validators, the metadata engine, binary IPTC/XMP round-trips through real
+PNG/JPEG/SVG/EPS fixtures, SVG/EPS analysis and hardening, spreadsheet formula
+neutralising, upscale recommendations, password policy, sales parsing, planner
+maths, and a completeness check that all 14 marketplaces carry a brand mark, a
+colour and a workflow.
+
+### Interface and security audits
+
+Run these against the dev server (`npm run dev:renderer` with
+`VITE_DEMO_MODE=1`):
+
+```bash
+npm run qa:deep               # 24 routes x 10 widths: overflow, clipping, overlap, tap targets
+npm run qa:a11y               # axe-core, WCAG 2.1 AA, light and dark
+npm run qa:layout             # route render smoke
+npm run qa:contrast           # token contrast pairs
+npm run qa:vector             # 15 Vector Studio interactions
+npm run qa:interaction        # menus and dialogs at desktop and phone widths
+npm run qa:text               # dash, hint and placeholder copy guard
+npm run qa:suggest            # upscaler and optimizer recommendations
+npm run qa:security-rules     # offline network policy unit checks
+npm run qa:security           # TOTP, password change and sign-in challenge
+```
 
 ## 🏗 Architecture
 

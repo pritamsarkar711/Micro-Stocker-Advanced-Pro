@@ -13,6 +13,7 @@ import { decodeRaster, encodeRaster } from '@/lib/tools/converter';
 import {
   DEFAULT_QUALITY,
   optimizeRaster,
+  suggestedFormat,
   type OptimizeFormat,
 } from '@/lib/tools/optimizer';
 
@@ -79,6 +80,36 @@ export function OptimizePage() {
   const [longEdge, setLongEdge] = useState('0');
   const [stripMetadata, setStripMetadata] = useState(true);
   const [running, setRunning] = useState(false);
+  const [manualFormat, setManualFormat] = useState(false);
+  const [suggestion, setSuggestion] = useState<{ format: OptimizeFormat; reason: string } | null>(null);
+
+  /** Inspect the first file once and propose a format the user can accept. */
+  const suggestFor = useCallback(async (file: File) => {
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const raster = await decodeRaster(bytes, file.name);
+      let hasAlpha = false;
+      for (let i = 3; i < raster.data.length; i += 4) {
+        if (raster.data[i] < 250) {
+          hasAlpha = true;
+          break;
+        }
+      }
+      const original = extensionOf(file.name);
+      const format = suggestedFormat(hasAlpha, original);
+      const reason = hasAlpha
+        ? format === 'webp'
+          ? 'Transparency detected. WebP keeps the alpha channel at a fraction of PNG size.'
+          : 'Transparent PNG stays PNG so the alpha channel is never flattened.'
+        : original === 'jpg' || original === 'jpeg'
+          ? 'Opaque photo already in JPEG. Staying in JPEG avoids generation loss.'
+          : 'Opaque image. WebP is smaller than JPEG and PNG at the same quality.';
+      setSuggestion({ format, reason });
+      if (!manualFormat) setFormat(format);
+    } catch {
+      /* unreadable preview: the run reports the real error */
+    }
+  }, [manualFormat]);
 
   const totals = useMemo(() => {
     const done = queue.filter((q) => q.status === 'done' && q.after !== undefined);
@@ -121,8 +152,9 @@ export function OptimizePage() {
         });
       }
       setQueue((prev) => [...added, ...prev]);
+      if (!suggestion) void suggestFor(list[0]);
     },
-    [],
+    [suggestion, suggestFor],
   );
 
   const addFromLibrary = useCallback(async () => {
@@ -301,13 +333,37 @@ export function OptimizePage() {
       <div className="grid gap-4 lg:grid-cols-[19rem_minmax(0,1fr)]">
         <Card padding="md" className="space-y-4 lg:sticky lg:top-[4.75rem] lg:self-start">
           <Field label="Output format">
-            <Select value={format} onChange={(e) => setFormat(e.target.value as typeof format)}>
+            <Select
+              value={format}
+              onChange={(e) => {
+                setFormat(e.target.value as typeof format);
+                setManualFormat(true);
+              }}
+            >
               {FORMAT_OPTIONS.map((option) => (
                 <option key={option.id} value={option.id}>
                   {option.label}
                 </option>
               ))}
             </Select>
+            {suggestion && (
+              <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-2xs leading-relaxed text-ink-muted">
+                <Badge tone="brand">Suggested</Badge>
+                {suggestion.reason}
+                {format !== suggestion.format && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormat(suggestion.format);
+                      setManualFormat(false);
+                    }}
+                    className="font-semibold text-brand underline-offset-2 hover:underline"
+                  >
+                    Use {suggestion.format.toUpperCase()}
+                  </button>
+                )}
+              </p>
+            )}
           </Field>
 
           <Field label="Size control">

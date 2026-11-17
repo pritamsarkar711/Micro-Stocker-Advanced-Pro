@@ -279,12 +279,18 @@ const browserFallback: DesktopBridge = {
   },
   shell: {
     openExternal: async (url) => {
+      // Only real web links leave the app: a javascript: or data: URL typed
+      // into a field must never become a navigation.
+      if (!/^https?:\/\//i.test(String(url))) return { ok: false, error: 'Only http(s) links may be opened' };
       window.open(url, '_blank', 'noopener,noreferrer');
       return { ok: true };
     },
   },
   net: {
     request: async ({ url, method = 'GET', headers, body, timeoutMs = 60000 }) => {
+      if (!/^https?:\/\//i.test(String(url))) {
+        return { ok: false, status: 0, error: 'Only HTTP(S) requests are allowed' };
+      }
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {

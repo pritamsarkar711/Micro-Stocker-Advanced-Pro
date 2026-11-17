@@ -42,13 +42,16 @@ export function PlatformLogo({ id, size = 24, bare = false, className, title }: 
     </svg>
   );
 
-  const mono = brand.monogram ?? '';
+  // A three letter monogram in a 16px tile lands at 6px, which nobody can read.
+  // Small tiles drop to two letters and never drop below 9px.
+  const monogram = brand.monogram ?? '';
+  const mono = tileSize < 28 && monogram.length > 2 ? monogram.slice(0, 2) : monogram;
   const text = (
     <span
       aria-hidden="true"
-      className="font-extrabold tracking-tight"
+      className="font-extrabold leading-none tracking-tight"
       style={{
-        fontSize: Math.round(tileSize * (mono.length > 2 ? 0.34 : mono.length === 2 ? 0.42 : 0.56)),
+        fontSize: Math.max(9, Math.round(tileSize * (mono.length > 2 ? 0.36 : mono.length === 2 ? 0.44 : 0.56))),
         lineHeight: 1,
         color: brand.color,
       }}

@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+
 import clsx from 'clsx';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Button, ButtonLink } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/Misc';
 import { GIcon } from '@/components/ui/GoogleIcon';
@@ -146,11 +146,9 @@ export function ExportPage() {
             title="No files to export yet"
             description="Import images or vectors in Library and generate metadata first."
             action={
-              <Link to="/library">
-                <Button size="sm" variant="primary" icon={<GIcon name="photo_library" size={15} />}>
-                  Open Library
-                </Button>
-              </Link>
+              <ButtonLink to="/library" size="sm" variant="primary" icon={<GIcon name="photo_library" size={15} />}>
+                Open Library
+              </ButtonLink>
             }
           />
         </Card>

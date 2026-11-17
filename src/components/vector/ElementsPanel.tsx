@@ -135,7 +135,7 @@ export const ElementsPanel = memo(function ElementsPanel({
                       dangerouslySetInnerHTML={{ __html: element.body }}
                     />
                   </span>
-                  <span className="w-full truncate text-center text-[0.625rem] leading-tight">{element.name}</span>
+                  <span className="w-full truncate text-center text-2xs leading-tight">{element.name}</span>
                 </button>
               ))}
             </div>

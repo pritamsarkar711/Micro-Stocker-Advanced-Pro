@@ -12,14 +12,24 @@ export interface LogoProps {
  * No gradients, no glows — it stays crisp from 16px to 512px and matches the
  * application icon down to the corner radius.
  */
-export function LogoMark({ size = 32, className }: { size?: number; className?: string }) {
+export function LogoMark({
+  size = 32,
+  className,
+  decorative = false,
+}: {
+  size?: number;
+  className?: string;
+  /** True next to the wordmark, where the name is already read out. */
+  decorative?: boolean;
+}) {
   return (
     <svg
       width={size}
       height={size}
       viewBox="0 0 48 48"
-      role="img"
-      aria-label="Micro Stocker"
+      role={decorative ? undefined : 'img'}
+      aria-label={decorative ? undefined : 'Micro Stocker'}
+      aria-hidden={decorative ? true : undefined}
       className={clsx('shrink-0', className)}
     >
       <rect width="48" height="48" rx="9" fill="var(--brand)" />
@@ -39,7 +49,7 @@ export function LogoMark({ size = 32, className }: { size?: number; className?: 
 export function Logo({ size = 32, showWordmark = false, className, tone = 'default' }: LogoProps) {
   return (
     <span className={clsx('inline-flex min-w-0 items-center gap-2.5 select-none', className)}>
-      <LogoMark size={size} />
+      <LogoMark size={size} decorative={showWordmark} />
       {showWordmark && (
         <span className="min-w-0 leading-none">
           <span
@@ -52,7 +62,7 @@ export function Logo({ size = 32, showWordmark = false, className, tone = 'defau
           </span>
           <span
             className={clsx(
-              'mt-1 block truncate text-[0.625rem] font-medium tracking-[0.16em] uppercase',
+              'mt-1 block truncate text-2xs font-medium tracking-[0.16em] uppercase',
               tone === 'onDark' ? 'text-nav-fg-muted' : 'text-ink-faint',
             )}
           >

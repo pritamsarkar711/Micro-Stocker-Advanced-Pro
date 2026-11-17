@@ -1,7 +1,7 @@
-import { Link } from 'react-router-dom';
+
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Button, ButtonLink } from '@/components/ui/Button';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { GIcon } from '@/components/ui/GoogleIcon';
 import { useToast } from '@/state/ToastState';
@@ -82,11 +82,9 @@ export function ContactPage() {
           </div>
 
           <div className="flex items-center gap-2.5 border-t border-line pt-4">
-            <Link to="/report">
-              <Button variant="secondary" icon={<GIcon name="arrow_forward" size={16} />}>
-                Open Report Form
-              </Button>
-            </Link>
+            <ButtonLink to="/report" variant="secondary" icon={<GIcon name="arrow_forward" size={16} />}>
+              Open Report Form
+            </ButtonLink>
           </div>
         </Card>
       </div>

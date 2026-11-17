@@ -231,7 +231,7 @@ export function ReportPage() {
                       <button
                         type="button"
                         onClick={() => void deleteReport(rep.id)}
-                        className="inline-flex size-6 items-center justify-center rounded-[var(--r-xs)] text-ink-faint hover:text-danger"
+                        className="inline-flex size-7 items-center justify-center rounded-[var(--r-xs)] text-ink-faint hover:text-danger"
                         aria-label="Delete report"
                       >
                         <GIcon name="delete" size={13} />

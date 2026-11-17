@@ -89,7 +89,7 @@ export function SubmissionsPage() {
           {row.item.thumbUrl ? <img src={row.item.thumbUrl} alt="" className="size-8 shrink-0 r-chip border border-line object-cover" /> : <span className="size-8 shrink-0 r-chip border border-line bg-surface-2" />}
           <span className="min-w-0">
             <span className="block truncate font-medium text-fg">{row.item.name}</span>
-            <span className="block truncate text-[0.625rem] text-fg-subtle">{row.item.metadata.title || 'no title'}</span>
+            <span className="block truncate text-2xs text-fg-subtle">{row.item.metadata.title || 'no title'}</span>
           </span>
         </span>
       ),

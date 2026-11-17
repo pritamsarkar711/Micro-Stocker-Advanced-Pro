@@ -106,7 +106,7 @@ export function DataTable<T>({
                   style={column.width ? { width: column.width } : undefined}
                   className={clsx(
                     cellPad,
-                    'text-[0.6875rem] font-semibold tracking-[0.04em] text-fg-subtle uppercase',
+                    'text-2xs font-semibold tracking-[0.04em] text-fg-subtle uppercase',
                     ALIGN[column.align ?? 'left'],
                     column.hideBelow ? HIDE_BELOW[column.hideBelow] : undefined,
                     column.sortable && 'cursor-pointer select-none hover:text-fg',
@@ -191,7 +191,7 @@ export function DataTable<T>({
               <dl className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1">
                 {secondary.map((column) => (
                   <div key={column.key} className="min-w-0">
-                    <dt className="truncate text-[0.625rem] tracking-wide text-fg-subtle uppercase">
+                    <dt className="truncate text-2xs tracking-wide text-fg-subtle uppercase">
                       {column.header}
                     </dt>
                     <dd className="truncate text-[0.8125rem] text-fg">

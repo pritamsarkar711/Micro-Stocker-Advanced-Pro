@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Field';
+import { PasswordMeter } from './PasswordMeter';
 import { Badge } from '@/components/ui/Badge';
 import { GIcon } from '@/components/ui/GoogleIcon';
 import { useAuth, type MfaEnrollment } from '@/state/AuthState';
@@ -193,6 +194,7 @@ export function SecurityPanel() {
                   required
                   minLength={8}
                 />
+                <PasswordMeter value={next} className="mt-1.5" />
               </Field>
               <Field label="Repeat new password">
                 <Input
@@ -211,7 +213,7 @@ export function SecurityPanel() {
               <Button type="submit" size="sm" loading={passwordBusy}>
                 Save password
               </Button>
-              <span className="text-[0.75rem] text-ink-faint">At least 8 characters</span>
+              <span className="text-2xs text-ink-faint">At least 8 characters</span>
             </div>
           </form>
         )}

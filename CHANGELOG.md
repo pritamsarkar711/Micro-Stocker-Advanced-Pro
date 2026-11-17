@@ -3,6 +3,63 @@
 All notable changes to Micro Stocker Advanced Pro are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.8.0] - 2026-11-17
+
+### Added
+- **Automatic suggestions in the tools.** The upscaler inspects the first image
+  and preselects a model, marketplace preset and output format with a one line
+  reason ("Edge Guided Sharp for this cutout"), and keeps **Use suggestion**
+  available after you change anything. The optimizer names the best format for
+  the file it just read. The quality report opens with the single next step and
+  a button that opens the tool that fixes it. The overview suggests what to do
+  next based on the state of the library.
+- **Password strength meter** on create, reset and change password, with the most
+  common passwords refused.
+- **Two step attempt limit** in the local demo client: five wrong codes lock the
+  factor for five minutes.
+- **Strict Content Security Policy** in packaged builds (no inline scripts, no
+  remote code, no frames, no plugins) and a build time `theme-boot` script so the
+  first paint is still correct without inline JavaScript.
+- **IPC path approval.** The desktop bridge now reads and writes only files the
+  user picked or watched, remembers those choices across restarts, and validates
+  every URL it downloads a model from.
+- **Network policy for the desktop proxy.** Public HTTP(S) only, loopback allowed
+  for local AI servers, cloud metadata, private ranges, `.local` names, embedded
+  credentials and `javascript:` URLs refused, redirects re-checked per hop, and
+  responses capped at 32 MB.
+- **Hardened SVG sanitiser.** Removes `<foreignObject>`, iframes, embeds,
+  handlers, `javascript:` and inline SVG data URLs, remote CSS references and
+  editor namespaces.
+- **Universal CSV column test** proving every row keeps the same seven columns
+  when titles, keywords and categories contain commas and quotes.
+- **Spreadsheet formula injection guard** in every CSV export: cells that start
+  with `=`, `+`, `@`, a tab or a formula-like `-` are prefixed with an apostrophe.
+- New audits: `qa:deep` (24 routes x 10 widths), `qa:a11y` (axe-core, WCAG 2.1 AA,
+  light and dark), `qa:interaction`, `qa:security-rules`, `qa:suggest`, `qa:text`.
+
+### Changed
+- Links that looked like buttons are now single anchors instead of a button
+  nested inside a link, in the overview, prepare, export, subscription, contact,
+  about and not found screens.
+- Every switch, slider, select and text field has an accessible name. Sidebar
+  secondary text and subscription card labels were lightened to clear AA.
+- Type scale floor raised to 11.6px for labels previously below it; small
+  monogram tiles keep readable initials.
+- Security card spans the full settings row so the password form and QR code fit.
+- Tap targets are at least 28px: toolbars, list row actions, key visibility, the
+  switch, the preview link and the mobile tab bar.
+
+### Fixed
+- White on pink gradient labels on the subscription card no longer sit under the
+  4.5:1 threshold.
+- Upscaler no longer offers a JPG marketplace preset for transparent artwork,
+  and the drop zone shrinks once a queue exists so the work area stays visible.
+- Optimizer no longer suggests a lossless PNG for a transparent source unless the
+  source really is PNG.
+- Quality prioritisation now ranks resolution and focus above file weight, so a
+  60 KB soft photo is not sent to the optimizer.
+- Mobile overview no longer truncates KPI labels.
+
 ## [1.7.0] - 2026-11-17
 
 ### Added
