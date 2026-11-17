@@ -8,7 +8,7 @@ import { useAuth } from '@/state/AuthState';
 import { useToast } from '@/state/ToastState';
 import { dateTime } from '@/lib/format';
 
-export function AuthModal() {
+export function AuthModal({ required = false }: { required?: boolean }) {
   const {
     user,
     modalOpen,
@@ -19,7 +19,6 @@ export function AuthModal() {
     login,
     updateDisplayName,
     logout,
-    deleteAccount,
   } = useAuth();
   const toast = useToast();
 
@@ -62,6 +61,8 @@ export function AuthModal() {
       setPassword('');
       setDisplayName('');
       closeAuth();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to sign in. Please try again.');
     } finally {
       setBusy(false);
     }
@@ -76,19 +77,7 @@ export function AuthModal() {
         size="sm"
         footer={
           <div className="flex w-full items-center justify-between gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-danger hover:text-danger"
-              icon={<GIcon name="delete" size={16} />}
-              onClick={async () => {
-                await deleteAccount();
-                toast.info('Account removed');
-                closeAuth();
-              }}
-            >
-              Delete account
-            </Button>
+            <span className="text-xs text-ink-muted">Contact support to delete your account.</span>
             <Button
               variant="secondary"
               size="sm"
@@ -106,7 +95,7 @@ export function AuthModal() {
       >
         <div className="space-y-4">
           <div className="flex items-center gap-3 rounded-[var(--r-control)] border border-line bg-surface-2/60 p-3">
-            <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-bold text-accent-fg">
+            <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-bold text-on-brand">
               {user.displayName.slice(0, 1).toUpperCase()}
             </span>
             <div className="min-w-0 flex-1">
@@ -128,8 +117,12 @@ export function AuthModal() {
                 variant="secondary"
                 disabled={!editName.trim() || editName.trim() === user.displayName}
                 onClick={async () => {
-                  await updateDisplayName(editName);
-                  toast.success('Display name saved');
+                  try {
+                    await updateDisplayName(editName);
+                    toast.success('Display name saved');
+                  } catch (err) {
+                    toast.error('Could not save display name', err instanceof Error ? err.message : String(err));
+                  }
                 }}
               >
                 Save
@@ -156,12 +149,13 @@ export function AuthModal() {
 
   return (
     <Modal
-      open={modalOpen}
+      open={required || modalOpen}
       onClose={closeAuth}
+      dismissible={!required}
       title={tab === 'register' ? 'Create account' : 'Sign in'}
       description={
         tab === 'register'
-          ? 'Instant registration with email and password. No email confirmation needed.'
+          ? 'Create an account. Email confirmation may be required before signing in.'
           : 'Sign in with your email and password.'
       }
       size="sm"
@@ -177,7 +171,7 @@ export function AuthModal() {
             }}
             className={`flex h-8 items-center justify-center gap-1.5 rounded-[5px] text-xs font-semibold ${
               tab === 'login'
-                ? 'bg-accent text-accent-fg shadow-xs'
+                ? 'bg-accent text-on-brand shadow-xs'
                 : 'text-ink-muted hover:text-ink'
             }`}
           >
@@ -193,7 +187,7 @@ export function AuthModal() {
             }}
             className={`flex h-8 items-center justify-center gap-1.5 rounded-[5px] text-xs font-semibold ${
               tab === 'register'
-                ? 'bg-accent text-accent-fg shadow-xs'
+                ? 'bg-accent text-on-brand shadow-xs'
                 : 'text-ink-muted hover:text-ink'
             }`}
           >
@@ -228,11 +222,11 @@ export function AuthModal() {
             />
           </Field>
 
-          <Field label="Password" hint={tab === 'register' ? 'Minimum 6 characters' : undefined}>
+          <Field label="Password" hint={tab === 'register' ? 'Minimum 8 characters' : undefined}>
             <Input
               type={showPassword ? 'text' : 'password'}
               required
-              minLength={6}
+              minLength={tab === 'register' ? 8 : undefined}
               autoComplete={tab === 'register' ? 'new-password' : 'current-password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}

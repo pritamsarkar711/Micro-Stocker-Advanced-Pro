@@ -4,8 +4,7 @@ Micro Stocker Advanced Pro in one workflow:
 
 **Import → Clean → Upscale → Generate → Validate → Embed → Export → Track**
 
-Everything below works offline. The cloud sync (Supabase) is optional and only
-stores metadata descriptors, never your artwork.
+An account, an internet connection and an active subscription are required to access the workspace. The Subscription page remains available for activation and administration. Legacy cloud sync is disabled for security; see [licensing setup and remediation](licensing-setup.md).
 
 ---
 

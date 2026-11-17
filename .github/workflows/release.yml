@@ -14,17 +14,36 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
-      - run: npm run build
-      - run: npx electron-builder --win --x64 --publish never
+      - name: Verify and build configured app
+        shell: bash
+        env:
+          VITE_LICENSE_SUPABASE_URL: ${{ vars.MSAP_LICENSE_SUPABASE_URL }}
+          VITE_LICENSE_SUPABASE_ANON_KEY: ${{ vars.MSAP_LICENSE_SUPABASE_ANON_KEY }}
+        run: |
+          test -n "$VITE_LICENSE_SUPABASE_URL" || { echo "Licensing project URL is not configured"; exit 1; }
+          test -n "$VITE_LICENSE_SUPABASE_ANON_KEY" || { echo "Licensing public key is not configured"; exit 1; }
+          npm run verify
+      - run: npx electron-builder --config electron-builder.yml --win --x64 --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-      - name: Publish release with exe
+      - name: Upload executables to a draft release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="v$(node -p "require('./package.json').version")"
+          set -euo pipefail
+          VERSION_TAG="v$(node -p "require('./package.json').version")"
+          TAG="$VERSION_TAG"
           [[ "$GITHUB_REF" == refs/tags/* ]] && TAG="${GITHUB_REF#refs/tags/}"
-          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --target "$GITHUB_SHA" --title "Micro Stocker Advanced Pro $TAG" --notes "Windows downloads below: the Setup .exe installer (recommended) and the portable .exe. Not code-signed, so SmartScreen may warn - click More info, then Run anyway."
+          [[ "$TAG" == "$VERSION_TAG" ]] || { echo "Tag and package version do not match"; exit 1; }
           shopt -s nullglob
-          gh release upload "$TAG" release/*.exe release/*.blockmap release/latest*.yml --clobber
+          installers=(release/*Setup*.exe)
+          portables=(release/*portable*.exe)
+          (( ${#installers[@]} == 1 && ${#portables[@]} == 1 )) || { echo "Expected one installer and one portable executable"; exit 1; }
+          if gh release view "$TAG" --json isDraft --jq .isDraft > release-draft-status.txt 2>/dev/null; then
+            [[ "$(cat release-draft-status.txt)" == true ]] || { echo "Refusing to modify a published release"; exit 1; }
+          else
+            gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "Micro Stocker Advanced Pro $TAG" --notes "Windows downloads below: the Setup .exe installer (recommended) and the portable .exe. These builds are not code-signed, so Windows may display a SmartScreen warning. Review and test this draft before publishing."
+          fi
+          artifacts=(release/*.exe release/*.blockmap release/latest*.yml)
+          gh release upload "$TAG" "${artifacts[@]}" --clobber

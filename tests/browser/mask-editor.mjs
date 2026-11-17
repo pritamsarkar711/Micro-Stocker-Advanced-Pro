@@ -1,0 +1,31 @@
+import { chromium } from 'playwright-core';
+import chromiumBinary from '@sparticuz/chromium';
+import assert from 'node:assert/strict';
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || await chromiumBinary.executablePath(), args: chromiumBinary.args, headless: true });
+try {
+  const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto(`${process.env.TEST_BASE_URL || 'http://127.0.0.1:5173'}/tests/browser/mask-editor.html`);
+  const canvas = page.getByLabel('Cutout editor; paint with a mouse, pen or touch');
+  await page.getByRole('button', { name: 'Apply edits' }).waitFor({ state: 'visible' });
+  await page.waitForFunction(() => { const c = document.querySelector('canvas'); return c && c.width === 80; });
+  const pixel = (x, y) => canvas.evaluate((c, xy) => Array.from(c.getContext('2d').getImageData(xy[0], xy[1], 1, 1).data), [x, y]);
+  assert.equal((await pixel(20, 40))[3], 255);
+  assert.equal((await pixel(60, 40))[3], 0);
+  const box = await canvas.boundingBox();
+  const drawAt = async (x, y) => { await page.mouse.click(box.x + box.width * x / 80, box.y + box.height * y / 80); };
+  await drawAt(20, 40);
+  assert.equal((await pixel(20, 40))[3], 0, 'erase');
+  await page.getByRole('button', { name: 'Undo' }).click();
+  assert.equal((await pixel(20, 40))[3], 255, 'undo');
+  await page.getByRole('button', { name: 'Restore' }).click();
+  await drawAt(60, 40);
+  assert.equal((await pixel(60, 40))[3], 255, 'restore');
+  await page.getByRole('button', { name: 'Apply edits' }).click();
+  await page.waitForFunction(() => window.saved instanceof Blob);
+  const saved = await page.evaluate(async () => { const bmp = await createImageBitmap(window.saved); const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height; c.getContext('2d').drawImage(bmp, 0, 0); return Array.from(c.getContext('2d').getImageData(60, 40, 1, 1).data); });
+  assert.deepEqual(saved, [255, 0, 0, 255], 'export contains restored original pixel');
+  assert.deepEqual(errors, []);
+  console.log('Mask editor: erase, undo, restore and PNG export passed');
+} finally { await browser.close(); }

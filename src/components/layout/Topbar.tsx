@@ -150,7 +150,7 @@ export function Topbar({ onOpenMobileNav }: TopbarProps) {
             className="inline-flex h-8 items-center gap-2 rounded-[var(--r-control)] border border-line bg-surface pr-2.5 pl-1.5 text-xs font-medium text-ink hover:border-line-strong hover:bg-surface-2"
             title={user.email}
           >
-            <span className="inline-flex size-5 items-center justify-center rounded-full bg-accent text-[11px] font-bold text-accent-fg">
+            <span className="inline-flex size-5 items-center justify-center rounded-full bg-accent text-[11px] font-bold text-on-brand">
               {user.displayName.slice(0, 1).toUpperCase()}
             </span>
             <span className="hidden max-w-[110px] truncate sm:inline">{user.displayName}</span>
@@ -159,7 +159,7 @@ export function Topbar({ onOpenMobileNav }: TopbarProps) {
           <button
             type="button"
             onClick={() => openAuth('login')}
-            className="inline-flex h-8 items-center gap-1.5 rounded-[var(--r-control)] bg-accent px-3 text-xs font-semibold text-accent-fg hover:bg-accent-hover"
+            className="inline-flex h-8 items-center gap-1.5 rounded-[var(--r-control)] bg-accent px-3 text-xs font-semibold text-on-brand hover:bg-accent-hover"
           >
             <GIcon name="account_circle" size={15} />
             <span>Sign in</span>

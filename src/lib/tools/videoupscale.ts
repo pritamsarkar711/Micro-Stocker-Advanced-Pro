@@ -3,17 +3,9 @@ import type { ModelInstallSpec } from '@/lib/desktop';
 import { desktopPlatformKey } from '@/lib/modelStore';
 import type { PlatformId } from '@/lib/stock/types';
 
-/**
- * Full in app Video Upscaler and Frame Interpolation studio.
- *
- * Catalog covers open source real time shaders (Lanczos, AMD FSR 1.0 EASU/RCAS,
- * FidelityFX CAS, Anime4K v4, Temporal Denoise), NCNN Vulkan neural video
- * upscalers (RealESRGAN Video v3 2x/3x/4x, RealESRGAN x4plus, RealESRNet,
- * RealCUGAN Pro/SE, Waifu2x CUNet/UpConv7, RealSR DF2K, SRMD, LSDIR Compact,
- * Nomos 8K SC, UltraSharp) and RIFE v4 optical flow frame interpolation.
- *
- * Every model installs directly inside the app and renders upscaled 1080p, 2K,
- * 4K and 8K clips with audio preservation plus instant 4K/8K still extraction.
+/** Video preset catalog and browser-based resize/sharpen rendering.
+ * Neural engines in the catalog are not yet connected to video rendering.
+ * Do not advertise them as usable until end-to-end execution is implemented.
  */
 
 export type VideoPurpose =
@@ -155,7 +147,7 @@ export const VIDEO_MODELS: VideoModel[] = [
   /* Instant real time open source shaders (Browser & Desktop) */
   {
     id: 'lanczos-temporal',
-    name: 'Lanczos Temporal Pro',
+    name: 'Soft resize',
     runtime: 'builtin',
     purpose: 'commercial',
     purposes: ['commercial', 'realtime', 'footage'],
@@ -169,12 +161,12 @@ export const VIDEO_MODELS: VideoModel[] = [
   },
   {
     id: 'fsr-easu-rcas',
-    name: 'AMD FSR 1.0 EASU + RCAS',
+    name: 'Balanced sharpening',
     runtime: 'builtin',
     purpose: 'realtime',
     purposes: ['realtime', 'commercial', 'footage'],
     icon: 'speed',
-    license: 'MIT',
+    license: 'Built in',
     badge: '2x / 4x',
     sizeMB: 0,
     sharpen: 0.55,
@@ -183,12 +175,12 @@ export const VIDEO_MODELS: VideoModel[] = [
   },
   {
     id: 'fidelityfx-cas',
-    name: 'FidelityFX CAS Sharp',
+    name: 'Moderate sharpening',
     runtime: 'builtin',
     purpose: 'commercial',
     purposes: ['commercial', 'realtime', 'footage'],
     icon: 'center_focus_strong',
-    license: 'MIT',
+    license: 'Built in',
     badge: '2x / 4x',
     sizeMB: 0,
     sharpen: 0.45,
@@ -197,12 +189,12 @@ export const VIDEO_MODELS: VideoModel[] = [
   },
   {
     id: 'anime4k-v4',
-    name: 'Anime4K v4 Restore HQ',
+    name: 'Strong sharpening',
     runtime: 'builtin',
     purpose: 'anime',
     purposes: ['anime', 'realtime', 'commercial'],
     icon: 'animation',
-    license: 'MIT',
+    license: 'Built in',
     badge: '2x / 4x',
     sizeMB: 0,
     sharpen: 0.72,
@@ -211,7 +203,7 @@ export const VIDEO_MODELS: VideoModel[] = [
   },
   {
     id: 'temporal-clean',
-    name: 'Temporal Clean & Clarify',
+    name: 'Gentle sharpening',
     runtime: 'builtin',
     purpose: 'restore',
     purposes: ['restore', 'realtime', 'commercial'],
@@ -771,11 +763,13 @@ export async function upscaleVideoInApp(
   meta: VideoMeta,
   options: UpscaleVideoOptions,
 ): Promise<UpscaleVideoResult> {
+  const model = VIDEO_MODELS.find((m) => m.id === options.modelId);
+  if (!model || model.runtime !== 'builtin') {
+    throw new Error('This video model is not yet supported by the rendering pipeline. Select a built-in preset.');
+  }
   if (typeof MediaRecorder === 'undefined') {
     throw new Error('Video encoder unavailable in this browser runtime.');
   }
-
-  const model = VIDEO_MODELS.find((m) => m.id === options.modelId) ?? VIDEO_MODELS[0];
   const { width, height } = resolveVideoDimensions(meta.width, meta.height, options.target.longEdge);
   const chosen = pickRecorderMime(options.format);
 
@@ -784,6 +778,7 @@ export async function upscaleVideoInApp(
   canvas.height = height;
   const webgl = createWebglUpscaler(canvas, model.sharpen, model.contrast);
   const ctx2d = webgl ? null : canvas.getContext('2d');
+  if (!webgl && !ctx2d) throw new Error('Unable to initialize the video rendering canvas.');
   if (ctx2d) {
     ctx2d.imageSmoothingEnabled = true;
     ctx2d.imageSmoothingQuality = 'high';
@@ -795,15 +790,21 @@ export async function upscaleVideoInApp(
   video.src = url;
   video.playsInline = true;
   video.muted = !options.keepAudio;
-  video.volume = options.keepAudio ? 0.001 : 0;
+  video.volume = options.keepAudio ? 1 : 0;
 
   return new Promise<UpscaleVideoResult>((resolve, reject) => {
     let rafId = 0;
     let settled = false;
+    let recorder: MediaRecorder | null = null;
+    const streams: MediaStream[] = [];
     const chunks: BlobPart[] = [];
+    const abort = () => fail(new Error('Video upscaling canceled'));
 
     const cleanup = () => {
       cancelAnimationFrame(rafId);
+      options.signal?.removeEventListener('abort', abort);
+      if (recorder && recorder.state !== 'inactive') recorder.stop();
+      for (const stream of streams) for (const track of stream.getTracks()) track.stop();
       webgl?.dispose();
       video.pause();
       video.removeAttribute('src');
@@ -818,25 +819,22 @@ export async function upscaleVideoInApp(
       reject(err);
     };
 
-    options.signal?.addEventListener('abort', () => {
-      fail(new Error('Video upscaling canceled'));
-    });
+    if (options.signal?.aborted) { abort(); return; }
+    options.signal?.addEventListener('abort', abort, { once: true });
 
     video.onloadedmetadata = async () => {
       try {
         const stream = canvas.captureStream(options.fps);
+        streams.push(stream);
         if (options.keepAudio) {
-          try {
-            const vidStream = (video as HTMLVideoElement & { captureStream?: () => MediaStream }).captureStream?.();
-            for (const track of vidStream?.getAudioTracks() ?? []) {
-              stream.addTrack(track);
-            }
-          } catch {
-            /* clip has no audio track or audio capture is restricted */
-          }
+          const vidStream = (video as HTMLVideoElement & { captureStream?: () => MediaStream }).captureStream?.();
+          if (vidStream) streams.push(vidStream);
+          const tracks = vidStream?.getAudioTracks() ?? [];
+          if (!tracks.length) throw new Error('Could not capture an audio track. If this clip has no audio, turn off Preserve audio; otherwise try a supported browser or format.');
+          for (const track of tracks) stream.addTrack(track);
         }
 
-        const recorder = new MediaRecorder(stream, {
+        recorder = new MediaRecorder(stream, {
           mimeType: chosen.mime,
           videoBitsPerSecond: Math.round(options.bitrateMbps * 1_000_000),
         });
@@ -884,7 +882,7 @@ export async function upscaleVideoInApp(
         video.onended = () => {
           if (webgl) webgl.draw(video);
           else if (ctx2d) ctx2d.drawImage(video, 0, 0, width, height);
-          if (recorder.state !== 'inactive') recorder.stop();
+          if (recorder && recorder.state !== 'inactive') recorder.stop();
         };
 
         recorder.start(250);
@@ -906,6 +904,9 @@ export async function extractUpscaledVideoFrame(
   model: VideoModel,
   format: 'jpg' | 'png' = 'jpg',
 ): Promise<{ blob: Blob; width: number; height: number }> {
+  if (model.runtime !== 'builtin') {
+    throw new Error('This video model is not yet supported by the frame capture pipeline.');
+  }
   const { width, height } = resolveVideoDimensions(
     video.videoWidth || 1920,
     video.videoHeight || 1080,

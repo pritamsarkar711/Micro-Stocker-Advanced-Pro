@@ -18,15 +18,16 @@
     "dev:web": "vite --host 0.0.0.0",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "test": "node scripts/run-tests.mjs && node scripts/ssr-smoke.mjs",
+    "test": "node scripts/run-tests.mjs && node tests/licensing-db.mjs && node scripts/ssr-smoke.mjs",
     "verify": "npm run typecheck && npm test && npm run build",
     "preview": "vite preview --host 0.0.0.0",
-    "pack": "npm run build && electron-builder --dir",
-    "dist": "npm run build && electron-builder",
-    "dist:win": "npm run build && electron-builder --win",
-    "dist:linux": "npm run build && electron-builder --linux",
-    "dist:mac": "npm run build && electron-builder --mac",
-    "postinstall": "electron-builder install-app-deps || true"
+    "pack": "npm run build && electron-builder --config electron-builder.yml --dir",
+    "dist": "npm run build && electron-builder --config electron-builder.yml",
+    "dist:win": "npm run build && electron-builder --config electron-builder.yml --win",
+    "dist:linux": "npm run build && electron-builder --config electron-builder.yml --linux",
+    "dist:mac": "npm run build && electron-builder --config electron-builder.yml --mac",
+    "postinstall": "electron-builder install-app-deps || true",
+    "test:browser": "node scripts/browser-tests.mjs"
   },
   "dependencies": {
     "@cornerstonejs/codec-openjpeg": "^1.3.6",
@@ -52,6 +53,7 @@
     "yauzl": "^3.4.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.16",
     "@sparticuz/chromium": "^153.0.0",
     "@tailwindcss/vite": "^4.3.5",
     "@types/jpeg-js": "^0.3.0",

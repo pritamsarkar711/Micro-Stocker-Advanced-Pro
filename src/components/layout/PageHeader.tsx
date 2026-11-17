@@ -22,11 +22,11 @@ export function PageHeader({
             {title}
           </h1>
           {description && (
-            <p className="mt-0.5 truncate text-[0.8125rem] text-fg-muted">{description}</p>
+            <p className="mt-0.5 text-[0.8125rem] text-fg-muted">{description}</p>
           )}
         </div>
         {actions && (
-          <div className="no-scrollbar flex shrink-0 flex-wrap items-center gap-1.5">
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
             {actions}
           </div>
         )}

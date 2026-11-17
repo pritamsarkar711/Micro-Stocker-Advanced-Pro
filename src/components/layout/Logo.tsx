@@ -10,7 +10,7 @@ export function Logo({ size = 28, showWordmark = false, className }: LogoProps) 
   return (
     <span className={clsx('inline-flex items-center gap-2.5 select-none', className)}>
       <span
-        className="inline-flex shrink-0 items-center justify-center rounded-[6px] bg-accent text-accent-fg shadow-xs"
+        className="inline-flex shrink-0 items-center justify-center rounded-[6px] bg-accent text-on-brand shadow-xs"
         style={{ width: size, height: size }}
       >
         <svg

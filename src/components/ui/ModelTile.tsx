@@ -66,7 +66,7 @@ export function ModelTile({
           <span
             className={clsx(
               'inline-flex size-7 shrink-0 items-center justify-center rounded-[5px]',
-              selected ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-ink-muted',
+              selected ? 'bg-accent text-on-brand' : 'bg-surface-2 text-ink-muted',
             )}
           >
             <GIcon name={icon} size={16} />

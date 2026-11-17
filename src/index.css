@@ -115,8 +115,8 @@
   --fg-subtle: #6f8194;
 
   /* Primary: Material Blue in dark mode with crisp contrast */
-  --brand: #1e88e5;
-  --brand-hover: #1976d2;
+  --brand: #1565c0;
+  --brand-hover: #0d47a1;
   --brand-soft: #132842;
   --brand-fg: #90caf9;
   --on-brand: #ffffff;
@@ -289,6 +289,9 @@ html.theme-switching *::after {
 /*  Utilities                                                           */
 /* ==================================================================== */
 @layer utilities {
+  /* Accent text on dark surfaces needs a lighter tone than solid controls. */
+  .dark .text-accent, .dark .text-brand { color: var(--brand-fg); }
+
   .card {
     background-color: var(--surface);
     border: 1px solid var(--line);
