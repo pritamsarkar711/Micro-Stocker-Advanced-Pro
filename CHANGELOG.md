@@ -20,6 +20,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Flash is live; Gemini, MiniMax, Kimi and the image model are seeded switched off
   until their ids are confirmed.
 
+- **Android app.** The same bundle now ships as an installable APK with the
+  studio branding, a share sheet for exported files and the whole workspace
+  available on a phone.
+
 ### Changed
 - **Credits are charged by the four generators only.** Premium background, upscale
   and video models now need a plan and cost nothing, and the plan cards state the
