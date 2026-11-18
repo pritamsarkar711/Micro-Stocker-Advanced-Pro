@@ -23,6 +23,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Android app.** The same bundle now ships as an installable APK with the
   studio branding, a share sheet for exported files and the whole workspace
   available on a phone.
+- **Add models and providers from the console.** Admin → Providers can create an
+  OpenAI-compatible endpoint and any model row (upstream id, display name, kind,
+  per-million price, enabled) without a new release. Both writes are admin only,
+  audited and closed to anonymous callers.
 
 ### Changed
 - **Credits are charged by the four generators only.** Premium background, upscale
