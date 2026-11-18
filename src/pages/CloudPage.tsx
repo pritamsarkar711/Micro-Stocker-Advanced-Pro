@@ -1,274 +1,110 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Field, Input } from '@/components/ui/Field';
 import { GIcon } from '@/components/ui/GoogleIcon';
-import { BrandLogo } from '@/components/ui/BrandLogo';
-import { useApp } from '@/state/AppState';
 import { useAuth } from '@/state/AuthState';
 import { useLibrary } from '@/state/library';
-import { useToast } from '@/state/ToastState';
-import { isConfigured, validateConfig } from '@/lib/cloud/config';
-import { SCHEMA_SQL } from '@/lib/cloud/schema';
-import { pullLibrary, pushLibrary } from '@/lib/stock/sync';
+import { useWorkspaceSync } from '@/state/WorkspaceSync';
+import { deviceLabel } from '@/lib/stock/sync';
+import { demoMode } from '@/lib/cloud/demo';
+
+function when(iso: string | null): string {
+  if (!iso) return 'never';
+  const delta = Date.now() - Date.parse(iso);
+  if (Number.isNaN(delta)) return 'never';
+  if (delta < 60_000) return 'just now';
+  const minutes = Math.floor(delta / 60_000);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  return `${Math.floor(hours / 24)} d ago`;
+}
 
 export function CloudPage() {
-  const { cloud, saveCloud, clearCloud, connection, recheckConnection } = useApp();
   const { user, openAuth } = useAuth();
-  const { items, replaceAll } = useLibrary();
-  const toast = useToast();
+  const { items } = useLibrary();
+  const { status, lastSyncAt, error, syncNow } = useWorkspaceSync();
+  const [working, setWorking] = useState(false);
 
-  const [url, setUrl] = useState(cloud.supabaseUrl);
-  const [anonKey, setAnonKey] = useState(cloud.supabaseAnonKey);
-  const [label, setLabel] = useState(cloud.projectLabel ?? '');
-  const [showKey, setShowKey] = useState(false);
-  const [showSql, setShowSql] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState(false);
+  const tone = status === 'error' ? 'danger' : status === 'idle' ? 'ok' : 'neutral';
+  const label =
+    status === 'off' ? 'Signed out' : status === 'pulling' ? 'Pulling' : status === 'pushing' ? 'Saving' : status === 'error' ? 'Not synced' : 'In sync';
 
-  useEffect(() => {
-    setUrl(cloud.supabaseUrl);
-    setAnonKey(cloud.supabaseAnonKey);
-    setLabel(cloud.projectLabel ?? '');
-  }, [cloud]);
-
-  async function handleSave(e: FormEvent) {
-    e.preventDefault();
-    const candidate = {
-      supabaseUrl: url.trim(),
-      supabaseAnonKey: anonKey.trim(),
-      projectLabel: label.trim(),
-    };
-    const err = validateConfig(candidate);
-    if (err) {
-      toast.error('Invalid configuration', err);
-      return;
-    }
-    setSaving(true);
+  async function run() {
+    setWorking(true);
     try {
-      const ok = await saveCloud(candidate);
-      toast.success(ok ? 'Cloud connected' : 'Configuration saved');
+      const result = await syncNow();
+      if (!result.ok && result.error) setWorking(false);
     } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handlePush() {
-    setSyncing(true);
-    try {
-      const res = await pushLibrary(cloud, items);
-      if (res.ok) toast.success(`Pushed ${items.length} assets`);
-      else toast.error('Push failed', res.error);
-    } finally {
-      setSyncing(false);
-    }
-  }
-
-  async function handlePull() {
-    setSyncing(true);
-    try {
-      const res = await pullLibrary(cloud, items);
-      if (res.ok) {
-        replaceAll(res.merged);
-        toast.success(`Merged ${res.merged.length} assets`);
-      } else {
-        toast.error('Pull failed', res.error);
-      }
-    } finally {
-      setSyncing(false);
+      setWorking(false);
     }
   }
 
   return (
-    <div className="space-y-5">
-      <div role="status" className="rounded border border-line bg-surface p-4 text-sm text-ink">Legacy cloud sync is disabled because its previous access policies exposed data. Apply the safety SQL below to every existing workspace project; this retains data but blocks anonymous access.</div>
+    <div>
       <PageHeader
-        title="Cloud Sync"
+        title="Sync & devices"
         actions={
-          <Badge tone={connection.state === 'online' ? 'brand' : 'neutral'}>
-            <GIcon name={connection.state === 'online' ? 'cloud_done' : 'cloud_off'} size={13} />
-            {connection.message}
-            {connection.latencyMs !== null ? ` · ${connection.latencyMs} ms` : ''}
+          <Badge tone={tone} icon={<GIcon name={status === 'error' ? 'cloud_off' : 'cloud_done'} size={13} />}>
+            {label}
           </Badge>
         }
       />
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        <Card className="lg:col-span-7">
-          <CardHeader
-            title="Supabase Project"
-            icon={<BrandLogo brand="supabase" size={18} />}
-            action={
-              isConfigured(cloud) && (
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  icon={<GIcon name="refresh" size={14} />}
-                  onClick={() => void recheckConnection()}
-                >
-                  Test
-                </Button>
-              )
-            }
-          />
-
-          <form onSubmit={handleSave} className="space-y-3.5">
-            <Field label="Project URL">
-              <Input
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://project.supabase.co"
-                leading={<GIcon name="link" size={15} />}
-              />
-            </Field>
-
-            <Field label="Anon public key">
-              <Input
-                type={showKey ? 'text' : 'password'}
-                value={anonKey}
-                onChange={(e) => setAnonKey(e.target.value)}
-                placeholder="Supabase public key"
-                leading={<GIcon name="key" size={15} />}
-                trailing={
-                  <button
-                    type="button"
-                    onClick={() => setShowKey((v) => !v)}
-                    className="pointer-events-auto inline-flex size-8 items-center justify-center rounded-[var(--r-xs)] text-ink-muted hover:bg-surface-2 hover:text-ink"
-                    aria-label={showKey ? 'Hide key' : 'Show key'}
-                  >
-                    <GIcon name={showKey ? 'visibility_off' : 'visibility'} size={15} />
-                  </button>
-                }
-              />
-            </Field>
-
-            <Field label="Label (optional)">
-              <Input
-                value={label}
-                onChange={(e) => setLabel(e.target.value)}
-                placeholder="Studio workspace"
-              />
-            </Field>
-
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
-              <div className="flex items-center gap-2">
-                <Button
-                  type="submit"
-                  size="sm"
-                  variant="primary"
-                  loading={saving}
-                  icon={<GIcon name="cloud_sync" size={15} />}
-                >
-                  Save & connect
-                </Button>
-                {isConfigured(cloud) && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="text-danger"
-                    onClick={() => void clearCloud()}
-                  >
-                    Disconnect
-                  </Button>
-                )}
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="secondary"
-                  icon={<GIcon name="content_copy" size={13} />}
-                  onClick={() => {
-                    void navigator.clipboard.writeText(SCHEMA_SQL);
-                    toast.success('Schema SQL copied');
-                  }}
-                >
-                  Copy SQL
-                </Button>
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="ghost"
-                  onClick={() => setShowSql((v) => !v)}
-                >
-                  {showSql ? 'Hide SQL' : 'View SQL'}
-                </Button>
-              </div>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <Card>
+          <CardHeader title="Workspace" subtitle={`${items.length} files on this device`} icon={<GIcon name="cloud_sync" size={18} />} />
+          <dl className="grid grid-cols-2 gap-3 text-[0.8125rem] sm:grid-cols-4">
+            <div>
+              <dt className="text-2xs text-ink-muted">Account</dt>
+              <dd className="mt-0.5 truncate font-medium">{user?.email ?? 'Signed out'}</dd>
             </div>
-          </form>
+            <div>
+              <dt className="text-2xs text-ink-muted">This device</dt>
+              <dd className="mt-0.5 font-medium">{deviceLabel()}</dd>
+            </div>
+            <div>
+              <dt className="text-2xs text-ink-muted">Last sync</dt>
+              <dd className="mt-0.5 font-medium">{when(lastSyncAt)}</dd>
+            </div>
+            <div>
+              <dt className="text-2xs text-ink-muted">Files</dt>
+              <dd className="mt-0.5 font-medium">{items.length}</dd>
+            </div>
+          </dl>
 
-          {showSql && (
-            <pre className="mt-3 max-h-60 overflow-auto rounded-[var(--r-control)] border border-line bg-surface-2/70 p-3 font-mono text-2xs text-ink">
-              {SCHEMA_SQL}
-            </pre>
+          {error && (
+            <p className="mt-3 rounded-[var(--r-control)] border border-danger/30 bg-danger-soft px-3 py-2 text-[0.8125rem] text-danger">
+              {error}
+            </p>
           )}
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            {user ? (
+              <Button onClick={() => void run()} loading={working || status === 'pulling' || status === 'pushing'} icon={<GIcon name="sync" size={18} />}>
+                Sync now
+              </Button>
+            ) : (
+              <Button onClick={() => openAuth('login')} icon={<GIcon name="login" size={18} />}>
+                Sign in to sync
+              </Button>
+            )}
+            <span className="text-2xs text-ink-muted">
+              {demoMode ? 'Demo build: sync is simulated' : 'Changes save automatically about 20 seconds after an edit'}
+            </span>
+          </div>
         </Card>
 
-        <div className="space-y-5 lg:col-span-5">
-          <Card>
-            <CardHeader title="Account" icon={<GIcon name="account_circle" size={17} />} />
-            {user ? (
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="truncate text-xs font-semibold text-ink">{user.displayName}</div>
-                  <div className="truncate text-2xs text-ink-muted">{user.email}</div>
-                </div>
-                <Button size="xs" variant="secondary" onClick={() => openAuth('account')}>
-                  Account
-                </Button>
-              </div>
-            ) : (
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="primary"
-                  icon={<GIcon name="person_add" size={15} />}
-                  onClick={() => openAuth('register')}
-                >
-                  Create account
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  icon={<GIcon name="login" size={15} />}
-                  onClick={() => openAuth('login')}
-                >
-                  Sign in
-                </Button>
-              </div>
-            )}
-          </Card>
-
-          <Card>
-            <CardHeader title="Library Sync" icon={<GIcon name="sync" size={17} />} />
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                variant="primary"
-                loading={syncing}
-                disabled={!isConfigured(cloud)}
-                icon={<GIcon name="cloud_upload" size={15} />}
-                onClick={() => void handlePush()}
-              >
-                Push ({items.length})
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                loading={syncing}
-                disabled={!isConfigured(cloud)}
-                icon={<GIcon name="cloud_download" size={15} />}
-                onClick={() => void handlePull()}
-              >
-                Pull & merge
-              </Button>
-            </div>
-          </Card>
-        </div>
+        <Card>
+          <CardHeader title="What travels" icon={<GIcon name="storage" size={18} />} />
+          <ul className="space-y-2 text-[0.8125rem] text-ink-muted">
+            <li className="flex gap-2"><GIcon name="check" size={16} className="mt-0.5 shrink-0 text-ok" />Titles, keywords, flags and platform choices</li>
+            <li className="flex gap-2"><GIcon name="check" size={16} className="mt-0.5 shrink-0 text-ok" />Subscriptions and credits, shared with the desktop and the web build</li>
+            <li className="flex gap-2"><GIcon name="do_not_disturb_on" size={16} className="mt-0.5 shrink-0 text-ink-faint" />Image and video files stay on the device that imported them</li>
+          </ul>
+        </Card>
       </div>
     </div>
   );

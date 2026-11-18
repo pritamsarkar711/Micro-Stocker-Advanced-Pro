@@ -11,6 +11,7 @@ import { ToastProvider } from '@/state/ToastState';
 import { LibraryProvider } from '@/state/library';
 import { BankProvider } from '@/state/bank';
 import { ReleasesProvider } from '@/state/releases';
+import { WorkspaceSyncProvider } from '@/state/WorkspaceSync';
 
 const SubscriptionPage = lazy(() => import('@/pages/SubscriptionPage').then((m) => ({ default: m.SubscriptionPage })));
 const GeneratePage = lazy(() => import('@/pages/GeneratePage').then((m) => ({ default: m.GeneratePage })));
@@ -48,6 +49,7 @@ export default function App() {
           <LibraryProvider>
             <BankProvider>
               <ReleasesProvider>
+                <WorkspaceSyncProvider>
                 <HashRouter>
                   <Suspense fallback={<PageLoading />}>
                     <Routes>
@@ -75,7 +77,7 @@ export default function App() {
                         <Route path="releases" element={<ReleasesPage />} />
                         <Route path="bank" element={<BankPage />} />
                         <Route path="admin" element={<AdminGate><AdminPage /></AdminGate>} />
-                        <Route path="cloud" element={<AdminGate><CloudPage /></AdminGate>} />
+                        <Route path="cloud" element={<CloudPage />} />
                         <Route path="settings" element={<SettingsPage />} />
                         <Route path="contact" element={<ContactPage />} />
                         <Route path="report" element={<ReportPage />} />
@@ -88,6 +90,7 @@ export default function App() {
                     </Routes>
                   </Suspense>
                 </HashRouter>
+                </WorkspaceSyncProvider>
               </ReleasesProvider>
             </BankProvider>
           </LibraryProvider>

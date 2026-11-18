@@ -33,6 +33,5 @@ export const kv = {
 
 export const STORAGE_KEYS = {
   settings: 'msap:settings',
-  cloud: 'msap:cloud-config',
   cachePrefix: 'msap:cache:',
 } as const;

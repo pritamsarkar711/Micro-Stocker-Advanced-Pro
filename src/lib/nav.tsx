@@ -214,12 +214,10 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     to: '/cloud',
-    label: 'Cloud Sync',
+    label: 'Sync & devices',
     icon: 'cloud_sync',
     group: 'system',
-    secondary: true,
-    keywords: ['supabase', 'backup', 'sync', 'database'],
-    adminOnly: true,
+    keywords: ['devices', 'backup', 'sync', 'desktop', 'android', 'web'],
   },
   {
     to: '/settings',
