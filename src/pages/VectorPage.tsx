@@ -1580,7 +1580,7 @@ export function VectorPage() {
       aria-pressed={tool === item.id}
       className={clsx(
         'flex items-center justify-center rounded-[var(--r-control)] transition-colors',
-        horizontal ? 'size-8 shrink-0' : 'size-8 w-full',
+        horizontal ? 'size-10 shrink-0 snap-start lg:size-8' : 'size-8 w-full',
         tool === item.id ? 'bg-brand-solid text-white' : 'text-ink-muted hover:bg-surface-2 hover:text-ink',
       )}
     >
@@ -1597,7 +1597,7 @@ export function VectorPage() {
           <button
             type="button"
             onClick={() => setMenu(menu === 'new' ? null : 'new')}
-            className="inline-flex h-8 items-center gap-1 rounded-[var(--r-control)] border border-line px-2 text-[0.75rem] font-semibold text-ink hover:border-brand"
+            className="inline-flex h-10 items-center gap-1 rounded-[var(--r-control)] border border-line px-2.5 text-[0.8125rem] font-semibold text-ink hover:border-brand sm:h-8 sm:text-[0.75rem]"
             aria-haspopup="menu"
             aria-expanded={menu === 'new'}
           >
@@ -1643,7 +1643,7 @@ export function VectorPage() {
           type="button"
           onClick={() => fileRef.current?.click()}
           title="Open SVG, EPS or AI"
-          className="inline-flex h-8 items-center gap-1 rounded-[var(--r-control)] border border-line px-2 text-[0.75rem] font-medium text-ink-muted hover:border-brand hover:text-ink"
+          className="inline-flex h-10 items-center gap-1 rounded-[var(--r-control)] border border-line px-2.5 text-[0.8125rem] font-medium text-ink-muted hover:border-brand hover:text-ink sm:h-8 sm:text-[0.75rem]"
         >
           <StudioIcon name="image" size={14} />
           Open artwork
@@ -1679,11 +1679,11 @@ export function VectorPage() {
           className="hidden h-8 min-w-0 flex-1 rounded-[var(--r-control)] border border-transparent px-2 text-[0.8125rem] font-medium text-ink hover:border-line focus:border-brand focus:outline-none sm:block sm:max-w-[18rem]"
         />
 
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex w-full items-center justify-between gap-1 sm:w-auto sm:justify-end">
           <button
             type="button"
             onClick={() => zoomBy(1 / 1.2)}
-            className="flex size-8 items-center justify-center rounded-[var(--r-control)] text-ink-muted hover:bg-surface-2 hover:text-ink"
+            className="flex size-10 lg:size-8 items-center justify-center rounded-[var(--r-control)] text-ink-muted hover:bg-surface-2 hover:text-ink"
             aria-label="Zoom out"
           >
             <StudioIcon name="minus" size={16} />
@@ -1692,7 +1692,7 @@ export function VectorPage() {
           <button
             type="button"
             onClick={() => zoomBy(1.2)}
-            className="flex size-8 items-center justify-center rounded-[var(--r-control)] text-ink-muted hover:bg-surface-2 hover:text-ink"
+            className="flex size-10 lg:size-8 items-center justify-center rounded-[var(--r-control)] text-ink-muted hover:bg-surface-2 hover:text-ink"
             aria-label="Zoom in"
           >
             <StudioIcon name="plus" size={16} />
@@ -1700,7 +1700,7 @@ export function VectorPage() {
           <button
             type="button"
             onClick={fitView}
-            className="flex size-8 items-center justify-center rounded-[var(--r-control)] text-ink-muted hover:bg-surface-2 hover:text-ink"
+            className="flex size-10 lg:size-8 items-center justify-center rounded-[var(--r-control)] text-ink-muted hover:bg-surface-2 hover:text-ink"
             aria-label="Fit canvas"
             title="Fit (0)"
           >
@@ -1710,7 +1710,7 @@ export function VectorPage() {
             <button
               type="button"
               onClick={() => setMenu(menu === 'export' ? null : 'export')}
-              className="inline-flex h-8 items-center gap-1 rounded-[var(--r-control)] bg-brand-solid px-2.5 text-[0.75rem] font-semibold text-white hover:brightness-110"
+              className="inline-flex h-10 items-center gap-1 rounded-[var(--r-control)] bg-brand-solid px-3 text-[0.8125rem] font-semibold text-white hover:brightness-110 sm:h-8 sm:px-2.5 sm:text-[0.75rem]"
               aria-haspopup="menu"
               aria-expanded={menu === 'export'}
             >
@@ -1781,7 +1781,7 @@ export function VectorPage() {
 
         {/* Canvas */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[var(--r-card)] border border-line bg-surface">
-          <div className="flex items-center gap-1 overflow-x-auto border-b border-line px-1.5 py-1.5 lg:hidden">
+          <div className="tool-strip flex items-center gap-1 overflow-x-auto border-b border-line px-1.5 py-1.5 lg:hidden">
             {TOOLS.map((item) => toolButton(item, true))}
           </div>
           <div

@@ -12,6 +12,7 @@ import { LibraryProvider } from '@/state/library';
 import { BankProvider } from '@/state/bank';
 import { ReleasesProvider } from '@/state/releases';
 import { WorkspaceSyncProvider } from '@/state/WorkspaceSync';
+import { LaunchGate } from '@/components/launch/LaunchGate';
 
 const SubscriptionPage = lazy(() => import('@/pages/SubscriptionPage').then((m) => ({ default: m.SubscriptionPage })));
 const GeneratePage = lazy(() => import('@/pages/GeneratePage').then((m) => ({ default: m.GeneratePage })));
@@ -51,6 +52,7 @@ export default function App() {
               <ReleasesProvider>
                 <WorkspaceSyncProvider>
                 <HashRouter>
+                  <LaunchGate>
                   <Suspense fallback={<PageLoading />}>
                     <Routes>
                       <Route element={<AppShell />}>
@@ -89,6 +91,7 @@ export default function App() {
                       </Route>
                     </Routes>
                   </Suspense>
+                  </LaunchGate>
                 </HashRouter>
                 </WorkspaceSyncProvider>
               </ReleasesProvider>

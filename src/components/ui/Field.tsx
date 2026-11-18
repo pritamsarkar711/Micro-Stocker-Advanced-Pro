@@ -21,8 +21,8 @@ const CONTROL =
   'disabled:cursor-not-allowed disabled:opacity-55 disabled:bg-surface-2';
 
 const SIZES = {
-  sm: 'h-9 px-3 text-[0.8125rem]',
-  md: 'h-10 px-3 text-[0.875rem]',
+  sm: 'h-10 px-3 text-[0.8125rem] sm:h-9',
+  md: 'h-11 px-3 text-[0.9375rem] sm:h-10 sm:text-[0.875rem]',
   lg: 'h-12 px-3.5 text-[0.9375rem]',
 };
 

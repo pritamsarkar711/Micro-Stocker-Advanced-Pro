@@ -362,16 +362,22 @@ export function LibraryPage() {
             if (e.dataTransfer.files?.length) void importFiles(e.dataTransfer.files);
           }}
           onClick={() => fileRef.current?.click()}
-          className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-[var(--r-card)] border border-dashed border-line-strong bg-surface px-6 py-16 text-center hover:border-accent hover:bg-accent-soft/25"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') fileRef.current?.click();
+          }}
+          aria-label="Import files into the library"
+          className="flex min-h-[16rem] cursor-pointer flex-col items-center justify-center gap-3 rounded-[var(--r-card)] border border-dashed border-line-strong bg-surface px-5 py-10 text-center active:bg-surface-2 hover:border-accent hover:bg-accent-soft/25 sm:py-16"
         >
-          <span className="inline-flex size-12 items-center justify-center rounded-[var(--r-control)] bg-accent-soft text-accent">
-            <GIcon name="add_photo_alternate" size={26} />
+          <span className="inline-flex size-14 items-center justify-center rounded-[var(--r-control)] bg-accent-soft text-accent">
+            <GIcon name="add_photo_alternate" size={28} />
           </span>
-          <div className="text-sm font-semibold text-ink">Drop files</div>
-          <div className="text-xs text-ink-muted">
-            JPG, PNG, WebP, TIFF, AVIF, SVG, EPS, AI
+          <div className="text-[0.9375rem] font-semibold text-ink">Tap to import</div>
+          <div className="max-w-[22rem] text-xs leading-relaxed text-ink-muted">
+            JPG, PNG, WebP, TIFF, AVIF, SVG, EPS, AI. Existing titles and keywords are read on arrival.
           </div>
-          <Button size="sm" variant="primary" icon={<GIcon name="upload_file" size={15} />}>
+          <Button size="sm" variant="primary" className="mt-1 w-full max-w-[14rem]" icon={<GIcon name="upload_file" size={15} />}>
             Browse files
           </Button>
         </div>

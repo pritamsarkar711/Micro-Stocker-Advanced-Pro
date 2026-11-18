@@ -394,6 +394,7 @@ export function UpscalePage() {
             <Button
               size="sm"
               variant="secondary"
+              className="flex-1 sm:flex-none"
               icon={<GIcon name="photo_library" size={16} />}
               onClick={() => void importFromLibrary()}
             >
@@ -402,6 +403,7 @@ export function UpscalePage() {
             <Button
               size="sm"
               variant="secondary"
+              className="flex-1 sm:flex-none"
               icon={<GIcon name="upload_file" size={16} />}
               onClick={() => fileRef.current?.click()}
             >
@@ -410,6 +412,7 @@ export function UpscalePage() {
             <Button
               size="sm"
               variant="primary"
+              className="w-full sm:w-auto"
               loading={running}
               disabled={queue.length === 0}
               icon={<GIcon name="photo_size_select_large" size={16} />}

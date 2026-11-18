@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { MobileTabBar } from './MobileTabBar';
+import { MobileHeader } from './MobileHeader';
 import { AuthModal } from '@/components/auth/AuthModal';
 import { SecurityBanner } from '@/components/auth/SecurityBanner';
 import { desktop } from '@/lib/desktop';
@@ -49,17 +50,20 @@ export function AppShell({ children }: { children?: ReactNode }) {
       {mobileOpen && <Sidebar mobileOpen onCloseMobile={() => setMobileOpen(false)} />}
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <Topbar onOpenMobileNav={() => setMobileOpen(true)} />
+        <div className="hidden shrink-0 lg:block">
+          <Topbar onOpenMobileNav={() => setMobileOpen(true)} />
+        </div>
+        <MobileHeader onOpenNav={() => setMobileOpen(true)} />
         <main
           id="workspace-main"
-          className="workspace flex-1 overflow-x-hidden overflow-y-auto px-3.5 pt-4 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] sm:px-5 sm:pt-5 lg:px-6 lg:pt-6 lg:pb-8 xl:px-8"
+          className="workspace flex-1 overflow-x-hidden overflow-y-auto px-3.5 pt-3 pb-[calc(5.25rem+env(safe-area-inset-bottom,0px))] sm:px-5 sm:pt-4 lg:px-6 lg:pt-6 lg:pb-8 xl:px-8"
         >
-          <div className="workspace animate-in-fast">
+          <div className="workspace workspace-enter">
             <SecurityBanner />
             {children ?? <Outlet />}
           </div>
         </main>
-        <MobileTabBar />
+        <MobileTabBar onOpenMore={() => setMobileOpen(true)} />
       </div>
 
       <AuthModal />

@@ -562,6 +562,198 @@ html.theme-switching *::after {
   }
 }
 
+/* ==================================================================== */
+/*  Launch flow                                                         */
+/* ==================================================================== */
+@layer components {
+  .launch-screen {
+    /* Phones get a slightly larger base size so the copy stays readable
+       without zooming, and the whole flow respects the safe areas. */
+    background-color: var(--bg);
+  }
+
+  .launch-glow {
+    position: absolute;
+    inset: -20% -30% auto -30%;
+    height: 70%;
+    background: radial-gradient(
+      60% 60% at 50% 40%,
+      color-mix(in oklab, var(--brand) 42%, transparent) 0%,
+      transparent 70%
+    );
+    filter: blur(18px);
+    opacity: 0.75;
+    pointer-events: none;
+  }
+
+  .launch-hero {
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 46%;
+    background: radial-gradient(
+      52% 68% at 82% 0%,
+      color-mix(in oklab, var(--brand) 26%, transparent) 0%,
+      transparent 72%
+    );
+    pointer-events: none;
+  }
+
+  .launch-mark {
+    display: grid;
+    place-items: center;
+    animation: launch-pop 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .launch-primary {
+    display: inline-flex;
+    width: 100%;
+    min-height: 3.25rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.75rem;
+    background-color: var(--brand);
+    color: #fff;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    box-shadow: 0 6px 18px -8px color-mix(in oklab, var(--brand) 70%, transparent);
+    transition: transform 120ms var(--ease-standard), filter 120ms var(--ease-standard);
+  }
+  .launch-primary:active {
+    transform: scale(0.985);
+    filter: brightness(0.96);
+  }
+
+  .launch-secondary {
+    display: inline-flex;
+    width: 100%;
+    min-height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.75rem;
+    border: 1px solid var(--line);
+    background-color: var(--surface);
+    color: var(--fg-muted);
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+  .launch-secondary:active {
+    background-color: var(--surface-2);
+  }
+
+  .launch-text-button {
+    min-height: 2.5rem;
+    padding-inline: 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--fg-muted);
+  }
+
+  .launch-icon-button {
+    display: inline-flex;
+    width: 2.75rem;
+    height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background-color: var(--surface);
+    color: var(--fg-muted);
+  }
+
+  .launch-art {
+    position: relative;
+    display: grid;
+    place-items: center;
+    height: clamp(9rem, 30vh, 14rem);
+    border-radius: 1.25rem;
+    border: 1px solid var(--line);
+    background:
+      radial-gradient(120% 120% at 20% 0%, color-mix(in oklab, var(--brand) 20%, transparent) 0%, transparent 60%),
+      var(--surface);
+    overflow: hidden;
+  }
+
+  .launch-art-icon {
+    display: inline-flex;
+    width: 6.5rem;
+    height: 6.5rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 1.5rem;
+    background: color-mix(in oklab, var(--brand) 14%, var(--surface));
+    color: var(--brand-fg);
+    box-shadow: 0 18px 40px -24px color-mix(in oklab, var(--brand) 80%, transparent);
+  }
+}
+
+/* Pages fade in without a transform: a lingering `transform` (even the
+   identity matrix an animation leaves behind) turns every `position: fixed`
+   descendant into an absolutely positioned one, which would pin mobile action
+   bars to the bottom of the document instead of the viewport. */
+@keyframes workspace-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.workspace-enter {
+  animation: workspace-fade 220ms var(--ease-standard) both;
+}
+
+@keyframes launch-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.88) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes launch-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes launch-slide {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.launch-rise {
+  animation: launch-rise 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.launch-slide {
+  animation: launch-slide 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .launch-mark,
+  .launch-rise,
+  .launch-slide {
+    animation: none;
+  }
+}
+
 @keyframes fade-slide-in {
   from {
     opacity: 0;
@@ -657,4 +849,93 @@ html.reduce-motion *::after {
 }
 .bg-brand\/10 {
   background-color: color-mix(in srgb, var(--brand-solid) 10%, transparent);
+}
+
+/* ==================================================================== */
+/*  Touch and small screens                                             */
+/*  Rules here are unlayered on purpose: they must win over a utility   */
+/*  such as text-[0.875rem] without every call site being rewritten.    */
+/* ==================================================================== */
+
+@media (max-width: 1023.98px) {
+  /* iOS Safari zooms the page when a focused control is under 16 px. Keeping
+     form controls at 16 px removes that jump and matches native apps. */
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  /* A range slider paints a 4 px track but still needs a 44 px thumb lane. */
+  input[type='range'] {
+    min-height: 2.5rem;
+  }
+
+  /* Native checkboxes are 13 px by default and unmissable to a fingertip. */
+  input[type='checkbox'],
+  input[type='radio'] {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  /* Square icon buttons keep a full-width hit area even when the visual size
+     stays small, so they can sit inside dense toolbars without looking bulky. */
+  button.size-7,
+  button.size-8,
+  button.size-9,
+  button[class*='size-7'],
+  button[class*='size-8'] {
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+  }
+
+  /* Cards breathe less on a phone but never lose their internal alignment. */
+  .card-head {
+    margin-bottom: 0.75rem;
+  }
+
+  /* Long words in table cells and chips must wrap instead of pushing a layout
+     sideways; the desktop keeps its single-line density. */
+  .card,
+  .workspace {
+    overflow-wrap: anywhere;
+  }
+
+  /* Inline toolbars wrap rather than scroll off the screen. */
+  .toolbar-row {
+    flex-wrap: wrap;
+  }
+}
+
+/* Short phones (Pixel 4a, iPhone SE) lose vertical space fast: pull the shell
+   spacing in so a form plus its primary button stays above the tab bar. */
+@media (max-width: 1023.98px) and (max-height: 720px) {
+  :root {
+    --topbar-h: 54px;
+  }
+}
+
+/* Landscape phones: the tab bar becomes a slim rail so the canvas keeps height. */
+@media (max-width: 1023.98px) and (orientation: landscape) and (max-height: 480px) {
+  nav[aria-label='Quick navigation'] {
+    height: calc(3rem + env(safe-area-inset-bottom, 0px));
+  }
+  nav[aria-label='Quick navigation'] span:last-child {
+    display: none;
+  }
+}
+
+/* Tablets: a two column rhythm keeps cards from stretching into billboards. */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .workspace {
+    padding-inline: 1.5rem;
+  }
+}
+
+/* A scrolling tool strip should look scrollable: the mask fades the edges so
+   the last icon is visibly cut instead of appearing to be missing. */
+.tool-strip {
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  mask-image: linear-gradient(to right, transparent 0, #000 10px, #000 calc(100% - 18px), transparent 100%);
 }

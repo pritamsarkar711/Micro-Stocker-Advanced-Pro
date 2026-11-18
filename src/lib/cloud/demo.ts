@@ -12,6 +12,7 @@ import { proRpcHandlers, proTables, type DemoCaller } from './demoPro';
 export const demoMode = import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === '1';
 
 const SESSION_KEY = 'msap.demo.session';
+const SESSION_EMAIL_KEY = 'msap.demo.email';
 const DAY = 86_400_000;
 
 interface DemoUser {
@@ -75,10 +76,41 @@ const audit: DemoAudit[] = [
 ];
 
 let signedInId: string | null = null;
+let signedInEmail: string | null = null;
 try {
   signedInId = localStorage.getItem(SESSION_KEY);
+  signedInEmail = localStorage.getItem(SESSION_EMAIL_KEY);
 } catch {
   signedInId = null;
+  signedInEmail = null;
+}
+
+/**
+ * The preview keeps its accounts in memory, so a reload would otherwise lose
+ * the roster and sign the user out. Rebuilding the account from the stored
+ * address keeps the preview behaving like the real server across refreshes.
+ */
+if (signedInId && signedInEmail && !users.some((u) => u.id === signedInId)) {
+  users.push({
+    id: signedInId,
+    email: signedInEmail,
+    created_at: nowIso(),
+    display_name: signedInEmail.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+    admin: signedInEmail === 'admin@demo.local',
+    expires_at: null,
+    blocked: false,
+  });
+}
+
+function rememberSession(user: DemoUser): void {
+  signedInId = user.id;
+  signedInEmail = user.email;
+  try {
+    localStorage.setItem(SESSION_KEY, user.id);
+    localStorage.setItem(SESSION_EMAIL_KEY, user.email);
+  } catch {
+    /* ignore */
+  }
 }
 
 type Listener = (event: string, session: { user: User } | null) => void;
@@ -363,13 +395,8 @@ const demoAuth = {
       return { data: { user: null, session: null }, error: { message: 'Invalid login credentials' } };
     }
     const user = ensureUser(email);
-    signedInId = user.id;
     demoAal = 'aal1';
-    try {
-      localStorage.setItem(SESSION_KEY, user.id);
-    } catch {
-      /* ignore */
-    }
+    rememberSession(user);
     emit('SIGNED_IN');
     return { data: { user: toSupabaseUser(user), session: { user: toSupabaseUser(user) } }, error: null };
   },
@@ -378,26 +405,16 @@ const demoAuth = {
     if (options?.data?.display_name) user.display_name = options.data.display_name;
     // The hosted project has "confirm email" switched off, so a signup returns a
     // session at once. Mirroring that keeps the preview honest.
-    signedInId = user.id;
     demoAal = 'aal1';
-    try {
-      localStorage.setItem(SESSION_KEY, user.id);
-    } catch {
-      /* ignore */
-    }
+    rememberSession(user);
     emit('SIGNED_IN');
     return { data: { user: toSupabaseUser(user), session: { user: toSupabaseUser(user) } }, error: null };
   },
   async verifyOtp({ email, token }: { email: string; token: string }) {
     if (!/^\d{6,}$/.test(token)) return { data: null, error: { message: 'Token has expired or is invalid' } };
     const user = ensureUser(email);
-    signedInId = user.id;
     demoAal = 'aal1';
-    try {
-      localStorage.setItem(SESSION_KEY, user.id);
-    } catch {
-      /* ignore */
-    }
+    rememberSession(user);
     emit('SIGNED_IN');
     return { data: { user: toSupabaseUser(user), session: { user: toSupabaseUser(user) } }, error: null };
   },
@@ -421,6 +438,7 @@ const demoAuth = {
     demoAal = 'aal1';
     try {
       localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(SESSION_EMAIL_KEY);
     } catch {
       /* ignore */
     }

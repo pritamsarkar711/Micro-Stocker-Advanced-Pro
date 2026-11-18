@@ -288,6 +288,7 @@ export function BgRemovePage() {
             <Button
               size="sm"
               variant="secondary"
+              className="flex-1 sm:flex-none"
               icon={<GIcon name="photo_library" size={16} />}
               onClick={() => void addFromLibrary()}
             >
@@ -296,6 +297,7 @@ export function BgRemovePage() {
             <Button
               size="sm"
               variant="secondary"
+              className="flex-1 sm:flex-none"
               icon={<GIcon name="upload_file" size={16} />}
               onClick={() => fileRef.current?.click()}
             >
@@ -304,6 +306,7 @@ export function BgRemovePage() {
             <Button
               size="sm"
               variant="primary"
+              className="w-full sm:w-auto"
               loading={running}
               disabled={queue.length === 0}
               icon={<GIcon name="content_cut" size={16} />}

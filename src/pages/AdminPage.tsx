@@ -175,7 +175,7 @@ function Overview({ stats, audit }: { stats: AdminStats; audit: Array<{ id: numb
   const fx = stats.api_cost_usd > 0 ? stats.api_cost_bdt / stats.api_cost_usd : 122;
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-4">
         <Kpi label="Revenue" value={bdt(stats.revenue_bdt)} icon="storefront" />
         <Kpi label="Provider cost" value={bdt(Math.round(stats.api_cost_bdt))} icon="table_chart" />
         <Kpi label="Margin" value={stats.margin_pct == null ? 'n/a' : `${stats.margin_pct}%`} icon="compare" tone={stats.margin_pct && stats.margin_pct > 40 ? 'ok' : 'default'} />
@@ -185,13 +185,14 @@ function Overview({ stats, audit }: { stats: AdminStats; audit: Array<{ id: numb
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <Card flush>
           <CardHeader title="Spend by model" subtitle={`Last ${stats.window_days} days`} icon={<GIcon name="memory" size={18} />} />
-          <table className="w-full border-t border-line text-[0.8125rem]">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[24rem] border-t border-line text-[0.8125rem]">
             <thead className="bg-surface-2 text-2xs uppercase tracking-wide text-ink-muted">
               <tr>
-                <th className="px-4 py-2 text-left font-semibold">Model</th>
-                <th className="px-4 py-2 text-right font-semibold">Calls</th>
-                <th className="px-4 py-2 text-right font-semibold">Tokens</th>
-                <th className="px-4 py-2 text-right font-semibold">Cost</th>
+                <th className="px-4 py-2 text-left font-semibold whitespace-nowrap">Model</th>
+                <th className="px-4 py-2 text-right font-semibold whitespace-nowrap">Calls</th>
+                <th className="px-4 py-2 text-right font-semibold whitespace-nowrap">Tokens</th>
+                <th className="px-4 py-2 text-right font-semibold whitespace-nowrap">Cost</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -208,6 +209,7 @@ function Overview({ stats, audit }: { stats: AdminStats; audit: Array<{ id: numb
               ))}
             </tbody>
           </table>
+          </div>
         </Card>
 
         <div className="space-y-3">

@@ -18,13 +18,15 @@ const VARIANTS: Record<ButtonVariant, string> = {
   success: 'bg-brand-solid text-white shadow-[0_1px_2px_rgb(15_23_42/0.14)] hover:brightness-95 active:scale-[0.99]',
 };
 
+// Phones get one step more height than the desktop rail so every control clears
+// the 44 px comfortable-touch guideline without changing the desktop density.
 const SIZES: Record<ButtonSize, string> = {
-  xs: 'h-8 gap-1.5 px-2.5 text-[0.8125rem]',
-  sm: 'h-9 gap-2 px-3.5 text-[0.8125rem]',
-  md: 'h-10 gap-2 px-4 text-[0.875rem]',
+  xs: 'h-9 gap-1.5 px-3 text-[0.8125rem] sm:h-8 sm:px-2.5',
+  sm: 'h-10 gap-2 px-3.5 text-[0.8125rem] sm:h-9',
+  md: 'h-11 gap-2 px-4 text-[0.875rem] sm:h-10',
   lg: 'h-12 gap-2.5 px-5 text-[0.9375rem]',
-  icon: 'size-10',
-  'icon-sm': 'size-9',
+  icon: 'size-11 sm:size-10',
+  'icon-sm': 'size-10 sm:size-9',
   'icon-lg': 'size-12',
 };
 

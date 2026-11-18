@@ -311,6 +311,7 @@ export function VideoUpscalePage() {
             <Button
               size="sm"
               variant="secondary"
+              className="flex-1 sm:flex-none"
               icon={<GIcon name="video_file" size={16} />}
               onClick={() => fileRef.current?.click()}
             >
@@ -320,6 +321,7 @@ export function VideoUpscalePage() {
               <Button
                 size="sm"
                 variant="danger"
+                className="w-full sm:w-auto"
                 icon={<GIcon name="stop" size={16} />}
                 onClick={() => abortRef.current?.abort()}
               >
@@ -329,6 +331,7 @@ export function VideoUpscalePage() {
               <Button
                 size="sm"
                 variant="primary"
+                className="w-full sm:w-auto"
                 disabled={jobs.length === 0}
                 icon={<GIcon name="videocam" size={16} />}
                 onClick={() => void runAll()}
