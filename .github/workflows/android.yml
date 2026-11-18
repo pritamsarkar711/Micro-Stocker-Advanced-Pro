@@ -28,7 +28,9 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '21'
+          # Gradle 8.2.1 and AGP 8.2.1 (the versions Capacitor 6 generates) top
+          # out at Java 17; newer JDKs fail with an unsupported class file.
+          java-version: '17'
 
       # The runner image already ships the Android SDK and accepted licences, so
       # Gradle only needs to be pointed at it. Downloading a second copy with a
