@@ -55,11 +55,13 @@ supabase secrets set BSCSCAN_API_KEY=... POLYGONSCAN_API_KEY=... TRON_API_KEY=..
 Without those the crypto verifier answers `pending` and an administrator approves
 the order by hand, which is the same path as bKash and Nagad.
 
-The migrations are already applied to `djlmbsaltjqsqpwqdvsg`. The three functions
-still have to be deployed and at least one provider key has to be stored before a
-paid generation can run: until then the generator answers
-`provider key not configured` and nothing is charged. `deno check` on the
-functions needs network access to `esm.sh`, so run it on a machine that has it.
+The migrations and the three functions are live on `djlmbsaltjqsqpwqdvsg`, and the
+`pro-exports` bucket exists. One thing is still missing: no provider key has been
+stored yet, so a generation answers `provider key not configured` and nothing is
+charged until an administrator adds a key under Providers in the admin console.
+Without the explorer secrets the crypto verifier answers `pending` and an
+administrator approves the order by hand. `deno check` on the functions needs
+network access to `esm.sh`, so run it on a machine that has it.
 
 ## Making yourself an administrator
 
