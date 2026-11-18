@@ -46,7 +46,7 @@ function readModelChoice(kind: GeneratorKind): string {
 
 export function GeneratePage({ kind }: { kind: GeneratorKind }) {
   const toast = useToast();
-  const { credits, planName, costs } = useLicense();
+  const { credits, costs } = useLicense();
   const [prompt, setPrompt] = useState('');
   const [presetId, setPresetId] = useState('');
   const [options, setOptions] = useState<GeneratorOptions>({ ...DEFAULT_OPTIONS, fileKind: kind === 'jpg' ? 'jpg' : kind });
@@ -159,10 +159,13 @@ export function GeneratePage({ kind }: { kind: GeneratorKind }) {
         title={copy.title}
         description={copy.tagline}
         actions={
-          <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-[0.8125rem] font-semibold">
-            <CreditIcon size={15} />
-            {credits}
-            <span className="text-ink-muted">{planName ?? 'Pro'}</span>
+          <span
+            title={`${credits.toLocaleString()} credits`}
+            aria-label={`${credits.toLocaleString()} credits left`}
+            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-[0.8125rem] font-semibold"
+          >
+            <CreditIcon size={16} />
+            {credits.toLocaleString()}
           </span>
         }
       />
