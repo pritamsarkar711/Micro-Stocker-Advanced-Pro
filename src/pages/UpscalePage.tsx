@@ -9,6 +9,7 @@ import { ModelTile } from '@/components/ui/ModelTile';
 import { GIcon } from '@/components/ui/GoogleIcon';
 import { FormatIcon } from '@/components/ui/FormatIcon';
 import { PlatformLogo } from '@/components/stock/PlatformLogo';
+import { useApp } from '@/state/AppState';
 import { useLibrary } from '@/state/library';
 import { useToast } from '@/state/ToastState';
 import { desktop, triggerBlobDownload, type ModelProgressEvent } from '@/lib/desktop';
@@ -93,6 +94,7 @@ async function readImageDims(blob: Blob): Promise<{ width: number; height: numbe
 }
 
 export function UpscalePage() {
+  const { settings } = useApp();
   const { items: libItems, getBlob, addGeneratedBlob } = useLibrary();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -100,8 +102,8 @@ export function UpscalePage() {
   const [purpose, setPurpose] = useState<UpscalePurpose>('all');
   const [modelId, setModelId] = useState<string>('lanczos-pro');
   const [targetId, setTargetId] = useState<string>('4k');
-  const [outFormat, setOutFormat] = useState<'jpg' | 'png' | 'webp'>('jpg');
-  const [quality, setQuality] = useState(94);
+  const [outFormat, setOutFormat] = useState<'jpg' | 'png' | 'webp'>(settings.upscaleFormat);
+  const [quality, setQuality] = useState(90);
 
   const [installed, setInstalled] = useState<Record<string, boolean>>({});
   const [dlProgress, setDlProgress] = useState<Record<string, ModelProgressEvent>>({});
@@ -503,14 +505,20 @@ export function UpscalePage() {
 
                 {outFormat !== 'png' && (
                   <Field label={`Quality (${quality}%)`}>
-                    <input
-                      type="range"
-                      min={70}
-                      max={100}
-                      value={quality}
-                      onChange={(e) => setQuality(Number(e.target.value))}
-                      className="mt-2 w-full accent-[var(--accent)]"
-                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min={70}
+                        max={100}
+                        value={quality}
+                        onChange={(e) => setQuality(Number(e.target.value))}
+                        aria-label="Output quality"
+                        className="flex-1 accent-[var(--accent)]"
+                      />
+                      <span className="text-2xs text-ink-muted">
+                        {quality >= 95 ? 'Max' : quality >= 88 ? 'Balanced' : 'Compact'}
+                      </span>
+                    </div>
                   </Field>
                 )}
               </div>
@@ -525,14 +533,15 @@ export function UpscalePage() {
                 action={<Badge tone="brand">Auto</Badge>}
               />
               <div className="space-y-2.5">
-                <p className="text-xs leading-relaxed text-ink-muted">{autoNote.reason}</p>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <Badge tone="neutral">{UPSCALE_MODELS.find((m) => m.id === autoNote.modelId)?.name}</Badge>
+                  <Badge tone="neutral">
+                    {UPSCALE_MODELS.find((m) => m.id === autoNote.modelId)?.name}
+                  </Badge>
                   <Badge tone="neutral">
                     {UPSCALE_TARGETS.find((t) => t.id === autoNote.targetId)?.label}
                   </Badge>
                   {!autoNote.readyNow && autoNote.needsDownload && (
-                    <Badge tone="warn">Best model needs a download</Badge>
+                    <Badge tone="warn">Needs download</Badge>
                   )}
                 </div>
                 {autoInsight && (

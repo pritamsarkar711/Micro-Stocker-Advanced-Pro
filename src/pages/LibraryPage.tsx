@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import clsx from 'clsx';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -12,6 +12,7 @@ import { BrandLogo } from '@/components/ui/BrandLogo';
 import { FormatIcon } from '@/components/ui/FormatIcon';
 import { ItemEditor } from '@/components/stock/ItemEditor';
 import { AiPanel } from '@/components/settings/AiPanel';
+import { useApp } from '@/state/AppState';
 import { useLibrary } from '@/state/library';
 import { useToast } from '@/state/ToastState';
 import { desktop } from '@/lib/desktop';
@@ -74,6 +75,26 @@ export function LibraryPage() {
   // Large libraries would mount hundreds of full-size previews at once, so the
   // grid renders a window of rows and extends it on demand.
   const [visibleCount, setVisibleCount] = useState(60);
+  // Removing artwork destroys metadata, so every delete asks first unless the
+  // user turned the confirmation off in Settings.
+  const [pendingRemove, setPendingRemove] = useState<{ ids: string[]; label: string } | null>(null);
+
+  const { settings } = useApp();
+
+  /** Ask first, or remove straight away when confirmations are switched off. */
+  const requestRemove = useCallback(
+    (ids: string[], label: string) => {
+      if (!ids.length) return;
+      if (settings.confirmRemove) {
+        setPendingRemove({ ids, label });
+        return;
+      }
+      removeItems(ids);
+      if (activeId && ids.includes(activeId)) setActiveId(null);
+      toast.success(`Removed ${ids.length} asset${ids.length === 1 ? '' : 's'}`, 'Files on disk were left alone.');
+    },
+    [settings.confirmRemove, removeItems, activeId, toast],
+  );
 
   useEffect(() => {
     void loadAiSettings().then(setAiSettings);
@@ -269,6 +290,14 @@ export function LibraryPage() {
             >
               {selected.size > 0 ? `Clear (${selected.size})` : 'Select all'}
             </Button>
+            <Button
+              size="xs"
+              variant="ghost"
+              icon={<GIcon name="delete_sweep" size={14} />}
+              onClick={() => requestRemove(items.map((item) => item.id), `all ${items.length} assets`)}
+            >
+              Clear library
+            </Button>
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
@@ -311,7 +340,12 @@ export function LibraryPage() {
                 variant="ghost"
                 className="text-danger hover:text-danger"
                 icon={<GIcon name="delete" size={13} />}
-                onClick={() => removeItems(Array.from(selected))}
+                onClick={() =>
+                  requestRemove(
+                    Array.from(selected),
+                    `${selected.size} selected asset${selected.size === 1 ? '' : 's'}`,
+                  )
+                }
               >
                 Remove
               </Button>
@@ -387,6 +421,19 @@ export function LibraryPage() {
 
                     <PreviewThumb item={item} />
 
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        requestRemove([item.id], item.name);
+                      }}
+                      className="inline-flex size-7 shrink-0 items-center justify-center rounded-[var(--r-chip)] text-ink-faint transition-colors hover:bg-danger-soft hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                      aria-label={`Remove ${item.name} from the library`}
+                      title="Remove from library"
+                    >
+                      <GIcon name="delete" size={16} />
+                    </button>
+
                     <div className="min-w-0 flex-1">
                       <div className="line-clamp-2 text-xs leading-snug font-semibold text-ink">
                         {item.metadata.title || item.name}
@@ -429,12 +476,58 @@ export function LibraryPage() {
             {activeItem && (
               <Card>
                 <CardHeader title="Metadata Editor" icon={<GIcon name="edit" size={17} />} />
-                <ItemEditor item={activeItem} />
+                <ItemEditor
+                  item={activeItem}
+                  onRequestRemove={(ids) => {
+                    const target = items.find((entry) => entry.id === ids[0]);
+                    requestRemove(ids, target?.name ?? `${ids.length} assets`);
+                  }}
+                />
               </Card>
             )}
           </div>
         </div>
       )}
+
+      <Modal
+        open={Boolean(pendingRemove)}
+        onClose={() => setPendingRemove(null)}
+        title="Remove from library?"
+        description={
+          pendingRemove
+            ? `${pendingRemove.label} will be removed from the library. Files on disk are never touched.`
+            : undefined
+        }
+        size="sm"
+        footer={
+          <>
+            <Button size="sm" variant="ghost" onClick={() => setPendingRemove(null)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              className="bg-danger hover:bg-danger/90"
+              icon={<GIcon name="delete" size={15} />}
+              onClick={() => {
+                if (!pendingRemove) return;
+                const ids = pendingRemove.ids;
+                removeItems(ids);
+                if (activeId && ids.includes(activeId)) setActiveId(null);
+                setPendingRemove(null);
+                toast.success(`Removed ${ids.length} asset${ids.length === 1 ? '' : 's'}`, 'Files on disk were left alone.');
+              }}
+            >
+              Remove
+            </Button>
+          </>
+        }
+      >
+        <p className="text-[0.8125rem] text-ink-muted">
+          Metadata, tags and embedded XMP records for these assets are deleted from the library.
+          Re-import the file to work on it again.
+        </p>
+      </Modal>
 
       <Modal
         open={aiModalOpen}

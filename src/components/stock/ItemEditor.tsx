@@ -19,20 +19,24 @@ import { PLATFORM_LIST, SHUTTERSTOCK_CATEGORIES } from '@/lib/stock/platforms';
 import { validateEverywhere, worstLevel } from '@/lib/stock/validate';
 import { canEmbedFormat } from '@/lib/stock/xmp';
 import { formatBytes } from '@/lib/modelStore';
+import { analyseBlob, type ImageInsight } from '@/lib/vision';
 import { megapixels, type PlatformId, type StockItem } from '@/lib/stock/types';
 
 export interface ItemEditorProps {
   item: StockItem;
   onClose?: () => void;
+  /** Ask the page to confirm removal, so deletes share one confirmation. */
+  onRequestRemove?: (ids: string[]) => void;
 }
 
-export function ItemEditor({ item, onClose }: ItemEditorProps) {
+export function ItemEditor({ item, onClose, onRequestRemove }: ItemEditorProps) {
   const {
     items,
     updateMetadata,
     updateFlags,
     setReleases,
     aiDraft,
+    getBlob,
     downloadEmbeddedFile,
     copyItemMetadata,
     exportMetadataCsv,
@@ -49,9 +53,25 @@ export function ItemEditor({ item, onClose }: ItemEditorProps) {
   const [embedding, setEmbedding] = useState(false);
   const [activePlatform, setActivePlatform] = useState<PlatformId | null>(null);
 
+  const [insight, setInsight] = useState<ImageInsight | null>(null);
+
   useEffect(() => {
     void loadAiSettings().then(setAiSettings);
   }, []);
+
+  // Read the file once per selection so the editor can show what the local
+  // engine actually measured before any metadata is generated.
+  useEffect(() => {
+    let cancelled = false;
+    setInsight(null);
+    void getBlob(item.id).then(async (blob) => {
+      const result = blob ? await analyseBlob(blob) : null;
+      if (!cancelled) setInsight(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [item.id, getBlob]);
 
   const provider = PROVIDERS[aiSettings.kind];
   const mp = megapixels(item);
@@ -159,17 +179,74 @@ export function ItemEditor({ item, onClose }: ItemEditorProps) {
             )}
           </div>
         </div>
-        {onClose && (
+        <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
-            onClick={onClose}
-            className="inline-flex size-7 items-center justify-center rounded-[var(--r-xs)] text-ink-muted hover:bg-surface-2 hover:text-ink"
-            aria-label="Close editor"
+            onClick={() => {
+              if (onRequestRemove) onRequestRemove([item.id]);
+              else removeItems([item.id]);
+            }}
+            className="inline-flex size-7 items-center justify-center rounded-[var(--r-xs)] text-ink-faint transition-colors hover:bg-danger-soft hover:text-danger"
+            aria-label={`Remove ${item.name} from the library`}
+            title="Remove from library"
           >
-            <GIcon name="close" size={17} />
+            <GIcon name="delete" size={16} />
           </button>
-        )}
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex size-7 items-center justify-center rounded-[var(--r-xs)] text-ink-muted hover:bg-surface-2 hover:text-ink"
+              aria-label="Close editor"
+            >
+              <GIcon name="close" size={17} />
+            </button>
+          )}
+        </div>
       </div>
+
+      {insight && (
+        <div className="rounded-[var(--r-control)] border border-line bg-surface-2/50 px-3 py-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-2xs font-semibold tracking-[0.1em] text-ink-faint uppercase">
+              <GIcon name="visibility" size={13} />
+              What the app sees
+            </span>
+            <Badge tone="brand" size="sm">
+              {insight.kind === 'photo' ? 'photograph' : insight.kind}
+            </Badge>
+            <Badge tone="neutral" size="sm">
+              {Math.round(insight.confidence * 100)}% match
+            </Badge>
+            {insight.negativeSpace && (
+              <Badge tone="neutral" size="sm">
+                {insight.negativeSpace} space
+              </Badge>
+            )}
+            {insight.details.slice(0, 2).map((detail) => (
+              <Badge key={detail} tone="neutral" size="sm">
+                {detail}
+              </Badge>
+            ))}
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1" aria-label="Dominant colours">
+              {insight.palette.slice(0, 5).map((colour) => (
+                <span
+                  key={colour.hex}
+                  title={`${colour.name} ${Math.round(colour.share * 100)}%`}
+                  className="size-4 rounded-full border border-line"
+                  style={{ background: colour.hex }}
+                />
+              ))}
+            </div>
+            <span className="text-2xs text-ink-muted">
+              {insight.quality.sharpnessLabel} focus · {insight.quality.noiseLabel} ·{' '}
+              {insight.megapixels} MP · quality {insight.quality.score}/100
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* AI generation & post generation bar */}
       <div className="rounded-[var(--r-control)] border border-line bg-surface-2/60 p-3 space-y-2.5">
@@ -564,7 +641,8 @@ export function ItemEditor({ item, onClose }: ItemEditorProps) {
           className="text-danger hover:text-danger"
           icon={<GIcon name="delete" size={14} />}
           onClick={() => {
-            removeItems([item.id]);
+            if (onRequestRemove) onRequestRemove([item.id]);
+            else removeItems([item.id]);
             onClose?.();
           }}
         >

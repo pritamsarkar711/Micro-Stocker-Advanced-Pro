@@ -86,6 +86,14 @@ export interface ImageInsight {
   hasFineText: boolean;
   /** Centre sharpness divided by edge sharpness. Above 2 suggests bokeh. */
   subjectIsolation: number;
+  /** Where the visual weight of the frame sits, left to right. */
+  subjectPosition: 'left' | 'centre' | 'right';
+  /** The quietest side of the frame, the natural home for headline copy. */
+  negativeSpace: 'left' | 'right' | 'top' | 'bottom' | null;
+  /** Extra descriptive tags derived from the measurements, most useful first. */
+  details: string[];
+  /** Stable per-image number used to vary phrasing between files. */
+  variant: number;
   analysedAt: number;
 }
 
@@ -259,6 +267,12 @@ interface Measurements {
   bimodal: number;
   centreSharpness: number;
   borderSharpness: number;
+  detailCentroidX: number;
+  detailCentroidY: number;
+  quietLeft: number;
+  quietRight: number;
+  quietTop: number;
+  quietBottom: number;
   darkShare: number;
   brightShare: number;
 }
@@ -379,6 +393,13 @@ function measure(grid: Grid): Measurements {
   let horizonRow = 0;
   const gradients: number[] = [];
   const centreSharpSum: number[] = [0, 0];
+  let detailWeight = 0;
+  let detailX = 0;
+  let detailY = 0;
+  let quietLeft = 0;
+  let quietRight = 0;
+  let quietTop = 0;
+  let quietBottom = 0;
 
   for (let y = 1; y < h - 1; y += 2) {
     for (let x = 1; x < w - 1; x += 2) {
@@ -395,6 +416,13 @@ function measure(grid: Grid): Measurements {
       lapCount += 1;
       const gradient = Math.abs(right - left) + Math.abs(down - up);
       gradients.push(gradient);
+
+      // Visual weight follows detail, not brightness, so a bright sky does not
+      // pull the subject to the top of the frame.
+      const weight = gradient + abs * 0.5;
+      detailWeight += weight;
+      detailX += (x / Math.max(1, w - 1)) * weight;
+      detailY += (y / Math.max(1, h - 1)) * weight;
       if (gradient > 42) {
         edgeCount += 1;
         if (Math.abs(right - left) > Math.abs(down - up) * 1.6) vertical += 1;
@@ -402,6 +430,14 @@ function measure(grid: Grid): Measurements {
       }
       const neighbourhoodSpread =
         Math.max(left, right, up, down, lum[i]) - Math.min(left, right, up, down, lum[i]);
+      if (gradient < 22) {
+        const u = x / Math.max(1, w - 1);
+        const v = y / Math.max(1, h - 1);
+        if (u < 0.34) quietLeft += 1;
+        else if (u > 0.66) quietRight += 1;
+        if (v < 0.34) quietTop += 1;
+        else if (v > 0.66) quietBottom += 1;
+      }
       if (neighbourhoodSpread < 7) flat += 1;
       flatCount += 1;
       if (abs < 30) {
@@ -567,6 +603,12 @@ function measure(grid: Grid): Measurements {
       clamp01(lapCount ? edgeCount / lapCount : 0) * 0.4,
     centreSharpness: centreSharpSum[1] ? centreSharpSum[0] / centreSharpSum[1] : 0,
     borderSharpness: borderSharpCount ? borderSharpSum / borderSharpCount : 0,
+    detailCentroidX: detailWeight > 0 ? detailX / detailWeight : 0.5,
+    detailCentroidY: detailWeight > 0 ? detailY / detailWeight : 0.5,
+    quietLeft: quietLeft / Math.max(1, lapCount),
+    quietRight: quietRight / Math.max(1, lapCount),
+    quietTop: quietTop / Math.max(1, lapCount),
+    quietBottom: quietBottom / Math.max(1, lapCount),
     darkShare: darkCount / sampledOpq,
     brightShare: brightCount / sampledOpq,
   };
@@ -756,6 +798,57 @@ function confidenceFor(m: Measurements, quality: ImageQuality): number {
   return Number(classify(m, quality).confidence.toFixed(2));
 }
 
+
+/** Extra, evidence based descriptors that make a draft specific instead of generic. */
+function detailsFor(kind: SceneKind, m: Measurements, quality: ImageQuality, palette: PaletteColour[]): string[] {
+  const details: string[] = [];
+  const add = (tag: string) => {
+    if (!details.includes(tag)) details.push(tag);
+  };
+  if (m.horizon > 0.35 && (kind === 'landscape' || kind === 'nature' || kind === 'photo')) add('horizon line');
+  if (m.sky > 0.4) add('open sky');
+  if (m.vegetation > 0.3) add('leafy detail');
+  if (m.meanLum > 190) add('high key');
+  if (m.meanLum < 68) add('low key');
+  if (quality.contrast > 70) add('strong contrast');
+  if (quality.saturation < 0.14) add('muted colour');
+  if (quality.saturation > 0.4) add('vivid colour');
+  if (quality.sharpness > 200) add('fine detail');
+  if (quality.noise > 13) add('grainy texture');
+  if (m.symmetry > 0.72) add('symmetrical layout');
+  if (m.verticalStructure > m.horizontalStructure * 1.5) add('vertical lines');
+  if (m.horizontalStructure > m.verticalStructure * 1.5) add('horizontal lines');
+  if (m.centreSkin > 0.06) add('person in frame');
+  if (m.detailCentroidX < 0.42) add('subject on the left');
+  else if (m.detailCentroidX > 0.58) add('subject on the right');
+  else add('centred subject');
+  const top = palette[0];
+  if (top && top.share > 0.3) add(`${top.name} dominant`);
+  return details.slice(0, 8);
+}
+
+/** Quietest third of the frame: the natural place for headline copy. */
+function negativeSpaceFor(m: Measurements): ImageInsight['negativeSpace'] {
+  const candidates: Array<[ImageInsight['negativeSpace'], number]> = [
+    ['left', m.quietLeft],
+    ['right', m.quietRight],
+    ['top', m.quietTop],
+    ['bottom', m.quietBottom],
+  ];
+  const [best, share] = candidates.sort((a, b) => b[1] - a[1])[0];
+  return share > 0.22 ? best : null;
+}
+
+/** Stable variant number so bulk drafts vary in phrasing without randomness. */
+function variantFor(m: Measurements, palette: PaletteColour[]): number {
+  const seed =
+    Math.round(m.detailCentroidX * 97) * 31 +
+    Math.round(m.meanLum * 7) +
+    Math.round(m.saturation * 53) +
+    Math.round((palette[0]?.share ?? 0) * 89);
+  return Math.abs(seed) % 997;
+}
+
 /** Analyse a decoded RGBA buffer. Pure: no DOM, no canvas, easy to test. */
 export function analysePixels(
   data: Uint8ClampedArray,
@@ -832,6 +925,10 @@ export function analysePixels(
     findings: findingsFor(kind, m, quality, megapixels, whiteBackdrop),
     hasFineText: isTextLayout(m),
     subjectIsolation: Number((m.centreSharpness / Math.max(0.5, m.borderSharpness)).toFixed(2)),
+    subjectPosition: m.detailCentroidX < 0.42 ? 'left' : m.detailCentroidX > 0.58 ? 'right' : 'centre',
+    negativeSpace: negativeSpaceFor(m),
+    details: detailsFor(kind, m, quality, palette),
+    variant: variantFor(m, palette),
     analysedAt: Date.now(),
   };
 }

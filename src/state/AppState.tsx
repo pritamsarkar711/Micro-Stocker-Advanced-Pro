@@ -30,6 +30,12 @@ export interface Settings {
   currency: CurrencyCode;
   sidebarCollapsed: boolean;
   reduceMotion: boolean;
+  /** Ask before an asset leaves the library. */
+  confirmRemove: boolean;
+  /** Format the Image Optimizer starts on. */
+  optimizeFormat: 'keep' | 'jpg' | 'webp' | 'avif' | 'png';
+  /** Format the Image Upscaler writes. */
+  upscaleFormat: 'jpg' | 'png' | 'webp';
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -39,6 +45,9 @@ export const DEFAULT_SETTINGS: Settings = {
   currency: 'BDT',
   sidebarCollapsed: false,
   reduceMotion: false,
+  confirmRemove: true,
+  optimizeFormat: 'keep',
+  upscaleFormat: 'webp',
 };
 
 interface AppState {

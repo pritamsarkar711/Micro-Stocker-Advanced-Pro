@@ -426,7 +426,10 @@ export function analyseEpsFile(text: string, name: string, bytes: number): Quali
 export interface PixelStats {
   width: number;
   height: number;
-  /** Variance of the Laplacian — low means soft or out-of-focus. */
+  /**
+   * Focus index from edge acutance after grain is removed. Below 45 reads as
+   * soft, above 120 as crisp.
+   */
   sharpness: number;
   /** Fraction of pixels pinned at pure black or pure white. */
   clipped: number;
@@ -490,37 +493,67 @@ export function measurePixels(data: Uint8ClampedArray, width: number, height: nu
     }
   }
 
-  let sum = 0;
-  let sumSq = 0;
-  let n = 0;
+  // A raw Laplacian variance measures grain as much as focus, so a noisy phone
+  // photo could look sharper than a clean studio shot. Smooth the luminance
+  // first (grain is high frequency) and read the 95th percentile gradient, the
+  // same measure the vision engine uses everywhere else in the app.
+  const smooth = new Float32Array(w * h);
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      let total = 0;
+      let count = 0;
+      for (let dy = -1; dy <= 1; dy += 1) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= h) continue;
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= w) continue;
+          total += gray[yy * w + xx];
+          count += 1;
+        }
+      }
+      smooth[y * w + x] = total / count;
+    }
+  }
+
+  const gradients: number[] = [];
   let edges = 0;
   let noiseSum = 0;
   let noiseCount = 0;
   for (let y = 1; y < h - 1; y += 1) {
     for (let x = 1; x < w - 1; x += 1) {
       const i = y * w + x;
-      const lap =
-        4 * gray[i] - gray[i - 1] - gray[i + 1] - gray[i - w] - gray[i + w];
-      const abs = Math.abs(lap);
-      sum += lap;
-      sumSq += lap * lap;
-      n += 1;
-      if (abs > 24) edges += 1;
-      // Grain lives in flat areas; strong edges would drown the measurement.
-      if (abs < 18) {
-        noiseSum += abs;
+      const gradient =
+        Math.abs(smooth[i + 1] - smooth[i - 1]) + Math.abs(smooth[i + w] - smooth[i - w]);
+      gradients.push(gradient);
+      if (gradient > 42) edges += 1;
+      if (gradient < 12) {
+        const lap = 4 * smooth[i] - smooth[i - 1] - smooth[i + 1] - smooth[i - w] - smooth[i + w];
+        noiseSum += Math.abs(lap) * 2;
         noiseCount += 1;
       }
     }
   }
-  const mean = n ? sum / n : 0;
-  const variance = n ? sumSq / n - mean * mean : 0;
+  gradients.sort((a, b) => a - b);
+  const acutance = gradients.length
+    ? gradients[Math.min(gradients.length - 1, Math.floor(gradients.length * 0.95))]
+    : 0;
+
+  // Keep the historical scale so every threshold and message stays meaningful:
+  // acutance 16 is the soft boundary (45) and 34 the crisp boundary (120).
+  const focusIndex =
+    acutance >= 34
+      ? 120 + (acutance - 34) * 4
+      : acutance >= 16
+        ? 45 + (acutance - 16) * (75 / 18)
+        : acutance * (45 / 16);
+
   const opaque = Math.max(1, w * h - transparent);
 
   return {
     width,
     height,
-    sharpness: Math.max(0, variance),
+    sharpness: Math.max(0, focusIndex),
     clipped: clipped / (w * h),
     transparent: transparent / (w * h),
     meanLuma: lumaSum / (w * h),
@@ -529,7 +562,7 @@ export function measurePixels(data: Uint8ClampedArray, width: number, height: nu
     colourCast: castCount ? castSum / castCount / 255 : 0,
     overSaturated: overSaturated / opaque,
     noise: noiseCount ? noiseSum / noiseCount : 0,
-    edgeDensity: n ? edges / n : 0,
+    edgeDensity: gradients.length ? edges / gradients.length : 0,
   };
 }
 

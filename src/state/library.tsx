@@ -19,6 +19,7 @@ import {
   type StockItem,
   type StockMetadata,
 } from '@/lib/stock/types';
+import { analyseBlob } from '@/lib/vision';
 import { analyzeImageVisuals, draftMetadata, formatMetadataForClipboard } from '@/lib/stock/metadata';
 import { canEmbedFormat, embedMetadata } from '@/lib/stock/xmp';
 import { sanitizeFilename } from '@/lib/stock/validate';
@@ -669,8 +670,10 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       const drafted = new Map<string, StockMetadata>();
       for (const item of targets) {
         const blob = await getBlob(item.id);
-        const visuals = await analyzeImageVisuals(blob);
-        drafted.set(item.id, draftMetadata(item, ai.targetKeywords, visuals));
+        // The offline engine reads the pixels. Without this the draft falls back
+        // to the filename, which is what made old generations look templated.
+        const [visuals, insight] = await Promise.all([analyzeImageVisuals(blob), analyseBlob(blob)]);
+        drafted.set(item.id, draftMetadata(item, ai.targetKeywords, visuals, insight));
       }
       persist(
         itemsRef.current.map((it) => {

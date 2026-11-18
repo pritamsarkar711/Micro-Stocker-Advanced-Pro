@@ -793,15 +793,21 @@ export async function upscaleVideoInApp(
   video.volume = options.keepAudio ? 1 : 0;
 
   return new Promise<UpscaleVideoResult>((resolve, reject) => {
-    let rafId = 0;
     let settled = false;
     let recorder: MediaRecorder | null = null;
     const streams: MediaStream[] = [];
     const chunks: BlobPart[] = [];
+    const cleanupFns: (() => void)[] = [];
     const abort = () => fail(new Error('Video upscaling canceled'));
 
     const cleanup = () => {
-      cancelAnimationFrame(rafId);
+      for (const fn of cleanupFns) {
+        try {
+          fn();
+        } catch {
+          /* ignore */
+        }
+      }
       options.signal?.removeEventListener('abort', abort);
       if (recorder && recorder.state !== 'inactive') recorder.stop();
       for (const stream of streams) for (const track of stream.getTracks()) track.stop();
@@ -864,20 +870,58 @@ export async function upscaleVideoInApp(
           });
         };
 
-        const renderLoop = () => {
-          if (settled) return;
+        // Draw only when the decoder hands over a new frame. A plain rAF loop
+        // redraws at display refresh (often 120 Hz) for a 30 fps clip, doubling
+        // or quadrupling GPU work, heat and fan noise for nothing.
+        const frameInterval = 1000 / Math.max(1, options.fps);
+        let lastDraw = 0;
+        const paint = () => {
           if (webgl) webgl.draw(video);
           else if (ctx2d) ctx2d.drawImage(video, 0, 0, width, height);
+        };
+        const report = () => {
           const dur = Math.max(0.1, video.duration || meta.duration || 1);
           const pct = Math.min(0.99, video.currentTime / dur);
-          options.onProgress?.(
-            pct,
-            `${width}x${height} · ${Math.round(pct * 100)}%`,
-          );
-          if (!video.ended && !video.paused) {
-            rafId = requestAnimationFrame(renderLoop);
-          }
+          options.onProgress?.(pct, `${width}x${height} · ${Math.round(pct * 100)}%`);
         };
+
+        type FrameVideo = HTMLVideoElement & {
+          requestVideoFrameCallback?: (cb: () => void) => number;
+          cancelVideoFrameCallback?: (handle: number) => void;
+        };
+        const frameVideo = video as FrameVideo;
+        let frameHandle = 0;
+
+        if (typeof frameVideo.requestVideoFrameCallback === 'function') {
+          const onFrame = () => {
+            if (settled) return;
+            const now = performance.now();
+            if (now - lastDraw >= frameInterval * 0.9) {
+              lastDraw = now;
+              paint();
+              report();
+            }
+            if (!video.ended) frameHandle = frameVideo.requestVideoFrameCallback!(onFrame);
+          };
+          frameHandle = frameVideo.requestVideoFrameCallback(onFrame);
+        } else {
+          let rafId = 0;
+          const tick = () => {
+            if (settled) return;
+            const now = performance.now();
+            if (now - lastDraw >= frameInterval * 0.9) {
+              lastDraw = now;
+              paint();
+              report();
+            }
+            if (!video.ended && !video.paused) rafId = requestAnimationFrame(tick);
+          };
+          rafId = requestAnimationFrame(tick);
+          cleanupFns.push(() => cancelAnimationFrame(rafId));
+        }
+        cleanupFns.push(() => {
+          if (frameHandle) frameVideo.cancelVideoFrameCallback?.(frameHandle);
+        });
 
         video.onended = () => {
           if (webgl) webgl.draw(video);
@@ -887,7 +931,6 @@ export async function upscaleVideoInApp(
 
         recorder.start(250);
         await video.play();
-        renderLoop();
       } catch (err) {
         fail(err instanceof Error ? err : new Error(String(err)));
       }

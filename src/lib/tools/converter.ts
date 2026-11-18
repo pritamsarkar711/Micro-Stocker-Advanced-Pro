@@ -28,6 +28,7 @@ import {
   encodePdf,
   encodePfm,
   encodePng,
+  encodePngIndexed,
   encodePsd,
   encodePsb,
   encodeQoi,
@@ -256,6 +257,8 @@ export interface ConvertOptions {
   resizePreset: string;
   customLongEdge?: number;
   preserveMetadata: boolean;
+  /** Store PNG output as a 256 colour palette file when it is smaller. */
+  palettePng?: boolean;
 }
 
 export interface ConvertResult {
@@ -606,7 +609,11 @@ export async function convertImageFile(
         outBlob = await canvasToBlob(canvas, spec.mime, spec.lossy ? options.quality : undefined);
       } else {
         const raster = canvasToRaster(canvas);
-        outBlob = toSafeBlob(await encodeRaster(raster, options.format, options.quality), spec.mime);
+        const encoded =
+          options.format === 'png' && options.palettePng
+            ? encodePngIndexed(raster.data, raster.width, raster.height, 256).bytes
+            : await encodeRaster(raster, options.format, options.quality);
+        outBlob = toSafeBlob(encoded, spec.mime);
       }
       break;
     }

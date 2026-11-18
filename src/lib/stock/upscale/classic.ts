@@ -32,7 +32,6 @@ function makeCanvas(w: number, h: number): OffscreenCanvas | HTMLCanvasElement {
 
 /** Fast 3x3 edge aware denoise for compressed JPEGs before enlarging. */
 function applySoftDenoise(data: Uint8ClampedArray, w: number, h: number) {
-  if (w * h > 16_000_000) return;
   const src = new Uint8ClampedArray(data);
   const threshold = 24;
   for (let y = 1; y < h - 1; y++) {
@@ -96,6 +95,39 @@ function applyUnsharp(data: Uint8ClampedArray, w: number, h: number, strength: n
   }
 }
 
+/**
+ * Applies a full-image filter one horizontal strip at a time.
+ *
+ * A 24 MP frame is 96 MB as RGBA, and a whole-image getImageData plus a copy for
+ * the kernel means 200 MB of churn twice over. That spike is what spins up the
+ * fans: the browser allocates, copies, collects and reallocates. Working in
+ * 512-row strips keeps the working set under ~10 MB, and the only rows written
+ * back are the ones the strip owns, so overlap rows are never sharpened twice.
+ */
+async function filterInStrips(
+  ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  filter: (data: Uint8ClampedArray, width: number, height: number) => void,
+  onStep?: () => void,
+): Promise<void> {
+  const stripRows = 512;
+  for (let y = 0; y < h; y += stripRows) {
+    const rows = Math.min(stripRows, h - y);
+    const padTop = y > 0 ? 1 : 0;
+    const padBottom = y + rows < h ? 1 : 0;
+    const readY = y - padTop;
+    const readH = rows + padTop + padBottom;
+    const img = ctx.getImageData(0, readY, w, readH);
+    filter(img.data, w, readH);
+    // Write back only the rows this strip owns (the kernel needs the neighbours
+    // for context but must not publish their filtered values twice).
+    ctx.putImageData(img, 0, readY, 0, padTop, w, rows);
+    onStep?.();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+}
+
 export async function upscaleClassic(blob: Blob, options: ClassicOptions): Promise<Blob> {
   const { scale = 2, exactScale, mode = 'lanczos-pro', outFormat, quality = 0.94, onProgress } = options;
   const bitmap = await createImageBitmap(blob);
@@ -105,13 +137,11 @@ export async function upscaleClassic(blob: Blob, options: ClassicOptions): Promi
     let width = bitmap.width;
     let height = bitmap.height;
 
-    if (mode === 'photo-restore' && width * height <= 12_000_000) {
+    if (mode === 'photo-restore') {
       const pre = makeCanvas(width, height);
       const pctx = pre.getContext('2d') as OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
       pctx.drawImage(source as CanvasImageSource, 0, 0);
-      const img = pctx.getImageData(0, 0, width, height);
-      applySoftDenoise(img.data, width, height);
-      pctx.putImageData(img, 0, 0);
+      await filterInStrips(pctx, width, height, (data, sw, sh) => applySoftDenoise(data, sw, sh));
       source = pre;
     }
 
@@ -160,13 +190,11 @@ export async function upscaleClassic(blob: Blob, options: ClassicOptions): Promi
       releaseAfterDraw = canvas as OffscreenCanvas | HTMLCanvasElement;
 
       const isLast = i === steps.length - 1;
-      if (isLast && mode !== 'plain' && nextW * nextH <= 34_000_000) {
-        const img = ctx.getImageData(0, 0, nextW, nextH);
-        if (mode === 'lanczos-pro') applyUnsharp(img.data, nextW, nextH, 0.35, false);
-        else if (mode === 'edge-crisp') applyUnsharp(img.data, nextW, nextH, 0.65, false);
-        else if (mode === 'photo-restore') applyUnsharp(img.data, nextW, nextH, 0.42, true);
-        else if (mode === 'anime4k-shader') applyUnsharp(img.data, nextW, nextH, 0.9, true);
-        ctx.putImageData(img, 0, 0);
+      const strength =
+        mode === 'lanczos-pro' ? 0.35 : mode === 'edge-crisp' ? 0.65 : mode === 'photo-restore' ? 0.42 : mode === 'anime4k-shader' ? 0.9 : 0;
+      const clampHalo = mode === 'photo-restore' || mode === 'anime4k-shader';
+      if (isLast && strength > 0 && nextW * nextH <= 64_000_000) {
+        await filterInStrips(ctx, nextW, nextH, (data, sw, sh) => applyUnsharp(data, sw, sh, strength, clampHalo));
       }
 
       source = canvas;

@@ -7,11 +7,13 @@ import { Button } from '@/components/ui/Button';
 import { Field, Input, Select } from '@/components/ui/Field';
 import { GIcon } from '@/components/ui/GoogleIcon';
 import { useToast } from '@/state/ToastState';
+import { useApp } from '@/state/AppState';
 import { useLibrary } from '@/state/library';
 import { triggerBlobDownload } from '@/lib/desktop';
 import { decodeRaster, encodeRaster } from '@/lib/tools/converter';
 import {
   DEFAULT_QUALITY,
+  encodePngBest,
   optimizeRaster,
   suggestedFormat,
   type OptimizeFormat,
@@ -70,15 +72,19 @@ const formatBytes = (bytes: number) =>
   bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(2)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
 export function OptimizePage() {
+  const { settings } = useApp();
   const toast = useToast();
   const { items: libraryItems, getBlob } = useLibrary();
   const fileRef = useRef<HTMLInputElement>(null);
   const [queue, setQueue] = useState<Item[]>([]);
-  const [format, setFormat] = useState<'keep' | OptimizeFormat>('keep');
+  const [format, setFormat] = useState<'keep' | OptimizeFormat>(settings.optimizeFormat);
   const [mode, setMode] = useState<Mode>('auto');
   const [targetKB, setTargetKB] = useState('2500');
   const [quality, setQuality] = useState('86');
   const [longEdge, setLongEdge] = useState('0');
+  // Palette size for PNG output: 256 keeps everything, lower merges similar
+  // colours in flat artwork for another big size drop.
+  const [pngColors, setPngColors] = useState(256);
   const [stripMetadata, setStripMetadata] = useState(true);
   const [running, setRunning] = useState(false);
   const [manualFormat, setManualFormat] = useState(false);
@@ -230,7 +236,10 @@ export function OptimizePage() {
             maxLongEdge,
             qualityFloor: 0.45,
           },
-          (r, q) => encodeRaster({ width: r.width, height: r.height, data: r.data } as never, targetFormat, q),
+          (r, q) =>
+            targetFormat === 'png'
+              ? Promise.resolve(encodePngBest({ width: r.width, height: r.height, data: r.data }, pngColors))
+              : encodeRaster({ width: r.width, height: r.height, data: r.data } as never, targetFormat, q),
         );
 
         // If the first pass grew the file, try a lower quality before giving up.
@@ -308,6 +317,18 @@ export function OptimizePage() {
         .then((blob) => triggerBlobDownload(blob, item.outName!));
     }
     toast.success('Optimized files downloaded');
+  };
+
+  /** Drop a single file so another can be added in its place. */
+  const removeOne = (id: string) => {
+    setQueue((prev) => {
+      const hit = prev.find((item) => item.id === id);
+      if (hit) {
+        URL.revokeObjectURL(hit.srcUrl);
+        if (hit.outUrl && hit.outUrl !== hit.srcUrl) URL.revokeObjectURL(hit.outUrl);
+      }
+      return prev.filter((item) => item.id !== id);
+    });
   };
 
   const clearAll = () => {
@@ -445,6 +466,27 @@ export function OptimizePage() {
             </Select>
           </Field>
 
+          {(format === 'png' || (format === 'keep' && queue.some((q) => /\.png$/i.test(q.name)))) && (
+            <Field label="PNG colours">
+              <div className="flex items-center gap-2">
+                <input
+                  type="range"
+                  min={2}
+                  max={256}
+                  step={2}
+                  value={pngColors}
+                  onChange={(e) => setPngColors(Number(e.target.value))}
+                  aria-label="PNG palette colours"
+                  className="flex-1 accent-[var(--brand)]"
+                />
+                <span className="w-12 text-right text-[0.8125rem] font-semibold tabular-nums text-ink">{pngColors}</span>
+              </div>
+              <p className="mt-1.5 text-[0.75rem] text-ink-muted">
+                {pngColors >= 256 ? 'Lossless when the artwork fits. Photos stay truecolour.' : 'Merges close colours. Best for flat artwork.'}
+              </p>
+            </Field>
+          )}
+
           <label className="flex cursor-pointer items-center gap-2 text-[0.8125rem] text-ink-muted">
             <input
               type="checkbox"
@@ -555,6 +597,15 @@ export function OptimizePage() {
                           <GIcon name="download" size={15} />
                         </Button>
                       )}
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        aria-label={`Remove ${item.name}`}
+                        title="Remove from queue"
+                        onClick={() => removeOne(item.id)}
+                      >
+                        <GIcon name="delete" size={15} />
+                      </Button>
                     </div>
                   );
                 })}

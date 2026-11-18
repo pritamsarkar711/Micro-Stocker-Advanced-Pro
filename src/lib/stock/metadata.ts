@@ -311,38 +311,124 @@ function lightWord(insight: ImageInsight): string {
   return 'soft natural light';
 }
 
+/** Pick one phrasing from a list, stable for a given file. */
+function pick<T>(options: T[], variant: number, salt = 0): T {
+  return options[(variant + salt) % options.length];
+}
+
+/** Composition phrase that reflects where the subject actually sits. */
+function compositionPhrase(insight: ImageInsight): string {
+  const space = insight.negativeSpace;
+  const side = space === 'left' ? 'left' : space === 'right' ? 'right' : '';
+  if (space === 'top') return 'with clear space above';
+  if (space === 'bottom') return 'with clear space below';
+  if (side) return `with copy space on the ${side}`;
+  if (insight.subjectPosition === 'left') return 'subject placed to the left';
+  if (insight.subjectPosition === 'right') return 'subject placed to the right';
+  return insight.orientation === 'portrait' ? 'vertical framing' : 'balanced framing';
+}
+
+/**
+ * Titles are assembled from several measured facts, and each scene offers more
+ * than one sentence shape, so a batch of files never reads like one template.
+ */
 function sceneTitle(insight: ImageInsight, isVector: boolean): string {
   const colour = titleColour(insight);
   const light = lightWord(insight);
+  const detail = insight.details;
+  const has = (tag: string) => detail.includes(tag);
   const withColour = (word: string) => (colour ? `${colour} ${word}` : word);
-  const kind: SceneKind = insight.kind;
+  const v = insight.variant;
   let title: string;
-  switch (kind) {
+
+  switch (insight.kind) {
     case 'cutout':
-      title = `Isolated ${withColour('object')} on a transparent background`;
+      title = pick(
+        [
+          `Isolated ${withColour('object')} on a transparent background`,
+          `Clean ${withColour('cutout')} with a sharp edge and no background`,
+          `${withColour('Single object')} isolated for instant layout use`,
+        ],
+        v,
+      );
       break;
     case 'product':
       title = insight.backgroundHex && /^#f/i.test(insight.backgroundHex)
-        ? `Clean product still life on a white background`
-        : `Studio still life on a ${colour ? `${colour} ` : ''}background`;
+        ? pick(
+            [
+              'Product still life on a seamless white background',
+              `Clean studio product shot in ${light}`,
+            ],
+            v,
+          )
+        : pick(
+            [
+              `Studio still life on a ${colour ? `${colour} ` : ''}backdrop`,
+              `Product composition lit with ${light}`,
+            ],
+            v,
+            1,
+          );
       break;
     case 'portrait':
-      title = `Portrait of a person in ${light}`;
+      title = pick(
+        [
+          `Portrait of a person in ${light}`,
+          `Close portrait with ${light} and a calm expression`,
+          `Editorial headshot photographed in ${light}`,
+        ],
+        v,
+      );
       break;
     case 'people':
-      title = `People together in ${light}`;
+      title = pick(
+        [
+          `People together in ${light}`,
+          `Group scene captured in ${light}`,
+          `Candid people moment in ${light}`,
+        ],
+        v,
+      );
       break;
     case 'landscape':
-      title = `Wide ${withColour('landscape')} under an open sky`;
+      title = pick(
+        [
+          `Wide ${withColour('landscape')} under an open sky`,
+          `${withColour('Horizon')} view with ${light} and room for copy`,
+          `Open ${withColour('vista')} stretching to the horizon`,
+        ],
+        v,
+      );
       break;
     case 'nature':
-      title = `${withColour('Foliage')} close up with natural texture`;
+      title = pick(
+        [
+          `${withColour('Foliage')} close up with natural texture`,
+          `Natural ${withColour('detail')} in ${light}`,
+          `Leafy ${withColour('undergrowth')} with fine texture`,
+        ],
+        v,
+      );
       break;
     case 'architecture':
-      title = `Modern building facade with clean ${colour || 'neutral'} lines`;
+      title = pick(
+        [
+          `Modern building facade with clean ${colour || 'geometric'} lines`,
+          `Architectural detail in ${light}`,
+          `${withColour('Structural')} geometry against the sky`,
+        ],
+        v,
+      );
       break;
     case 'food':
-      title = `Warm tabletop food scene in ${light}`;
+      title = pick(
+        [
+          `Warm tabletop food scene in ${light}`,
+          `Freshly plated dish in ${light}`,
+          `Overhead food still life with ${colour || 'rich'} tones`,
+        ],
+        v,
+      );
       break;
     case 'screenshot':
       title = 'Clean interface screenshot with crisp readable text';
@@ -351,36 +437,115 @@ function sceneTitle(insight: ImageInsight, isVector: boolean): string {
       title = 'Printed document page on a plain white surface';
       break;
     case 'illustration':
-      title = `Flat ${withColour('vector illustration')} with bold shapes`;
+      title = pick(
+        [
+          `Flat ${withColour('vector illustration')} with bold shapes`,
+          `${withColour('Graphic')} composition with clean vector edges`,
+          `Modern flat artwork in ${colour || 'bold'} tones`,
+        ],
+        v,
+      );
       break;
     case 'pattern':
-      title = `Seamless ${withColour('geometric pattern')} for surface design`;
+      title = pick(
+        [
+          `Seamless ${withColour('geometric pattern')} for surface design`,
+          `Repeat ${withColour('motif')} that tiles without a seam`,
+          `Decorative ${withColour('pattern')} for print and web`,
+        ],
+        v,
+      );
       break;
     case 'abstract':
-      title = `Abstract ${withColour('composition')} with soft gradients`;
+      title = pick(
+        [
+          `Abstract ${withColour('composition')} with soft gradients`,
+          `Abstract ${withColour('background')} with fluid shapes`,
+          `Modern abstract artwork in ${colour || 'layered'} tones`,
+        ],
+        v,
+      );
       break;
     default:
-      title = `${colour ? `${colour} toned ` : ''}Photograph in ${light}`;
+      title = pick(
+        [
+          `${colour ? `${colour} toned ` : ''}Photograph in ${light}`,
+          `${colour ? `${colour} ` : ''}Scene captured in ${light}`,
+          `${has('fine detail') ? 'Detailed' : 'Natural'} photograph with ${light}`,
+        ],
+        v,
+      );
   }
-  if (isVector && !/vector|illustration/i.test(title)) title = `${title} as a scalable vector graphic`;
+
+  // Only add a composition tail when the title stays inside the 70 character
+  // marketplace sweet spot.
+  const tail = compositionPhrase(insight);
+  if (title.length + tail.length + 1 <= 70 && !/copy space|framing/.test(title)) {
+    title = `${title} ${tail}`;
+  }
+  if (isVector && !/vector|illustration|graphic|pattern/i.test(title)) {
+    title = `${title} as a scalable vector graphic`;
+  }
   return title;
 }
 
+/** Category to marketplace copy: what a buyer would actually do with the file. */
+function useCaseFor(kind: SceneKind): string {
+  switch (kind) {
+    case 'cutout':
+    case 'product':
+      return 'Ready for product pages, advertising layouts and mockups.';
+    case 'portrait':
+    case 'people':
+      return 'Suited to editorial features, brand storytelling and campaigns.';
+    case 'landscape':
+    case 'nature':
+      return 'Works for travel promotion, editorial features and wide banners.';
+    case 'architecture':
+      return 'Fits real estate listings, architectural features and corporate decks.';
+    case 'food':
+      return 'Ideal for menus, delivery apps and food blog features.';
+    case 'document':
+    case 'screenshot':
+      return 'Useful for documentation, tutorials and interface presentations.';
+    case 'illustration':
+    case 'pattern':
+    case 'abstract':
+      return 'Built for branding, packaging, social posts and background use.';
+    default:
+      return 'Suitable for commercial and editorial layouts.';
+  }
+}
+
 function sceneDescription(insight: ImageInsight, isVector: boolean): string {
-  const profile = SCENE_PROFILES[insight.kind];
-  const subject =
-    insight.kind === 'cutout'
-      ? 'The subject is isolated with a clean edge and no background, ready to drop into a layout.'
-      : insight.kind === 'landscape'
-        ? 'The frame opens onto a wide horizon with room for headline copy.'
-        : insight.kind === 'portrait'
-          ? 'Natural expression and even light keep the frame usable for editorial and commercial work.'
-          : insight.kind === 'pattern'
-            ? 'The repeat tiles seamlessly across packaging, fabric and web backgrounds.'
-            : insight.kind === 'document' || insight.kind === 'screenshot'
-              ? 'Text and interface elements stay legible at full size.'
-              : `The ${profile.category.toLowerCase()} subject fills the frame with clean detail.`;
-  return `${sceneTitle(insight, isVector)}. ${subject}`;
+  const colour = titleColour(insight);
+  const light = lightWord(insight);
+  const detail = insight.details.filter((tag) => !/subject|centred/.test(tag)).slice(0, 2);
+  const kindPhrase: Record<string, string> = {
+    cutout: 'The subject is isolated with a clean edge, so it drops straight into any layout.',
+    product: 'Shot on a clean background with even, controlled light.',
+    portrait: 'Natural expression and even light keep the frame usable for editorial and commercial work.',
+    people: 'An honest, unposed moment between people.',
+    landscape: 'The frame opens onto a wide horizon and holds plenty of room for headline copy.',
+    nature: 'Fine natural texture stays readable at full size.',
+    architecture: 'Straight lines and repeating structure give the frame a calm, graphic rhythm.',
+    food: 'Fresh texture and warm colour make the dish look appetising at any size.',
+    screenshot: 'Interface elements and text stay legible at full resolution.',
+    document: 'Text and margins are sharp enough to read at full size.',
+    illustration: 'Flat shapes and clean outlines stay crisp at any scale.',
+    pattern: 'The repeat tiles seamlessly across packaging, fabric and web backgrounds.',
+    abstract: 'Layered shapes and soft gradients leave space for type.',
+    photo: 'Balanced exposure and honest colour keep the frame easy to crop.',
+  };
+  const toneSentence = colour
+    ? `${colour[0].toUpperCase()}${colour.slice(1)} tones in ${light}${detail.length ? `, with ${detail.join(' and ')}` : ''}.`
+    : `Even exposure in ${light}${detail.length ? `, with ${detail.join(' and ')}` : ''}.`;
+  const parts = [
+    kindPhrase[insight.kind] ?? kindPhrase.photo,
+    toneSentence,
+    isVector ? 'Delivered as a scalable vector that stays sharp at any size.' : useCaseFor(insight.kind),
+  ];
+  return cleanStockSentence(parts.join(' '), 195, false);
 }
 
 function draftFromInsight(
@@ -390,12 +555,11 @@ function draftFromInsight(
 ): StockMetadata {
   const profile = SCENE_PROFILES[insight.kind];
   const isVector = item.format === 'eps' || item.format === 'ai' || item.format === 'svg';
-  const tokens = tokensFromFilename(item.name).filter((token) => !BANNED_STOCK_TERMS.has(token));
   const title = cleanStockSentence(sceneTitle(insight, isVector), 70, true);
-  const description = cleanStockSentence(sceneDescription(insight, isVector), 195, false);
+  const description = sceneDescription(insight, isVector);
 
   const paletteWords = insight.palette
-    .slice(0, 3)
+    .slice(0, 4)
     .map((colour) => (COLOUR_ADJECTIVES[colour.name] ? `${COLOUR_ADJECTIVES[colour.name]} tones` : ''))
     .filter(Boolean);
   const lightTerms =
@@ -407,12 +571,16 @@ function draftFromInsight(
   const composition = [
     insight.orientation === 'landscape' ? 'horizontal' : insight.orientation === 'portrait' ? 'vertical' : 'square',
     'copy space',
-    insight.orientation === 'portrait' ? 'story format' : 'wide shot',
-  ];
+    insight.negativeSpace ? `negative space ${insight.negativeSpace}` : '',
+    insight.subjectPosition === 'centre' ? 'centred' : `subject on the ${insight.subjectPosition}`,
+  ].filter(Boolean);
+  const detailWords = insight.details
+    .map((tag) => tag.replace('subject on the ', ''))
+    .filter((tag) => tag && !/centred subject/.test(tag));
 
   const pool = [
     ...profile.keywords,
-    ...tokens,
+    ...detailWords,
     ...paletteWords,
     ...lightTerms,
     ...composition,
