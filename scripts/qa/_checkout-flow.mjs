@@ -62,7 +62,7 @@ await mobile.getByRole('button', { name: 'Done' }).click();
 await mobile.waitForTimeout(900);
 await mobile.screenshot({ path: path.join(outDir, 'bkash-orders.png'), fullPage: true });
 const orderText = await mobile.locator('body').innerText();
-console.log('manual order listed:', /submitted|pending|awaiting/i.test(orderText), '| trxid shown:', /CAROL9X2Q7/.test(orderText));
+console.log('manual order listed:', /waiting for review|submitted|pending|awaiting/i.test(orderText), '| trxid shown:', /CAROL9X2Q7/.test(orderText));
 
 // 2. Crypto invoice, Professional 12 months.
 await mobile.getByRole('button', { name: /Carol Das/ }).click();

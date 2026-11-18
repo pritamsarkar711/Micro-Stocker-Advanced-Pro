@@ -45,6 +45,10 @@ interface LicenseState {
   credits: number;
   features: PlanFeatures;
   hasFeature: (feature: keyof PlanFeatures) => boolean;
+  /** Server configured credit price per action (vector, jpg, upscales). */
+  costs: Record<string, number>;
+  /** Server configured usage limits (daily generations, per minute). */
+  limits: Record<string, number>;
   /** True when the answer came from a live server call in this session. */
   online: boolean;
   refresh: () => Promise<void>;
@@ -63,6 +67,8 @@ interface EntitlementRow {
   expires_at?: string | null;
   seconds_left?: number | null;
   features?: Partial<PlanFeatures>;
+  credit_costs?: Record<string, number>;
+  limits?: Record<string, number>;
   server_time?: string;
 }
 
@@ -114,7 +120,14 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user?.id) return;
     const poll = window.setInterval(() => void refresh(), 60_000);
-    return () => window.clearInterval(poll);
+    // A second factor changes what the server is willing to reveal, so reload
+    // immediately instead of waiting for the next poll.
+    const onRefresh = () => void refresh();
+    window.addEventListener('msap:entitlement-refresh', onRefresh);
+    return () => {
+      window.clearInterval(poll);
+      window.removeEventListener('msap:entitlement-refresh', onRefresh);
+    };
   }, [refresh, user?.id]);
 
   useEffect(() => {
@@ -141,6 +154,8 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
       plan: entitlement?.plan ?? null,
       planName: entitlement?.plan_name ?? null,
       credits: entitlement?.credits ?? 0,
+      costs: { vector: 2, jpg: 8, premium_upscale: 2, video_premium: 6, ...(entitlement?.credit_costs ?? {}) },
+      limits: { daily_generations: 60, rate_gen_per_minute: 6, ...(entitlement?.limits ?? {}) },
       features: premium ? features : FREE_FEATURES,
       hasFeature: (feature) => premium && Boolean(features[feature]),
       online,

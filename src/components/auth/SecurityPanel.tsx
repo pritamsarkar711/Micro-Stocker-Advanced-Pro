@@ -5,6 +5,7 @@ import { PasswordMeter } from './PasswordMeter';
 import { Badge } from '@/components/ui/Badge';
 import { GIcon } from '@/components/ui/GoogleIcon';
 import { useAuth, type MfaEnrollment } from '@/state/AuthState';
+import { useLicense } from '@/state/LicenseState';
 import { useToast } from '@/state/ToastState';
 
 /**
@@ -23,6 +24,7 @@ export function SecurityPanel() {
     signOutEverywhere,
     refreshMfa,
   } = useAuth();
+  const { isAdmin } = useLicense();
   const toast = useToast();
 
   const [passwordOpen, setPasswordOpen] = useState(false);
@@ -232,7 +234,9 @@ export function SecurityPanel() {
                 </Badge>
               </div>
               <div className="truncate text-[0.75rem] text-ink-muted">
-                {mfaFactor ? mfaFactor.friendlyName : 'Authenticator app'}
+                {mfaFactor
+                  ? `${mfaFactor.friendlyName} · code needed at every sign in`
+                  : 'One 6 digit code from your phone, on top of the password'}
               </div>
             </div>
           </div>
@@ -273,10 +277,16 @@ export function SecurityPanel() {
                 />
               )}
               <div className="min-w-0 space-y-1">
-                <p className="text-[0.75rem] text-ink-muted">
-                  {enrollment.qr ? 'Scan the code, then enter the 6 digit code.' : 'Add this key to your authenticator app.'}
-                </p>
-                <div className="flex items-center gap-1.5">
+                <ol className="list-inside list-decimal space-y-0.5 text-[0.75rem] text-ink-muted">
+                  <li>
+                    Install <span className="font-semibold text-ink">Google Authenticator</span> (or Authy, Microsoft
+                    Authenticator, 1Password).
+                  </li>
+                  <li>{enrollment.qr ? 'Tap + and scan this QR code.' : 'Choose "Enter a setup key" and paste the key below.'}</li>
+                  <li>Type the 6 digit code the app shows. Do it straight away: the code is valid for 30 seconds.</li>
+                </ol>
+                {!enrollment.qr && <p className="pt-1 text-[0.75rem] text-ink-muted">Setup key</p>}
+                <div className={enrollment.qr ? 'hidden' : 'flex items-center gap-1.5'}>
                   <code className="min-w-0 truncate rounded-[var(--r-xs)] border border-line bg-surface-2 px-1.5 py-1 text-[0.75rem] tracking-[0.08em] text-ink">
                     {enrollment.secret}
                   </code>
@@ -286,9 +296,9 @@ export function SecurityPanel() {
                     variant="ghost"
                     onClick={() => {
                       void navigator.clipboard.writeText(enrollment.secret);
-                      toast.success('Key copied');
+                      toast.success('Setup key copied', 'Keep it somewhere safe, not in the same phone.');
                     }}
-                    aria-label="Copy key"
+                    aria-label="Copy setup key"
                   >
                     <GIcon name="content_copy" size={14} />
                   </Button>
@@ -299,11 +309,14 @@ export function SecurityPanel() {
               <Field label="6 digit code" className="w-32">
                 <Input
                   value={totpCode}
-                  onChange={(event) => setTotpCode(event.target.value)}
+                  onChange={(event) => setTotpCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
                   aria-label="6 digit code"
                   inputMode="numeric"
                   autoComplete="one-time-code"
+                  pattern="[0-9]*"
                   maxLength={6}
+                  placeholder="000000"
+                  autoFocus
                   required
                 />
               </Field>
@@ -318,6 +331,22 @@ export function SecurityPanel() {
           </form>
         )}
       </div>
+
+      <p className="text-2xs leading-relaxed text-ink-muted">
+        Lost the phone? A reset link cannot remove the code, so ask the administrator to clear
+        two step verification for your account, then sign in and set it up again.
+        {isAdmin ? ' As an administrator you can do this for any user in the admin console, Security tab.' : ''}
+      </p>
+
+      {isAdmin && !mfaFactor && (
+        <div className="flex items-start gap-2 rounded-[var(--r-control)] border border-warn/30 bg-warn-soft px-3 py-2.5 text-[0.75rem] text-ink">
+          <GIcon name="admin_panel_settings" size={17} className="mt-0.5 shrink-0" />
+          <span>
+            Administrator accounts can change prices, grant plans and store provider keys. Turn two step verification
+            on here first, then switch on the admin requirement in the admin console.
+          </span>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-[0.75rem] text-ink-muted">Signed in on this device</span>

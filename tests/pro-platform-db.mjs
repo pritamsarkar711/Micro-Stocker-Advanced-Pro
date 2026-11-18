@@ -6,9 +6,10 @@ import assert from 'node:assert/strict';
 
 const db = new PGlite({ extensions: { pgcrypto } });
 
-const asUser = async (id) => {
+const asUser = async (id, aal = 'aal1') => {
   await db.exec('reset role');
   await db.query("select set_config('request.jwt.claim.sub', $1, false)", [id ?? '']);
+  await db.query("select set_config('request.jwt.claims', $1, false)", [JSON.stringify({ sub: id ?? null, aal })]);
   await db.exec('set role authenticated');
 };
 
@@ -18,11 +19,23 @@ try {
     create role authenticated;
     create schema auth;
     create schema extensions;
-    create table auth.users(id uuid primary key, email text, raw_user_meta_data jsonb default '{}'::jsonb, created_at timestamptz default now());
+    create table auth.users(id uuid primary key, email text, raw_user_meta_data jsonb default '{}'::jsonb, created_at timestamptz default now(), last_sign_in_at timestamptz);
     create function auth.uid() returns uuid language sql stable
       as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+    create function auth.jwt() returns jsonb language sql stable
+      as $$ select coalesce(nullif(current_setting('request.jwt.claims', true), '')::jsonb, '{}'::jsonb) $$;
+    -- Supabase keeps authenticators here; the aal2 rules read this table.
+    create table auth.mfa_factors(
+      id uuid primary key default gen_random_uuid(),
+      user_id uuid not null,
+      factor_type text not null default 'totp',
+      status text not null default 'unverified',
+      friendly_name text,
+      created_at timestamptz default now()
+    );
     grant usage on schema auth to authenticated, anon;
     grant execute on function auth.uid() to authenticated, anon;
+    grant execute on function auth.jwt() to authenticated, anon;
     create schema storage;
     create table storage.buckets(id text primary key, name text, public boolean, file_size_limit bigint);
     create table storage.objects(id uuid primary key default gen_random_uuid(), bucket_id text, name text);
@@ -99,11 +112,12 @@ try {
   const days = Math.round((new Date(entitled.expires_at) - new Date(entitled.server_time)) / 86_400_000);
   assert.equal(days, 30, 'one month is exactly 30 days');
 
-  // Generating spends a credit and records the job.
+  // Generating spends whatever app_settings charges for that action.
+  const costs = (await db.query("select value from public.app_settings where key = 'credits'")).rows[0].value;
   const balanceBefore = entitled.credits;
   const started = (await db.query("select public.pro_begin_generation('eps', 'alpine sunrise', '{}'::jsonb, null) as s")).rows[0].s;
-  assert.equal(started.credits, 1);
-  assert.equal(started.balance, balanceBefore - 1);
+  assert.equal(started.credits, costs.vector);
+  assert.equal(started.balance, balanceBefore - costs.vector);
   await db.query('select public.pro_attach_quality($1, $2::jsonb, $3::jsonb, $4, $5)', [
     started.generation_id, JSON.stringify({ pass: true, score: 100 }), JSON.stringify({ title: 'Alpine' }), 'alpine.eps', 4096,
   ]);
@@ -116,9 +130,9 @@ try {
   const finished = (await db.query('select public.pro_finish_generation($1, $2, null, null, null, null, null, 0, $3) as r', [
     second.generation_id, 'failed', 'provider error',
   ])).rows[0].r;
-  assert.equal(finished.refunded, 1);
+  assert.equal(finished.refunded, costs.vector);
   const afterRefund = (await db.query('select credits from public.wallets where user_id = $1', [alice])).rows[0].credits;
-  assert.equal(afterRefund, balanceBefore - 1);
+  assert.equal(afterRefund, balanceBefore - costs.vector);
 
   // Plans without the JPG studio are refused that tool even when active.
   await asUser(bob);
@@ -162,7 +176,48 @@ try {
   assert.equal(expired.active, false);
   await assert.rejects(db.query("select public.pro_begin_generation('eps', 'late request', '{}'::jsonb, null)"), /subscription required/);
 
-  console.log('Pro platform SQL: free tier, gating, credits, refunds, pricing, orders, crypto settlement and expiry passed');
+  /* ------------------------------------------------- two step verification */
+
+  // A verified authenticator on alice: her aal1 session gets nothing back.
+  await db.exec('reset role');
+  await db.query("insert into auth.mfa_factors(user_id, status) values ($1, 'verified')", [alice]);
+  await asUser(alice, 'aal1');
+  const locked = (await db.query('select public.pro_my_entitlement() as e')).rows[0].e;
+  assert.equal(locked.mfa_required, true, 'aal1 with a factor must say so');
+  assert.equal(locked.active, false);
+  assert.equal(locked.credits, 0);
+  assert.equal(locked.features.vector, false);
+  const ownRows = await db.query('select count(*)::int as n from public.wallets');
+  assert.equal(ownRows.rows[0].n, 0, 'own wallet row is hidden at aal1');
+  // Generators stop at the entitlement ("subscription required") first, so the
+  // credit guard is proven directly.
+  await assert.rejects(
+    db.query("select public.pro_consume_credits(1, 'test')"),
+    /two factor code required/,
+  );
+
+  // The same account at aal2 is fully back (the expiry test above cancelled her
+  // plan, so give her a fresh one first).
+  await asUser(admin, 'aal1');
+  await db.query("select public.pro_admin_grant($1, 'standard', 1)", [alice]);
+  await asUser(alice, 'aal2');
+  const unlocked = (await db.query('select public.pro_my_entitlement() as e')).rows[0].e;
+  assert.equal(unlocked.mfa_required, false);
+  assert.equal(unlocked.active, true);
+  assert.ok(unlocked.credits > 0);
+  assert.equal((await db.query('select count(*)::int as n from public.wallets')).rows[0].n, 1);
+
+  // Admins see who has a code, and can clear a lost one.
+  await asUser(admin, 'aal1');
+  const overview = (await db.query('select public.pro_admin_security_overview() as o')).rows[0].o;
+  assert.equal(overview.find((row) => row.email === 'alice@example.test').factors, 1);
+  assert.equal((await db.query('select public.pro_admin_reset_mfa($1) as n', [alice])).rows[0].n, 1);
+  await db.exec('reset role');
+  assert.equal((await db.query('select count(*)::int as n from auth.mfa_factors where user_id = $1', [alice])).rows[0].n, 0);
+  await asUser(alice, 'aal1');
+  assert.equal((await db.query('select public.pro_my_entitlement() as e')).rows[0].e.active, true);
+
+  console.log('Pro platform SQL: free tier, gating, credits, refunds, pricing, orders, crypto settlement, expiry and 2FA passed');
 } finally {
   await db.close();
 }

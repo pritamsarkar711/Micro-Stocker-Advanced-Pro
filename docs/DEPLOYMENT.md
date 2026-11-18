@@ -23,6 +23,10 @@ redirect URL, and phase 3 has to exist before a paid generation can succeed.
 | Supabase auth | Site URL set to the production URL, redirect list covers the production and preview hosts plus `localhost:5173` |
 | Deployment protection | **On**, so the `.vercel.app` URL asks for a Vercel login. Turn it off for production (step 0) |
 | Provider keys | **Missing**, so paid generation answers `provider key not configured` |
+| Accounts | 2 sign-ins, profiles backfilled, `pritamsarkar1321@gmail.com` is the administrator |
+| Database | migrations `…1001` to `…1007` applied: plans, payments, credits, two step verification |
+| Two step verification | available to every account; the admin-only policy switch is off |
+| Email | Supabase built-in sender, **2 messages per hour**, confirm-email still off |
 
 ### Step 0: make the site public
 
@@ -115,6 +119,30 @@ Without this phase, password reset links and email confirmations bounce back to
 
 ---
 
+## Phase 2b: finish the security settings (5 minutes)
+
+The code side is done and tested; these four switches belong to Supabase. Open
+**Authentication** in the dashboard.
+
+1. **Emails → Reset password**: replace the link with
+   `<a href="{{ .SiteURL }}/?token_hash={{ .TokenHash }}&type=recovery">Reset password</a>`.
+   Without it a reset link only works in the browser that asked for it.
+2. **Providers → Email**: add a custom SMTP server, then turn **Confirm email**
+   on. The built-in sender allows two messages per hour, so password resets stop
+   working after the second request in an hour.
+3. **Policies → Password**: minimum length 8, leaked-password protection on.
+4. **Policies → Sessions**: "Require current password when changing the password"
+   on.
+
+Then open the app, sign in, go to **Settings → Security**, and turn on two step
+verification for the administrator account. After that open **Admin console →
+Security** and flip "Require an authenticator for administrator accounts".
+
+Details, including how a locked-out customer is helped, are in
+[SECURITY.md](SECURITY.md).
+
+---
+
 ## Phase 3: make paid generation actually work
 
 The generators call the `ai-generate` edge function, which reads the provider key
@@ -122,9 +150,11 @@ from `pro_provider_keys` with the service role. That table is empty today, so ev
 generation answers `provider key not configured` and charges nothing.
 
 1. Sign in to the app as an administrator.
-2. **Admin console → Providers**, press **Set key** on the provider you use
-   (Moonshot AI for the vector briefs, OpenAI for the JPG studio).
-3. Paste the key and save. Only a hint such as `sk-a...f2c9` is ever shown again.
+2. **Admin console → Providers**, press **Add key** on the provider you use
+   (Moonshot AI for the vector briefs, OpenAI for the JPG studio). The dialog
+   names the page to create the key on and the shape of the value.
+3. Paste the key and press **Store key**. Only a hint such as `sk-a...f2c9` is
+   ever shown again; **Remove key** deletes it if it leaks.
 4. Make sure the model you want is enabled under **Models**, and that its cost per
    million tokens is right. Those numbers drive the margin figure on the Overview.
 5. Run one generation on a Pro account and check **Overview → Spend by model**
@@ -146,6 +176,9 @@ by hand, exactly like bKash and Nagad.
 ---
 
 ## Phase 4: become an administrator
+
+Already done for `pritamsarkar1321@gmail.com` on this project. For another
+account, sign it up first, then run:
 
 ```sql
 update public.profiles set role = 'admin' where email = 'you@example.com';

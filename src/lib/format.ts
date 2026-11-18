@@ -37,6 +37,43 @@ export function money(value: number, currency: CurrencyCode = 'USD', decimals = 
   return `${meta.symbol}${formatted}`;
 }
 
+let takaGlyph: boolean | null = null;
+
+/**
+ * Not every system ships a Bengali font, and a missing glyph turns ৳1,590 into
+ * "b1,590". Detect it once and fall back to the plain BDT prefix.
+ */
+export function takaGlyphAvailable(): boolean {
+  if (takaGlyph !== null) return takaGlyph;
+  if (typeof document === 'undefined') return true;
+  try {
+    const context = document.createElement('canvas').getContext('2d');
+    if (!context) return (takaGlyph = true);
+    context.font = '32px sans-serif';
+    const sign = context.measureText('৳').width;
+    const missing = context.measureText('\u{10FFFF}').width;
+    takaGlyph = sign > 0 && Math.abs(sign - missing) > 0.5;
+  } catch {
+    takaGlyph = true;
+  }
+  return takaGlyph;
+}
+
+/** The currency mark alone, for column headers and labels. */
+export function bdtUnit(): string {
+  return takaGlyphAvailable() ? '৳' : 'BDT';
+}
+
+/** Money in Bangladeshi taka, the only currency the plans are sold in. */
+export function bdt(value: number, decimals = 0): string {
+  const amount = Number.isFinite(value) ? value : 0;
+  const formatted = new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: decimals,
+  }).format(amount);
+  return takaGlyphAvailable() ? `৳${formatted}` : `BDT ${formatted}`;
+}
+
 export function compactNumber(value: number): string {
   return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(
     value,

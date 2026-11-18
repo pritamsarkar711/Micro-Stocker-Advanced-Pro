@@ -10,6 +10,7 @@ import { SegmentedControl } from '@/components/ui/Field';
 import { GIcon } from '@/components/ui/GoogleIcon';
 import { copyText } from '@/components/ui/Misc';
 import { CoinMark, PaymentMark } from '@/components/pro/BrandMark';
+import { bdt } from '@/lib/format';
 import { useAuth } from '@/state/AuthState';
 import { useLicense } from '@/state/LicenseState';
 import { useToast } from '@/state/ToastState';
@@ -47,6 +48,19 @@ function cryptoAmount(value: number): string {
     .replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
+/** Plain words for the rows the database stores in lower case. */
+const STATUS_LABEL: Record<string, string> = {
+  approved: 'Approved',
+  submitted: 'Waiting for review',
+  awaiting: 'Waiting for payment',
+  rejected: 'Rejected',
+  expired: 'Expired',
+  confirmed: 'Confirmed',
+  seen: 'Seen on chain',
+  pending: 'Waiting for the network',
+  mismatch: 'Wrong amount',
+};
+
 const STATUS_TONE: Record<string, 'ok' | 'warn' | 'danger' | 'neutral' | 'brand'> = {
   approved: 'ok',
   submitted: 'warn',
@@ -61,7 +75,7 @@ const STATUS_TONE: Record<string, 'ok' | 'warn' | 'danger' | 'neutral' | 'brand'
 
 export function SubscriptionPage() {
   const { user, openAuth } = useAuth();
-  const { premium, planName, credits, expiresAt, isAdmin, refresh } = useLicense();
+  const { premium, planName, credits, expiresAt, isAdmin, refresh, costs } = useLicense();
   const toast = useToast();
 
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -96,11 +110,19 @@ export function SubscriptionPage() {
   }, [load]);
 
   const terms = useMemo(() => Array.from(new Set(prices.map((price) => price.months))).sort((a, b) => a - b), [prices]);
+
+  // Never leave the grid stuck on a term the catalogue does not sell: a price
+  // lookup miss shows "n/a" on every card.
+  useEffect(() => {
+    if (!terms.length) return;
+    if (!terms.includes(term)) setTerm(terms.includes(1) ? 1 : terms[0]);
+  }, [term, terms]);
   const priceFor = (slug: string, months: number) => prices.find((price) => price.plan_slug === slug && price.months === months);
 
   const expiryLabel = expiresAt
     ? new Date(expiresAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
     : null;
+  const daysLeft = expiresAt ? Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 86_400_000)) : null;
 
   // Refreshes the plan, credit and order lists without dismissing the sheet,
   // so the invoice or receipt stays on screen until the customer is done.
@@ -131,12 +153,21 @@ export function SubscriptionPage() {
             <span className="inline-flex size-10 items-center justify-center rounded-[var(--r-control)] bg-brand-soft text-brand-fg">
               <GIcon name="workspace_premium" size={20} />
             </span>
-            <div>
+            <div className="min-w-0">
               <p className="text-[0.875rem] font-semibold">{isAdmin ? 'Administrator access' : `${planName} plan`}</p>
               <p className="text-2xs text-ink-muted">
                 {isAdmin ? 'Every feature is unlocked for administrators.' : expiryLabel ? `Active until ${expiryLabel}` : 'Active plan'}
                 {isAdmin ? '' : ` · ${credits.toLocaleString()} credits left`}
               </p>
+              {!isAdmin && daysLeft !== null && (
+                <p className={clsx('mt-0.5 text-2xs font-semibold', daysLeft <= 7 ? 'text-warn' : 'text-ink-muted')}>
+                  {daysLeft <= 0
+                    ? 'Ends today. Renewing now keeps today’s access and adds the new months on top.'
+                    : daysLeft === 1
+                      ? '1 day left. Renew early: the new months are added to the end.'
+                      : `${daysLeft} days left. Renewing early adds the new months to the end.`}
+                </p>
+              )}
             </div>
           </div>
           <Button
@@ -182,13 +213,24 @@ export function SubscriptionPage() {
                 {current && <Badge tone="ok">Current</Badge>}
               </div>
 
-              <div className="mt-4 flex items-end gap-1.5">
-                <span className="text-[1.75rem] font-bold leading-none">৳{price ? price.price_bdt.toLocaleString('en-US') : 'n/a'}</span>
-                <span className="pb-0.5 text-2xs text-ink-muted">/ {termLabel(term).toLowerCase()}</span>
+              <div className="mt-4 flex flex-wrap items-end gap-1.5">
+                <span className="text-[1.75rem] font-bold leading-none">
+                  {price ? bdt(price.price_bdt) : 'Not sold'}
+                </span>
+                <span className="pb-0.5 text-2xs text-ink-muted">
+                  {price ? `/ ${termLabel(term).toLowerCase()}` : 'at this term'}
+                </span>
               </div>
               <p className="mt-1 text-2xs text-ink-muted">
-                {price ? `৳${monthlyEquivalent(price.price_bdt, term).toLocaleString('en-US')} per month · ${price.credits.toLocaleString('en-US')} credits` : 'Unavailable'}
+                {price
+                  ? `${bdt(monthlyEquivalent(price.price_bdt, term))} per month · ${price.credits.toLocaleString('en-US')} credits`
+                  : 'Pick another term'}
               </p>
+              {price && term > 1 && priceFor(plan.slug, 1) && (
+                <p className="mt-1 text-2xs font-semibold text-ok">
+                  Save {Math.max(0, Math.round((1 - price.price_bdt / (priceFor(plan.slug, 1)!.price_bdt * term)) * 100))}% against monthly
+                </p>
+              )}
 
               <ul className="mt-4 space-y-1.5 border-t border-line pt-3 text-[0.8125rem]">
                 {FEATURE_ROWS.map((row) => {
@@ -262,7 +304,7 @@ export function SubscriptionPage() {
                         {order.plan_slug} · {termLabel(order.months)}
                       </p>
                       <p className="text-2xs text-ink-muted">
-                        ৳{order.amount_bdt} · {order.method}
+                        {bdt(order.amount_bdt)} · {order.method}
                         {order.txn_ref ? ` · ${order.txn_ref}` : ''}
                       </p>
                       {invoice && (
@@ -271,7 +313,7 @@ export function SubscriptionPage() {
                         </p>
                       )}
                     </div>
-                    <Badge tone={STATUS_TONE[order.status] ?? 'neutral'}>{order.status}</Badge>
+                    <Badge tone={STATUS_TONE[order.status] ?? 'neutral'}>{STATUS_LABEL[order.status] ?? order.status}</Badge>
                   </div>
                 );
               })}
@@ -279,6 +321,43 @@ export function SubscriptionPage() {
           )}
         </Card>
       </div>
+
+      <Card className="mt-4">
+        <CardHeader title="How credits work" icon={<GIcon name="savings" size={18} />} />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5 text-[0.8125rem]">
+            {[
+              { key: 'vector', label: 'Vector, EPS, SVG and AI generations' },
+              { key: 'jpg', label: 'JPG studio render' },
+              { key: 'premium_upscale', label: 'Premium upscale, per image' },
+              { key: 'video_premium', label: 'Premium video upscale, per clip' },
+            ].map((row) => (
+              <div key={row.key} className="flex items-center justify-between gap-3">
+                <span className="min-w-0 text-ink-muted">{row.label}</span>
+                <Badge tone="neutral">{costs[row.key] ?? 0} credits</Badge>
+              </div>
+            ))}
+          </div>
+          <ul className="space-y-1.5 text-2xs leading-relaxed text-ink-muted">
+            <li className="flex gap-1.5">
+              <GIcon name="check_circle" size={15} className="mt-0.5 shrink-0 text-ok" />
+              Credits are only spent when a job starts, and a failed job is refunded automatically.
+            </li>
+            <li className="flex gap-1.5">
+              <GIcon name="check_circle" size={15} className="mt-0.5 shrink-0 text-ok" />
+              Leftovers stay in your wallet after a plan ends; they are used again the next time a plan is active.
+            </li>
+            <li className="flex gap-1.5">
+              <GIcon name="check_circle" size={15} className="mt-0.5 shrink-0 text-ok" />
+              Every plan adds its full credit amount, and renewing early adds the new months after the current expiry.
+            </li>
+            <li className="flex gap-1.5">
+              <GIcon name="check_circle" size={15} className="mt-0.5 shrink-0 text-ok" />
+              The free tools never touch credits: convert, optimise, remove backgrounds and standard upscales are free.
+            </li>
+          </ul>
+        </div>
+      </Card>
 
       {checkout && (
         <CheckoutSheet
@@ -348,7 +427,7 @@ function CheckoutSheet({
     setPlaced({ orderId: result.order_id, status: result.status });
     toast.success(
       'Order created',
-      isCrypto ? 'Pay the invoice amount and the network confirms it automatically.' : `Send ৳${result.amount_bdt.toLocaleString('en-US')} and an administrator will confirm it.`,
+      isCrypto ? 'Pay the invoice amount and the network confirms it automatically.' : `Send ${bdt(result.amount_bdt)} and an administrator will confirm it.`,
     );
     if (isCrypto && asset) {
       const created = await createCryptoInvoice(result.order_id, asset.id);
@@ -381,7 +460,7 @@ function CheckoutSheet({
       onClose={onClose}
       size="md"
       title={`${plan.name} · ${termLabel(price.months)}`}
-      description={`৳${price.price_bdt.toLocaleString('en-US')} · ${price.credits.toLocaleString('en-US')} credits · access starts the moment payment is confirmed`}
+      description={`${bdt(price.price_bdt)} · ${price.credits.toLocaleString('en-US')} credits · access starts the moment payment is confirmed`}
     >
       {!placed ? (
         <div className="space-y-4">
@@ -416,7 +495,7 @@ function CheckoutSheet({
             <div className="space-y-3">
               <div className="rounded-[var(--r-control)] border border-line bg-surface-2 p-3">
                 <p className="text-2xs text-ink-muted">Send exactly</p>
-                <p className="text-[1.125rem] font-bold">৳{price.price_bdt.toLocaleString('en-US')}</p>
+                <p className="text-[1.125rem] font-bold">{bdt(price.price_bdt)}</p>
                 <div className="mt-2 space-y-1">
                   {(selected.config.numbers ?? []).map((number) => (
                     <div key={number} className="flex items-center justify-between gap-2">

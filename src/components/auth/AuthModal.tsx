@@ -12,7 +12,7 @@ import { date } from '@/lib/format';
 import { AuthForm } from './AuthForm';
 
 export function AuthModal() {
-  const { user, modalOpen, closeAuth, updateDisplayName, logout, mfaRequired } = useAuth();
+  const { user, modalOpen, closeAuth, updateDisplayName, logout, mfaRequired, recovery, recoveryError } = useAuth();
   const { premium, isAdmin, expiresAt } = useLicense();
   const toast = useToast();
   const [editName, setEditName] = useState('');
@@ -22,9 +22,23 @@ export function AuthModal() {
     if (modalOpen && user) setEditName(user.displayName);
   }, [modalOpen, user]);
 
-  if (!user) {
+  // A reset link signs the browser in with a recovery session, so the account
+  // panel would hide the only form that can set a new password. Same for a
+  // session that still owes an authenticator code.
+  const needsForm = !user || recovery || mfaRequired;
+  if (needsForm) {
     return (
-      <Modal open={modalOpen} onClose={closeAuth} title={mfaRequired ? 'Two step verification' : 'Account'} size="sm">
+      <Modal
+        open={modalOpen}
+        onClose={closeAuth}
+        title={recovery ? 'Choose a new password' : mfaRequired ? 'Two step verification' : 'Account'}
+        size="sm"
+      >
+        {recoveryError && !recovery && (
+          <div role="alert" className="mb-3 rounded-[var(--r-control)] border border-danger/30 bg-danger-soft px-3 py-2.5 text-[0.8125rem] text-danger">
+            {recoveryError}
+          </div>
+        )}
         <AuthForm compact onDone={closeAuth} />
       </Modal>
     );

@@ -248,6 +248,7 @@ export async function loadCatalog() {
 }
 
 export const entitlement = () => rpc<Entitlement>('pro_my_entitlement');
+
 export const quote = (plan: string, months: number, method: string) => rpc<Quote>('pro_quote', { p_plan: plan, p_months: months, p_method: method });
 
 export interface SubmitInput {
@@ -322,6 +323,29 @@ export const updatePrice = async (plan: string, months: number, patch: Partial<P
   return error ? ({ error: messageOf(error) } as Failure) : { ok: true };
 };
 export const updateSetting = (key: string, value: unknown) => rpc<void>('pro_admin_set_setting', { p_key: key, p_value: value });
+
+export interface AdminSecurityUser {
+  user_id: string;
+  email: string | null;
+  role: string;
+  blocked: boolean;
+  /** Verified authenticator factors on the account. */
+  factors: number;
+  last_sign_in_at: string | null;
+  created_at: string;
+}
+
+export const adminSecurityOverview = () => rpc<AdminSecurityUser[]>('pro_admin_security_overview');
+export const adminResetMfa = (userId: string) => rpc<number>('pro_admin_reset_mfa', { p_user: userId });
+export const adminExpireSubscriptions = () => rpc<number>('pro_admin_expire_subscriptions');
+export const clearProviderKey = async (providerId: string) => {
+  const client = licensingClient();
+  if (!client) return { error: 'Cloud project is not connected' } as Failure;
+  const { data, error } = await client.functions.invoke('admin-config', { body: { action: 'clear-key', provider_id: providerId } });
+  if (error) return { error: messageOf(error) } as Failure;
+  return data as { ok: boolean };
+};
+
 export const setProviderKey = async (providerId: string, secret: string) => {
   const client = licensingClient();
   if (!client) return { error: 'Cloud project is not connected' } as Failure;

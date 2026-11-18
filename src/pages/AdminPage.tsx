@@ -9,6 +9,8 @@ import { Tabs } from '@/components/ui/Tabs';
 import { GIcon } from '@/components/ui/GoogleIcon';
 import { Kpi } from '@/components/ui/Kpi';
 import { Spinner } from '@/components/ui/Misc';
+import { AdminSecurity } from '@/components/pro/AdminSecurity';
+import { bdt, bdtUnit } from '@/lib/format';
 import { useToast } from '@/state/ToastState';
 import {
   adminAdjustCredits,
@@ -22,6 +24,7 @@ import {
   adminSettings,
   adminStats,
   adminUsers,
+  clearProviderKey,
   isFailure,
   setProviderKey,
   termLabel,
@@ -37,7 +40,7 @@ import {
   type Setting,
 } from '@/lib/pro/api';
 
-type TabId = 'overview' | 'orders' | 'users' | 'plans' | 'providers' | 'settings';
+type TabId = 'overview' | 'orders' | 'users' | 'plans' | 'providers' | 'settings' | 'security';
 
 interface AdminOrder extends Order {
   user_id: string;
@@ -115,6 +118,7 @@ export function AdminPage() {
             { id: 'users', label: 'Users' },
             { id: 'plans', label: 'Plans' },
             { id: 'providers', label: 'Providers' },
+            { id: 'security', label: 'Security' },
             { id: 'settings', label: 'Settings' },
           ]}
         />
@@ -148,6 +152,9 @@ export function AdminPage() {
               onToast={(message, detail) => toast.success(message, detail)}
             />
           )}
+          {tab === 'security' && (
+            <AdminSecurity settings={settings} onChange={load} onSaved={(message, detail) => toast.success(message, detail)} />
+          )}
           {tab === 'settings' && <Settings settings={settings} onChange={load} onToast={(message) => toast.success(message)} />}
         </div>
       )}
@@ -162,8 +169,8 @@ function Overview({ stats, audit }: { stats: AdminStats; audit: Array<{ id: numb
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi label="Revenue" value={`৳${stats.revenue_bdt.toLocaleString()}`} icon="storefront" />
-        <Kpi label="Provider cost" value={`৳${Math.round(stats.api_cost_bdt).toLocaleString()}`} icon="table_chart" />
+        <Kpi label="Revenue" value={bdt(stats.revenue_bdt)} icon="storefront" />
+        <Kpi label="Provider cost" value={bdt(Math.round(stats.api_cost_bdt))} icon="table_chart" />
         <Kpi label="Margin" value={stats.margin_pct == null ? 'n/a' : `${stats.margin_pct}%`} icon="compare" tone={stats.margin_pct && stats.margin_pct > 40 ? 'ok' : 'default'} />
         <Kpi label="Active plans" value={stats.active_subs.toLocaleString()} icon="workspace_premium" />
       </div>
@@ -189,7 +196,7 @@ function Overview({ stats, audit }: { stats: AdminStats; audit: Array<{ id: numb
                   <td className="px-4 py-2 font-medium">{row.model_id ?? 'unknown'}</td>
                   <td className="px-4 py-2 text-right tabular-nums">{row.calls}</td>
                   <td className="px-4 py-2 text-right tabular-nums text-ink-muted">{row.tokens_in + row.tokens_out}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">৳{Math.round(row.cost_usd * fx).toLocaleString()}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{bdt(Math.round(row.cost_usd * fx))}</td>
                 </tr>
               ))}
             </tbody>
@@ -270,7 +277,7 @@ function Orders({ orders, onChange }: { orders: AdminOrder[]; onChange: () => vo
       toast.error('Could not update order', result.error);
       return;
     }
-    toast.success(approve ? 'Order approved' : 'Order rejected', `${order.plan_slug} · ৳${order.amount_bdt}`);
+    toast.success(approve ? 'Order approved' : 'Order rejected', `${order.plan_slug} · ${bdt(order.amount_bdt)}`);
     setNote('');
     onChange();
   };
@@ -290,7 +297,7 @@ function Orders({ orders, onChange }: { orders: AdminOrder[]; onChange: () => vo
             <div key={order.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
               <div className="min-w-0">
                 <p className="text-[0.8125rem] font-medium">
-                  {order.plan_slug} · {termLabel(order.months)} · ৳{order.amount_bdt}
+                  {order.plan_slug} · {termLabel(order.months)} · {bdt(order.amount_bdt)}
                 </p>
                 <p className="text-2xs text-ink-muted">
                   {order.method}
@@ -408,7 +415,7 @@ function Users({
                   )}
                 </td>
                 <td className="px-4 py-2 text-right tabular-nums">{entry.credits}</td>
-                <td className="px-4 py-2 text-right tabular-nums">৳{entry.spent_bdt}</td>
+                <td className="px-4 py-2 text-right tabular-nums">{bdt(entry.spent_bdt)}</td>
                 <td className="px-4 py-2 text-right tabular-nums">{entry.generations}</td>
                 <td className="px-4 py-2 text-right">
                   <Button size="sm" variant="outline" onClick={() => setEditing(entry)}>
@@ -534,6 +541,53 @@ function Plans({ onToast }: { onToast: (message: string) => void }) {
 
 /* ------------------------------------------------------------- providers */
 
+/**
+ * Where each key comes from. Written for someone who has never opened a
+ * provider dashboard before: one link, three steps, the shape of the key.
+ */
+const PROVIDER_HELP: Record<string, { keysUrl: string; blurb: string; steps: string[]; placeholder: string }> = {
+  moonshot: {
+    keysUrl: 'https://platform.moonshot.ai/console/api-keys',
+    blurb: 'Used by the vector and AI generators (Kimi K2.5).',
+    steps: [
+      'Sign in to platform.moonshot.ai with the account you topped up.',
+      'Open Console → API Keys and press "Create API key".',
+      'Name it "Micro Stocker", press create, then copy the value that starts with sk-. It is shown once.',
+    ],
+    placeholder: 'sk-...',
+  },
+  deepseek: {
+    keysUrl: 'https://platform.deepseek.com/api_keys',
+    blurb: 'Used by the DeepSeek vector models (cheapest per image).',
+    steps: [
+      'Sign in to platform.deepseek.com.',
+      'Open API keys → "Create new API key".',
+      'Copy the sk- value now; the dashboard will not show it again.',
+    ],
+    placeholder: 'sk-...',
+  },
+  minimax: {
+    keysUrl: 'https://platform.minimax.io/user-center/basic-information/interface-key',
+    blurb: 'Used by MiniMax M3.1 Flash.',
+    steps: [
+      'Sign in to platform.minimax.io.',
+      'Open User center → Basic information → Interface key.',
+      'Copy the long JWT style key (it contains dots).',
+    ],
+    placeholder: 'eyJhbGciOi...',
+  },
+  openai: {
+    keysUrl: 'https://platform.openai.com/api-keys',
+    blurb: 'Used by OpenAI Image (gpt-image-1) in the JPG studio.',
+    steps: [
+      'Sign in to platform.openai.com with a funded account.',
+      'Open API keys → "Create new secret key".',
+      'Copy the sk- value straight away, OpenAI hides it after you close the dialog.',
+    ],
+    placeholder: 'sk-...',
+  },
+};
+
 function Providers({
   providers,
   models,
@@ -548,34 +602,79 @@ function Providers({
   const toast = useToast();
   const [keyFor, setKeyFor] = useState<AiProvider | null>(null);
   const [secret, setSecret] = useState('');
+  const [reveal, setReveal] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [keyError, setKeyError] = useState('');
+
+  const help = keyFor ? PROVIDER_HELP[keyFor.id] : undefined;
 
   const saveKey = async () => {
     if (!keyFor) return;
+    setKeyError('');
     setBusy(true);
     const result = await setProviderKey(keyFor.id, secret.trim());
     setBusy(false);
     if (isFailure(result)) {
-      toast.error('Could not save key', result.error);
+      setKeyError(result.error);
       return;
     }
-    onToast('Key stored', `Only a hint is shown: ${result.key_hint}`);
+    onToast('Key stored', `Only the hint is kept in view: ${result.key_hint}`);
     setSecret('');
+    setKeyFor(null);
+    setReveal(false);
+    onChange();
+  };
+
+  const removeKey = async () => {
+    if (!keyFor) return;
+    setRemoving(true);
+    const result = await clearProviderKey(keyFor.id);
+    setRemoving(false);
+    if (isFailure(result)) {
+      toast.error('Could not remove the key', result.error);
+      return;
+    }
+    onToast(`${keyFor.label} key removed`, 'Generations that need it will stop until a new key is stored.');
     setKeyFor(null);
     onChange();
   };
 
+  const ready = providers.filter((provider) => provider.key_hint && provider.enabled).length;
+
   return (
     <div className="space-y-4">
       <Card flush>
-        <CardHeader title="Providers" subtitle="Keys are stored server side and never returned to the browser." icon={<GIcon name="key" size={18} />} />
+        <CardHeader
+          title="Provider keys"
+          subtitle={`${ready} of ${providers.length} providers ready · keys live in the server, never in the browser`}
+          icon={<GIcon name="key" size={18} />}
+        />
         <div className="divide-y divide-line border-t border-line">
           {providers.map((provider) => (
             <div key={provider.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-              <div>
-                <p className="text-[0.8125rem] font-medium">{provider.label}</p>
-                <p className="text-2xs text-ink-muted">
-                  {provider.base_url} · {provider.key_hint ? `key ${provider.key_hint}` : 'no key yet'}
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-[0.8125rem] font-medium">{provider.label}</p>
+                  {provider.key_hint ? (
+                    <Badge tone="ok" size="sm">
+                      Key stored
+                    </Badge>
+                  ) : (
+                    <Badge tone="warn" size="sm">
+                      No key
+                    </Badge>
+                  )}
+                  {!provider.enabled && (
+                    <Badge tone="neutral" size="sm">
+                      disabled
+                    </Badge>
+                  )}
+                </div>
+                <p className="truncate text-2xs text-ink-muted">
+                  {PROVIDER_HELP[provider.id]?.blurb ?? provider.base_url}
+                  {provider.key_hint ? ` · ${provider.key_hint}` : ''}
+                  {provider.key_updated_at ? ` · updated ${new Date(provider.key_updated_at).toLocaleDateString()}` : ''}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -589,7 +688,7 @@ function Providers({
                   }}
                 />
                 <Button size="sm" variant="outline" onClick={() => setKeyFor(provider)} icon={<GIcon name="key" size={16} />}>
-                  Set key
+                  {provider.key_hint ? 'Replace key' : 'Add key'}
                 </Button>
               </div>
             </div>
@@ -605,8 +704,8 @@ function Providers({
               <tr>
                 <th className="px-4 py-2 text-left font-semibold">Model</th>
                 <th className="px-4 py-2 text-left font-semibold">Kind</th>
-                <th className="px-4 py-2 text-left font-semibold">৳ / 1M in</th>
-                <th className="px-4 py-2 text-left font-semibold">৳ / 1M out</th>
+                <th className="px-4 py-2 text-left font-semibold">{bdtUnit()} / 1M in</th>
+                <th className="px-4 py-2 text-left font-semibold">{bdtUnit()} / 1M out</th>
                 <th className="px-4 py-2 text-left font-semibold">Enabled</th>
               </tr>
             </thead>
@@ -643,14 +742,80 @@ function Providers({
       </Card>
 
       {keyFor && (
-        <Modal open onClose={() => setKeyFor(null)} title={`${keyFor.label} key`} description="The value is written on the server and never returned." size="sm">
+        <Modal
+          open
+          onClose={() => {
+            setKeyFor(null);
+            setSecret('');
+            setKeyError('');
+            setReveal(false);
+          }}
+          title={`${keyFor.label} API key`}
+          description="Paste once, then the value is encrypted at rest on the server and never sent back to a browser."
+          size="sm"
+        >
           <div className="space-y-3">
-            <Field label="API key">
-              <Input value={secret} onChange={(event) => setSecret(event.target.value)} placeholder="sk-..." />
+            <ol className="list-inside list-decimal space-y-1 rounded-[var(--r-control)] border border-line bg-surface-2 px-3 py-2.5 text-[0.8125rem] text-ink">
+              {(help?.steps ?? [
+                'Open the provider dashboard and create an API key.',
+                'Copy the whole value, including any prefix such as sk-.',
+                'Paste it below and press "Store key".',
+              ]).map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+            {help && (
+              <a
+                href={help.keysUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="inline-flex items-center gap-1 text-[0.8125rem] font-semibold text-brand-fg hover:underline"
+              >
+                <GIcon name="open_in_new" size={15} />
+                Open {keyFor.label} API keys
+              </a>
+            )}
+            <Field label="API key" hint="Spaces and quotes are removed automatically.">
+              <Input
+                type={reveal ? 'text' : 'password'}
+                value={secret}
+                onChange={(event) => {
+                  setSecret(event.target.value);
+                  setKeyError('');
+                }}
+                placeholder={help?.placeholder ?? 'sk-...'}
+                autoComplete="off"
+                spellCheck={false}
+                leading={<GIcon name="key" size={18} />}
+                trailing={
+                  <button
+                    type="button"
+                    onClick={() => setReveal((value) => !value)}
+                    className="pointer-events-auto inline-flex size-8 items-center justify-center rounded-[var(--r-xs)] text-ink-muted hover:bg-surface-2 hover:text-ink"
+                    aria-label={reveal ? 'Hide key' : 'Show key'}
+                  >
+                    <GIcon name={reveal ? 'visibility_off' : 'visibility'} size={18} />
+                  </button>
+                }
+              />
             </Field>
-            <Button className="w-full" loading={busy} onClick={() => void saveKey()} icon={<GIcon name="save" size={18} />}>
-              Store key
-            </Button>
+            {keyError && <p className="text-[0.75rem] font-medium text-danger">{keyError}</p>}
+            <p className="text-2xs leading-relaxed text-ink-muted">
+              The key is only used by the server when a customer runs a generator. It is never bundled into the site, so
+              nobody can copy it from the browser.
+            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              {keyFor.key_hint ? (
+                <Button size="sm" variant="ghost" loading={removing} onClick={() => void removeKey()} icon={<GIcon name="delete" size={16} />}>
+                  Remove key
+                </Button>
+              ) : (
+                <span />
+              )}
+              <Button size="sm" loading={busy} disabled={secret.trim().length < 16} onClick={() => void saveKey()} icon={<GIcon name="save" size={16} />}>
+                Store key
+              </Button>
+            </div>
           </div>
         </Modal>
       )}
