@@ -16,7 +16,7 @@ import { useApp } from '@/state/AppState';
 import { useAuth } from '@/state/AuthState';
 import { useLibrary } from '@/state/library';
 import { useToast } from '@/state/ToastState';
-import { CURRENCIES, type CurrencyCode } from '@/lib/format';
+import { bdtUnit, CURRENCIES, type CurrencyCode } from '@/lib/format';
 import { sanitizeBackup } from '@/lib/stock/backup';
 import { desktop } from '@/lib/desktop';
 
@@ -37,7 +37,8 @@ export function SettingsPage() {
     () =>
       CURRENCIES.map((c) => ({
         value: c.code,
-        label: `${c.code} (${c.symbol})`,
+        // Systems without a Bengali font would print "BDT (b)".
+        label: c.code === 'BDT' ? `BDT (${bdtUnit()})` : `${c.code} (${c.symbol})`,
         sublabel: c.name,
         icon: <CircleFlag code={c.flag} size={18} />,
       })),

@@ -244,14 +244,17 @@ export function Topbar({ onOpenMobileNav }: TopbarProps) {
             type="button"
             onClick={() => openAuth('account')}
             className="inline-flex h-9 items-center gap-2 rounded-[var(--r-control)] border border-line bg-surface pr-2 pl-1 text-[0.8125rem] font-medium text-ink transition-colors hover:border-line-strong hover:bg-surface-2"
-            title={user.email}
             aria-haspopup="dialog"
+            title={`${user.displayName} · ${user.email}`}
           >
-            <span className="inline-flex size-7 items-center justify-center rounded-full bg-brand text-[0.75rem] font-bold text-on-brand">
+            <span
+              aria-hidden="true"
+              className="inline-flex size-7 items-center justify-center rounded-full bg-brand text-[0.75rem] font-bold text-on-brand"
+            >
               {user.displayName.slice(0, 1).toUpperCase()}
             </span>
             <span className="hidden max-w-[8rem] truncate md:inline">{user.displayName}</span>
-            <GIcon name="expand_more" size={16} className="hidden text-ink-faint md:inline" />
+            <GIcon name="expand_more" aria-hidden="true" size={16} className="hidden text-ink-faint md:inline" />
           </button>
         ) : (
           <button

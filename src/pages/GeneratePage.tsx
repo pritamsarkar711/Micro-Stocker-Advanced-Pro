@@ -47,7 +47,7 @@ function formatEta(ms: number): string {
 
 export function GeneratePage({ kind }: { kind: GeneratorKind }) {
   const toast = useToast();
-  const { credits, planName } = useLicense();
+  const { credits, planName, costs } = useLicense();
   const [prompt, setPrompt] = useState('');
   const [options, setOptions] = useState<GeneratorOptions>({ ...DEFAULT_OPTIONS, fileKind: kind === 'jpg' ? 'jpg' : kind });
   const [imageKind, setImageKind] = useState<ImageKind>('photo');
@@ -279,7 +279,7 @@ export function GeneratePage({ kind }: { kind: GeneratorKind }) {
               {busy ? 'Generating' : 'Generate'}
             </Button>
             <span className="text-2xs text-ink-muted">
-              {isImage ? `${FORMAT_LABEL[kind]} · 5 credits` : `${FORMAT_LABEL[kind]} · 1 credit`}
+              {`${FORMAT_LABEL[kind]} · ${isImage ? costs.jpg : costs.vector} credits`}
             </span>
           </div>
 

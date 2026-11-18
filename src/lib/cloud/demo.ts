@@ -156,6 +156,8 @@ const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
 interface DemoFactor {
   id: string;
+  /** Owning demo account: one phone factor per account, like the real service. */
+  userId: string;
   friendlyName: string;
   createdAt: string;
   secret: string;
@@ -189,6 +191,13 @@ function readFactors(): DemoFactor[] {
   } catch {
     return [];
   }
+}
+
+/** Factors that belong to the signed in demo account only. */
+function myFactors(): DemoFactor[] {
+  const id = me()?.id;
+  if (!id) return [];
+  return readFactors().filter((factor) => factor.userId === id);
 }
 
 function writeFactors(list: DemoFactor[]): void {
@@ -263,7 +272,7 @@ const demoAuth = {
   },
   mfa: {
     async listFactors() {
-      const factors = readFactors().map((factor) => ({
+      const factors = myFactors().map((factor) => ({
         id: factor.id,
         friendly_name: factor.friendlyName,
         factor_type: 'totp',
@@ -274,8 +283,11 @@ const demoAuth = {
       return { data: { all: factors, totp: factors }, error: null };
     },
     async enroll({ friendlyName }: { friendlyName?: string } = {}) {
+      const owner = me();
+      if (!owner) return { data: null, error: { message: 'Not signed in' } };
       const factor: DemoFactor = {
         id: `factor_${Math.random().toString(36).slice(2, 12)}`,
+        userId: owner.id,
         friendlyName: friendlyName || 'Authentication app',
         createdAt: nowIso(),
         secret: randomSecret(),
@@ -301,7 +313,7 @@ const demoAuth = {
       return { data: { id: `challenge_${Math.random().toString(36).slice(2, 10)}`, expires_at: Date.now() + 300_000 }, error: null };
     },
     async verify({ factorId, code }: { factorId: string; code: string }) {
-      const factor = readFactors().find((item) => item.id === factorId);
+      const factor = myFactors().find((item) => item.id === factorId);
       if (!factor) return { data: null, error: { message: 'Factor not found' } };
 
       // A six digit code is brute forceable in minutes, so the demo client
@@ -330,12 +342,12 @@ const demoAuth = {
       return { data: { access_token: 'demo', token_type: 'bearer' }, error: null };
     },
     async unenroll({ factorId }: { factorId: string }) {
-      writeFactors(readFactors().filter((item) => item.id !== factorId));
+      writeFactors(readFactors().filter((item) => item.id !== factorId || item.userId !== me()?.id));
       demoAal = 'aal1';
       return { data: { id: factorId }, error: null };
     },
     async getAuthenticatorAssuranceLevel() {
-      const hasFactor = Boolean(readFactors().some((factor) => factor.verified));
+      const hasFactor = Boolean(myFactors().some((factor) => factor.verified));
       return {
         data: {
           currentLevel: hasFactor ? demoAal : 'aal1',
@@ -364,7 +376,17 @@ const demoAuth = {
   async signUp({ email, options }: { email: string; options?: { data?: { display_name?: string } } }) {
     const user = ensureUser(email);
     if (options?.data?.display_name) user.display_name = options.data.display_name;
-    return { data: { user: toSupabaseUser(user), session: null }, error: null };
+    // The hosted project has "confirm email" switched off, so a signup returns a
+    // session at once. Mirroring that keeps the preview honest.
+    signedInId = user.id;
+    demoAal = 'aal1';
+    try {
+      localStorage.setItem(SESSION_KEY, user.id);
+    } catch {
+      /* ignore */
+    }
+    emit('SIGNED_IN');
+    return { data: { user: toSupabaseUser(user), session: { user: toSupabaseUser(user) } }, error: null };
   },
   async verifyOtp({ email, token }: { email: string; token: string }) {
     if (!/^\d{6,}$/.test(token)) return { data: null, error: { message: 'Token has expired or is invalid' } };
@@ -622,8 +644,17 @@ function buildDemoClient(): SupabaseClient {
         if (name === 'admin-config') {
           if (!me()?.admin) return { data: null, error: { message: 'not allowed' } };
           const provider = proTables.ai_providers.find((row) => row.id === options.body?.provider_id);
+          if (options.body?.action === 'clear-key') {
+            if (provider) {
+              provider.key_hint = null;
+              provider.key_updated_at = null;
+            }
+            return { data: { ok: true, key_hint: null }, error: null };
+          }
+          const secret = String(options.body?.secret ?? '').trim();
+          if (secret.length < 16) return { data: null, error: { message: 'That key looks too short. Copy the whole value.' } };
           if (provider) {
-            provider.key_hint = `${String(options.body?.secret).slice(0, 4)}...${String(options.body?.secret).slice(-4)}`;
+            provider.key_hint = `${secret.slice(0, 4)}...${secret.slice(-4)}`;
             provider.key_updated_at = new Date().toISOString();
           }
           return { data: { ok: true, key_hint: provider?.key_hint }, error: null };

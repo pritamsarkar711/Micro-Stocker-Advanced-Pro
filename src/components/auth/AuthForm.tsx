@@ -38,6 +38,10 @@ export function AuthForm({
     setPendingEmail,
     clearNotice,
     dismissRecovery,
+    recoveryError,
+    clearRecoveryError,
+    demoRecoveryAvailable,
+    startDemoRecovery,
   } = useAuth();
   const toast = useToast();
 
@@ -123,6 +127,7 @@ export function AuthForm({
       }
       setOtp('');
       toast.success('Two step verification passed');
+      // The account is fully signed in now, so the panel has nothing left to ask.
       onDone?.();
     } finally {
       setBusy(false);
@@ -210,10 +215,14 @@ export function AuthForm({
         setError(result.error ?? 'Could not update the password.');
         return;
       }
-      toast.success('Password updated');
+      toast.success('Password updated', 'You are signed in with the new password.');
       setNewPassword('');
       dismissRecovery();
+      clearRecoveryError();
       setView('signin');
+      // The account is usable again, so close the panel instead of leaving it
+      // open with the old sign in form behind the reset screen.
+      onDone?.();
     } finally {
       setBusy(false);
     }
@@ -318,16 +327,20 @@ export function AuthForm({
       <div className="space-y-4">
         <div>
           <h2 className="text-[1.0625rem] font-bold text-ink">Two step verification</h2>
-          <p className="mt-0.5 text-[0.8125rem] text-ink-muted">Enter the 6 digit code from your authenticator app.</p>
+          <p className="mt-0.5 text-[0.8125rem] text-ink-muted">
+            Enter the 6 digit code from Google Authenticator or any TOTP app. Codes change every 30 seconds; a fresh
+            code is accepted for a minute.
+          </p>
         </div>
         <form onSubmit={handleMfa} className="space-y-3.5">
           <Field label="Code">
             <Input
               value={otp}
               aria-label="Code"
-              onChange={(event) => setOtp(event.target.value)}
+              onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
               inputMode="numeric"
               autoComplete="one-time-code"
+              pattern="[0-9]*"
               maxLength={6}
               placeholder="000000"
               leading={<GIcon name="verified" size={18} />}
@@ -377,6 +390,26 @@ export function AuthForm({
           {infoBox}
           <Button type="submit" block loading={busy}>Send reset link</Button>
         </form>
+        <p className="text-2xs leading-relaxed text-ink-muted">
+          Open the link in the same browser you used to ask for it. Nothing arrived after a few minutes? Check the spam
+          folder, then try again in an hour: the mail service allows two messages per hour.
+        </p>
+        {demoRecoveryAvailable && (
+          <button
+            type="button"
+            onClick={() => {
+              setBusy(true);
+              void startDemoRecovery(email)
+                .then((result) => {
+                  if (!result.ok) setError(result.error ?? 'Could not open the preview link.');
+                })
+                .finally(() => setBusy(false));
+            }}
+            className="text-[0.8125rem] font-semibold text-brand-fg hover:underline"
+          >
+            Preview build: open the reset link
+          </button>
+        )}
         <button type="button" onClick={() => switchView('signin')} className="text-[0.8125rem] text-ink-muted hover:text-ink">
           Back to sign in
         </button>
@@ -391,6 +424,15 @@ export function AuthForm({
           <h2 className="text-[1.0625rem] font-bold text-ink">Choose a new password</h2>
           <p className="mt-0.5 text-[0.8125rem] text-ink-muted">Minimum 8 characters.</p>
         </div>
+        {recoveryError && (
+          <div role="alert" className="flex items-start gap-2.5 rounded-[var(--r-control)] border border-danger/30 bg-danger-soft px-3 py-2.5 text-[0.8125rem] text-danger">
+            <GIcon name="link_off" size={17} className="mt-0.5" />
+            <span className="min-w-0 flex-1">{recoveryError}</span>
+            <button type="button" onClick={clearRecoveryError} aria-label="Dismiss" className="opacity-70 hover:opacity-100">
+              <GIcon name="close" size={16} />
+            </button>
+          </div>
+        )}
         <form onSubmit={handleReset} className="space-y-3.5">
           <Field label="New password">
             <Input
@@ -409,11 +451,21 @@ export function AuthForm({
           {errorBox}
           <Button type="submit" block loading={busy}>Update password</Button>
         </form>
-        {user && (
-          <button type="button" onClick={() => { dismissRecovery(); onDone?.(); }} className="text-[0.8125rem] text-ink-muted hover:text-ink">
-            Cancel
-          </button>
-        )}
+        <p className="text-2xs leading-relaxed text-ink-muted">
+          {user?.email ? `Signed in as ${user.email}. ` : ''}Changing the password signs out your other devices.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            clearRecoveryError();
+            dismissRecovery();
+            if (user) onDone?.();
+            else switchView('signin');
+          }}
+          className="text-[0.8125rem] text-ink-muted hover:text-ink"
+        >
+          Cancel
+        </button>
       </div>
     );
   }

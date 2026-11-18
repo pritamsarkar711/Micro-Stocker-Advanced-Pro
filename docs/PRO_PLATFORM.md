@@ -70,21 +70,26 @@ update public.profiles set role = 'admin' where email = 'you@example.com';
 ```
 
 Then reload the app. `pro_is_admin()` gates every admin RPC, and every change is
-written to `admin_audit`.
+written to `admin_audit`. It also refuses to answer for an administrator whose
+session is below aal2 while their account owns an authenticator, so the console
+inherits two step verification with no extra code. See
+[SECURITY.md](SECURITY.md) for the full model and the admin recovery actions.
 
 ## Pricing, credits and limits
 
 Everything is data, not code:
 
 * `plans` and `plan_prices` — three tiers, one, six and twelve month terms.
-* `app_settings` — `fx_bdt_usd`, `credits` (cost per action), `limits`
+* `app_settings` — `fx_bdt_usd`, `credits` (cost per action), `security`
+  (`require_admin_mfa`), `limits`
   (daily generations, rate limits, prompt length), `payment` (order windows),
   `free_tier` (what an unsubscribed visitor may do).
 * `crypto_assets` — coin, network, address, decimals, USD rate, confirmations.
 * `payment_methods` — bKash and Nagad numbers, instructions.
 
 Margin is visible in the admin console: `pro_admin_stats()` returns revenue in
-BDT, API spend in USD and BDT, and the resulting margin.
+BDT, API spend in USD and BDT, and the resulting margin. The per action prices
+and the arithmetic behind them are in [PRICING.md](PRICING.md).
 
 ## Payments
 

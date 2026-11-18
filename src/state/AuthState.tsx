@@ -5,11 +5,13 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { licensingClient } from '@/lib/cloud/licensing';
+import { demoMode } from '@/lib/cloud/demo';
 
 /** Legacy local-account helpers are retained for migration only. New sessions
  * are authenticated and verified by the centralized licensing service. */
@@ -224,6 +226,12 @@ interface AuthState {
   notice: AuthNotice | null;
   /** True when the user arrived from a password-recovery link. */
   recovery: boolean;
+  /** Set when a recovery link could not be exchanged (wrong browser, expired). */
+  recoveryError: string | null;
+  clearRecoveryError: () => void;
+  /** Preview builds have no inbox, so the demo can open its own reset link. */
+  demoRecoveryAvailable: boolean;
+  startDemoRecovery: (email: string) => Promise<{ ok: boolean; error?: string }>;
   /** Signed in with a password but still needs the authenticator code. */
   mfaRequired: boolean;
   /** Verified authenticator factor on this account, if any. */
@@ -308,6 +316,12 @@ export function friendlyAuthError(raw: string | undefined | null): string {
   return message;
 }
 
+/** Lets the license store reload the moment a second factor is verified. */
+export const ENTITLEMENT_REFRESH_EVENT = 'msap:entitlement-refresh';
+export function notifyEntitlementChanged(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(ENTITLEMENT_REFRESH_EVENT));
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [sessionUser, setSessionUser] = useState<UserSession | null>(null);
@@ -318,6 +332,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [pendingEmail, setPendingEmailState] = useState<string | null>(null);
   const [notice, setNotice] = useState<AuthNotice | null>(null);
   const [recovery, setRecovery] = useState(false);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  /** Timestamp of the last accepted code: token refresh takes a moment. */
+  const mfaGraceRef = useRef(0);
 
   // While the authenticator challenge is pending the app stays signed out, so
   // every gate and route keeps its normal unauthenticated behaviour.
@@ -347,6 +364,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    // Recovery links arrive in three shapes and each needs its own handling:
+    //   ?token_hash=…&type=recovery    works in any browser (template opt-in)
+    //   ?code=…                        PKCE, only the browser that asked for it
+    //   #access_token=…&type=recovery   implicit fallback, parsed by the client
+    let recoveryTimer: number | undefined;
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      const tokenHash = url.searchParams.get('token_hash');
+      const otpType = url.searchParams.get('type');
+      if (tokenHash && (otpType === null || otpType === 'recovery' || otpType === 'email')) {
+        const type = (otpType ?? 'recovery') as 'recovery' | 'email';
+        void client.auth
+          .verifyOtp({ type, token_hash: tokenHash })
+          .then(({ error }) => {
+            ['token_hash', 'type'].forEach((key) => url.searchParams.delete(key));
+            window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+            if (error) setRecoveryError(friendlyAuthError(error.message));
+          });
+      }
+      if (url.searchParams.has('code')) {
+        recoveryTimer = window.setTimeout(() => {
+          if (!active) return;
+          // No session and no recovery event: the code verifier was stored in
+          // another browser, so this link cannot be exchanged here.
+          setRecoveryError(
+            'That reset link belongs to a different browser. Open it on the phone or computer where you asked for it, or send a new link.',
+          );
+          setModalMode('login');
+          setModalOpen(true);
+        }, 5000);
+      }
+    }
+
     const refresh = async () => {
       const revision = ++authRevision;
       const { data, error } = await client.auth.getUser();
@@ -357,6 +407,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           needsMfa = Boolean(
             assurance.data && assurance.data.nextLevel === 'aal2' && assurance.data.currentLevel !== 'aal2',
           );
+          // Right after a code is accepted the token can still read as aal1 for
+          // a moment. Wait once and read again instead of trusting the first
+          // answer, so a real pending challenge is never skipped.
+          if (needsMfa && Date.now() - mfaGraceRef.current < 15_000) {
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+            const again = await client.auth.mfa.getAuthenticatorAssuranceLevel();
+            needsMfa = Boolean(
+              again.data && again.data.nextLevel === 'aal2' && again.data.currentLevel !== 'aal2',
+            );
+          }
         } catch {
           needsMfa = false;
         }
@@ -365,6 +425,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSessionUser(!error && data.user ? toUser(data.user) : null);
         setMfaRequired(needsMfa);
         setReady(true);
+        if (data.user) {
+          window.clearTimeout(recoveryTimer);
+          if (needsMfa) {
+            // A restored session that still has to pass 2FA must say so, even
+            // if the account panel was never opened.
+            setModalMode('login');
+            setModalOpen(true);
+          }
+        }
       }
     };
     void refresh();
@@ -379,8 +448,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else if (event === 'PASSWORD_RECOVERY') {
         ++authRevision;
         if (active) {
+          window.clearTimeout(recoveryTimer);
           setRecovery(true);
+          setRecoveryError(null);
+          setPendingEmailState(null);
+          setMfaRequired(false);
           setReady(true);
+          // The reset form lives in the account panel, so open it for the user
+          // instead of leaving them on a page with no visible next step.
+          setModalMode('login');
+          setModalOpen(true);
           if (session?.user) setSessionUser(toUser(session.user));
         }
       } else if (event !== 'INITIAL_SESSION') {
@@ -392,8 +469,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     return () => {
       active = false;
+      window.clearTimeout(recoveryTimer);
       listener.subscription.unsubscribe();
     };
+  }, []);
+
+  const clearRecoveryError = useCallback(() => setRecoveryError(null), []);
+
+  // Preview builds never receive email, so the demo signs itself in and lets
+  // the reset form be exercised end to end.
+  const startDemoRecovery = useCallback<AuthState['startDemoRecovery']>(async (email) => {
+    const client = licensingClient();
+    if (!client) return { ok: false, error: 'Licensing service unavailable.' };
+    if (!demoMode) return { ok: false, error: 'Open the link from the email instead.' };
+    const clean = email.trim().toLowerCase();
+    if (!clean) return { ok: false, error: 'Enter the email you signed up with.' };
+    const signIn = await client.auth.signInWithPassword({ email: clean, password: 'demo-preview-password' });
+    if (signIn.error) return { ok: false, error: 'No preview account uses that email yet.' };
+    setPendingEmailState(null);
+    setRecovery(true);
+    setRecoveryError(null);
+    setModalMode('login');
+    setModalOpen(true);
+    return { ok: true };
   }, []);
 
   const openAuth = useCallback(
@@ -452,6 +550,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { ok: false, error: 'This build is not connected to the licensing service. Contact the administrator.' };
     }
     const cleanEmail = normalizeEmail(email);
+    // A new sign in always has to prove the second factor, even when it follows
+    // a code that was just accepted on this page.
+    mfaGraceRef.current = 0;
     const { error } = await client.auth.signInWithPassword({ email: cleanEmail, password });
     if (error) {
       const friendly = friendlyAuthError(error.message);
@@ -528,6 +629,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await client.auth.updateUser({ password });
     if (error) return { ok: false, error: friendlyAuthError(error.message) };
     setRecovery(false);
+    setRecoveryError(null);
+    notifyEntitlementChanged();
     return { ok: true };
   }, []);
 
@@ -541,6 +644,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     const client = licensingClient();
+    mfaGraceRef.current = 0;
     if (client) await client.auth.signOut();
     setSessionUser(null);
     setPendingEmailState(null);
@@ -551,6 +655,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOutEverywhere = useCallback<AuthState['signOutEverywhere']>(async () => {
     const client = licensingClient();
     if (!client) return { ok: false, error: 'Licensing service unavailable.' };
+    mfaGraceRef.current = 0;
     const { error } = await client.auth.signOut({ scope: 'global' });
     if (error) return { ok: false, error: friendlyAuthError(error.message) };
     setSessionUser(null);
@@ -573,8 +678,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (reauth.error) return { ok: false, error: 'Current password is incorrect.' };
     const { error } = await client.auth.updateUser({ password: next });
     if (error) return { ok: false, error: friendlyAuthError(error.message) };
+    // Re-authenticating with the password drops the session back to aal1, which
+    // would silently bypass two step verification. Ask for the code again.
+    if (mfaFactor) {
+      setMfaRequired(true);
+      setModalMode('login');
+      setModalOpen(true);
+    }
     return { ok: true };
-  }, [sessionUser?.email]);
+  }, [mfaFactor, sessionUser?.email]);
 
   const refreshMfa = useCallback<AuthState['refreshMfa']>(async () => {
     const client = licensingClient();
@@ -624,7 +736,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const verify = await client.auth.mfa.verify({ factorId, challengeId: challenge.data.id, code: clean });
     if (verify.error) return { ok: false, error: friendlyAuthError(verify.error.message) };
+    mfaGraceRef.current = Date.now();
+    setMfaRequired(false);
     await refreshMfa();
+    notifyEntitlementChanged();
     return { ok: true };
   }, [refreshMfa]);
 
@@ -633,6 +748,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!client) return { ok: false, error: 'Licensing service unavailable.' };
     const clean = code.replace(/\D/g, '');
     if (clean.length !== 6) return { ok: false, error: 'Enter the 6 digit code from the app.' };
+    // Self heal: a stale state can show the challenge after the code was
+    // already accepted, so trust the token when it says aal2.
+    const assurance = await client.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (assurance.data?.currentLevel === 'aal2') {
+      mfaGraceRef.current = Date.now();
+      setMfaRequired(false);
+      notifyEntitlementChanged();
+      return { ok: true };
+    }
     const { data: factors } = await client.auth.mfa.listFactors();
     const factor = factors?.totp?.find((item) => item.status === 'verified');
     if (!factor) {
@@ -645,9 +769,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const verify = await client.auth.mfa.verify({ factorId: factor.id, challengeId: challenge.data.id, code: clean });
     if (verify.error) return { ok: false, error: 'That code is not valid. Try the next one.' };
+    mfaGraceRef.current = Date.now();
     setMfaRequired(false);
     const current = await client.auth.getUser();
     if (!current.error && current.data.user) setSessionUser(toUser(current.data.user));
+    notifyEntitlementChanged();
     return { ok: true };
   }, []);
 
@@ -681,6 +807,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       pendingEmail,
       notice,
       recovery,
+      recoveryError,
+      clearRecoveryError,
+      demoRecoveryAvailable: demoMode,
+      startDemoRecovery,
       mfaRequired,
       mfaFactor,
       openAuth,
@@ -713,6 +843,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       pendingEmail,
       notice,
       recovery,
+      recoveryError,
+      clearRecoveryError,
+      startDemoRecovery,
       mfaRequired,
       mfaFactor,
       openAuth,

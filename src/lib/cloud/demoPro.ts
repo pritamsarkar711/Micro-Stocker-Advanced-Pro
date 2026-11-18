@@ -124,7 +124,7 @@ function price(plan: string, months: number) {
 
 function entitlementFor(caller: DemoCaller | null) {
   if (!caller) {
-    return { active: false, authenticated: false, blocked: false, is_admin: false, credits: 0, plan: null, plan_name: null, tier: 0, expires_at: null, days_left: null, features: { vector: false, jpg: false, premium_upscale: false, video_premium: false, max_export_px: 2000 }, server_time: now() };
+    return { active: false, authenticated: false, blocked: false, is_admin: false, credits: 0, plan: null, plan_name: null, tier: 0, expires_at: null, days_left: null, features: { vector: false, jpg: false, premium_upscale: false, video_premium: false, max_export_px: 2000 }, credit_costs: { vector: 2, jpg: 8, premium_upscale: 2, video_premium: 6 }, limits: { daily_generations: 60, rate_gen_per_minute: 6, max_prompt_chars: 600 }, server_time: now() };
   }
   const sub = subscriptions.find((row) => row.user_id === caller.id && new Date(row.expires_at as string).getTime() > Date.now());
   const plan = sub ? plans.find((row) => row.slug === sub.plan_slug) : null;
@@ -142,6 +142,8 @@ function entitlementFor(caller: DemoCaller | null) {
     features: caller.admin
       ? { vector: true, jpg: true, premium_upscale: true, video_premium: true, max_export_px: 10000 }
       : (plan?.features as Json) ?? { vector: false, jpg: false, premium_upscale: false, video_premium: false },
+    credit_costs: { vector: 2, jpg: 8, premium_upscale: 2, video_premium: 6 },
+    limits: { daily_generations: 60, rate_gen_per_minute: 6, max_prompt_chars: 600 },
     server_time: now(),
   };
 }
@@ -154,6 +156,18 @@ export const generations: DemoRow[] = [
   { id: 'g0000000-0000-4000-8000-000000000001', user_id: DEMO_ALICE_ID, kind: 'eps', prompt: 'alpine sunrise', status: 'done', credits: 1, model_id: 'kimi-k2.5', quality: { pass: true, score: 100 }, created_at: new Date(Date.now() - 3 * 3600_000).toISOString() },
   { id: 'g0000000-0000-4000-8000-000000000002', user_id: DEMO_ALICE_ID, kind: 'jpg', prompt: 'ceramic mug', status: 'failed', credits: 5, model_id: 'gpt-image-1', quality: null, created_at: new Date(Date.now() - 26 * 3600_000).toISOString() },
 ];
+
+/** Verified authenticator factors in the preview build (see demo.ts). */
+function demoFactorCount(userId?: string): number {
+  try {
+    const raw = localStorage.getItem('msap.demo.mfa');
+    const list = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(list)) return 0;
+    return list.filter((item) => item?.verified && (!userId || item.userId === userId)).length;
+  } catch {
+    return 0;
+  }
+}
 
 function record(action: string, caller: DemoCaller | null, target: string | null, detail: unknown) {
   auditLog.unshift({ id: auditId++, actor: caller?.id ?? null, action, target, detail, created_at: now() });
@@ -309,8 +323,57 @@ export const proRpcHandlers: Record<string, (params: Json, caller: DemoCaller | 
     record('credits.adjust', caller, String(params.p_user), { delta: params.p_amount, reason: params.p_reason });
     return ok(walletCredits[String(params.p_user)]);
   },
+  pro_admin_security_overview(_params, caller) {
+    if (!caller?.admin) return fail('not allowed');
+    const factors = demoFactorCount(caller.id);
+    const people = [
+      { user_id: DEMO_ADMIN_ID, email: 'admin@demo.local', role: 'admin', blocked: false },
+      { user_id: DEMO_ALICE_ID, email: 'alice@demo.local', role: 'user', blocked: false },
+      { user_id: 'd0000000-0000-4000-8000-000000000003', email: 'bob@demo.local', role: 'user', blocked: false },
+      { user_id: 'd0000000-0000-4000-8000-000000000004', email: 'carol@demo.local', role: 'user', blocked: true },
+    ];
+    return ok(
+      people.map((person) => ({
+        ...person,
+        factors: person.user_id === caller.id ? factors : 0,
+        last_sign_in_at: now(),
+        created_at: new Date(Date.now() - 30 * DAY).toISOString(),
+      })),
+    );
+  },
+  pro_admin_reset_mfa(params, caller) {
+    if (!caller?.admin) return fail('not allowed');
+    const target = String(params.p_user ?? '');
+    const removed = demoFactorCount(target);
+    if (removed) {
+      try {
+        const raw = localStorage.getItem('msap.demo.mfa');
+        const list = raw ? JSON.parse(raw) : [];
+        localStorage.setItem('msap.demo.mfa', JSON.stringify((Array.isArray(list) ? list : []).filter((item) => item.userId !== target)));
+      } catch {
+        /* ignore */
+      }
+    }
+    record('mfa.reset', caller, String(params.p_user), { removed });
+    return ok(removed);
+  },
+  pro_admin_expire_subscriptions(_params, caller) {
+    if (!caller?.admin) return fail('not allowed');
+    let touched = 0;
+    for (const sub of subscriptions) {
+      if (sub.status === 'active' && new Date(String(sub.expires_at)).getTime() <= Date.now()) {
+        sub.status = 'expired';
+        touched += 1;
+      }
+    }
+    record('subscriptions.expire', caller, 'sweep', { expired: touched });
+    return ok(touched);
+  },
   pro_admin_set_setting(params, caller) {
     if (!caller?.admin) return fail('not allowed');
+    if (params.p_key === 'security' && (params.p_value as Json)?.require_admin_mfa && demoFactorCount(caller.id) === 0) {
+      return fail('enable two step verification on your own account first');
+    }
     const row = appSettings.find((entry) => entry.key === params.p_key);
     if (row) {
       row.value = params.p_value;
@@ -336,7 +399,7 @@ export const proRpcHandlers: Record<string, (params: Json, caller: DemoCaller | 
     if (!entitlement.active) return fail('subscription required');
     const feature = params.p_kind === 'jpg' ? 'jpg' : 'vector';
     if (!(entitlement.features as Json)[feature]) return fail(`plan does not include ${feature}`);
-    const cost = params.p_kind === 'jpg' ? 5 : 1;
+    const cost = params.p_kind === 'jpg' ? 8 : 2;
     if ((walletCredits[caller.id] ?? 0) < cost) return fail('insufficient credits');
     walletCredits[caller.id] = (walletCredits[caller.id] ?? 0) - cost;
     const id = uid();

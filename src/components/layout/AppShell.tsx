@@ -4,6 +4,7 @@ import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { MobileTabBar } from './MobileTabBar';
 import { AuthModal } from '@/components/auth/AuthModal';
+import { SecurityBanner } from '@/components/auth/SecurityBanner';
 import { desktop } from '@/lib/desktop';
 
 export function AppShell({ children }: { children?: ReactNode }) {
@@ -41,7 +42,10 @@ export function AppShell({ children }: { children?: ReactNode }) {
           id="workspace-main"
           className="workspace flex-1 overflow-x-hidden overflow-y-auto px-3.5 pt-4 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] sm:px-5 sm:pt-5 lg:px-6 lg:pt-6 lg:pb-8 xl:px-8"
         >
-          <div className="workspace animate-in-fast">{children ?? <Outlet />}</div>
+          <div className="workspace animate-in-fast">
+            <SecurityBanner />
+            {children ?? <Outlet />}
+          </div>
         </main>
         <MobileTabBar />
       </div>
