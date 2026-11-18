@@ -285,23 +285,24 @@ export function OverviewPage() {
           }
         />
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 sm:gap-2.5 lg:grid-cols-3">
+        <div className="divide-y divide-line overflow-hidden rounded-[var(--r-control)] border border-line bg-surface sm:grid sm:grid-cols-2 sm:gap-2.5 sm:divide-y-0 sm:overflow-visible sm:border-0 sm:bg-transparent lg:grid-cols-3">
           {readiness.map(({ platform, ready }) => (
             <Link
               key={platform.id}
               to="/export"
-              className="flex items-center gap-3 rounded-[var(--r-control)] border border-line bg-surface p-3 hover:border-line-strong hover:bg-surface-2/50"
+              className="flex items-center gap-3 px-3 py-2.5 active:bg-surface-2 sm:rounded-[var(--r-control)] sm:border sm:border-line sm:bg-surface sm:p-3 sm:hover:border-line-strong sm:hover:bg-surface-2/50"
             >
               <PlatformLogo id={platform.id} size={28} />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-xs font-semibold text-ink">{platform.name}</div>
-                <div className="truncate text-2xs text-ink-muted">
+                <div className="text-[0.8125rem] leading-snug font-semibold text-ink">{platform.name}</div>
+                <div className="mt-0.5 truncate text-2xs text-ink-muted">
                   {platform.minMP > 0 ? `${platform.minMP} MP min` : 'Vector'} · {platform.keywords.min} to {platform.keywords.max} tags
                 </div>
               </div>
               <Badge tone={ready > 0 && ready === items.length ? 'brand' : 'neutral'}>
                 {items.length ? `${ready}/${items.length}` : platform.csv ? 'CSV' : 'XMP'}
               </Badge>
+              <GIcon name="chevron_right" size={16} className="text-ink-faint sm:hidden" />
             </Link>
           ))}
         </div>

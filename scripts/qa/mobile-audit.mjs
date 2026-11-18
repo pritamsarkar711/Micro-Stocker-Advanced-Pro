@@ -96,7 +96,18 @@ for (const device of DEVICES) {
           if (!ancestorScrolls) escaped++;
         }
         const interactive = el.closest('button, a, input, select, textarea, [role="button"]');
-        if (interactive === el && (rect.height < 32 || rect.width < 32) && style.display !== 'inline') {
+        // A checkbox or radio inside a label is tapped through that label, so
+        // the label's box is the real target, not the 20 px glyph.
+        const labellingParent =
+          el.tagName === 'INPUT' && (el.type === 'checkbox' || el.type === 'radio')
+            ? el.closest('label')
+            : null;
+        const targetRect = labellingParent ? labellingParent.getBoundingClientRect() : rect;
+        if (
+          interactive === el &&
+          (targetRect.height < 32 || targetRect.width < 32) &&
+          style.display !== 'inline'
+        ) {
           if (small < 5) problems.push(`small tap target: ${describe(el)} ${Math.round(rect.width)}x${Math.round(rect.height)}`);
           small++;
         }

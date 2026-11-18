@@ -92,9 +92,28 @@ export function AuthForm({
     if (next !== 'verify') setOtp('');
   }
 
+  /** Inline validation, so a phone never shows a native bubble instead. */
+  function validateCredentials(): boolean {
+    const trimmed = email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(trimmed)) {
+      setError('Enter a valid email address.');
+      return false;
+    }
+    if (!password) {
+      setError('Enter your password.');
+      return false;
+    }
+    if (view === 'create' && password.length < 8) {
+      setError('Use at least 8 characters for the password.');
+      return false;
+    }
+    return true;
+  }
+
   async function handleSignIn(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    if (!validateCredentials()) return;
     setBusy(true);
     try {
       const result = await login(email, password);
@@ -137,6 +156,7 @@ export function AuthForm({
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    if (!validateCredentials()) return;
     setBusy(true);
     try {
       const result = await register(email, password, displayName);
@@ -373,7 +393,7 @@ export function AuthForm({
           <h2 className="text-[1.0625rem] font-bold text-ink">Reset password</h2>
           <p className="mt-0.5 text-[0.8125rem] text-ink-muted">We will email you a secure reset link.</p>
         </div>
-        <form onSubmit={handleForgot} className="space-y-3.5">
+        <form onSubmit={handleForgot} noValidate className="space-y-3.5">
           <Field label="Email">
             <Input
               type="email"
@@ -487,7 +507,7 @@ export function AuthForm({
             aria-selected={view === tab.id}
             onClick={() => switchView(tab.id)}
             className={clsx(
-              'inline-flex h-9 items-center justify-center gap-2 rounded-[var(--r-chip)] text-[0.8125rem] font-semibold transition-colors',
+              'inline-flex h-10 items-center justify-center gap-2 rounded-[var(--r-chip)] text-[0.8125rem] font-semibold transition-colors sm:h-9',
               view === tab.id ? 'bg-surface text-ink shadow-[var(--elev-1)]' : 'text-ink-muted hover:text-ink',
             )}
           >
@@ -497,7 +517,7 @@ export function AuthForm({
         ))}
       </div>
 
-      <form onSubmit={view === 'create' ? handleCreate : handleSignIn} className="space-y-3.5">
+      <form onSubmit={view === 'create' ? handleCreate : handleSignIn} noValidate className="space-y-3.5">
         {view === 'create' && (
           <Field label="Name" hint="Optional">
             <Input
@@ -560,7 +580,7 @@ export function AuthForm({
           loading={busy}
           icon={<GIcon name={view === 'create' ? 'person_add' : 'login'} size={18} />}
         >
-          {view === 'create' ? 'Register and sign in' : 'Sign in'}
+          {view === 'create' ? 'Create account' : 'Sign in'}
         </Button>
       </form>
 

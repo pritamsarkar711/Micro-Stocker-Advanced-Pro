@@ -14,7 +14,7 @@ export function MobileTabBar({ onOpenMore }: { onOpenMore: () => void }) {
   return (
     <nav
       aria-label="Quick navigation"
-      className="fixed inset-x-0 bottom-0 z-30 flex h-[calc(3.5rem+env(safe-area-inset-bottom,0px))] items-stretch justify-around border-t border-line bg-surface/95 px-0.5 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-6px_20px_-14px_rgb(0_0_0/0.35)] backdrop-blur-md lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 flex h-[calc(var(--tabbar-h)+env(safe-area-inset-bottom,0px))] items-stretch justify-around border-t border-line bg-surface/95 px-0.5 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-6px_20px_-14px_rgb(0_0_0/0.35)] backdrop-blur-md lg:hidden"
     >
       {tabs.map((tab) => (
         <NavLink

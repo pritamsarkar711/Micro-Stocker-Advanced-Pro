@@ -182,7 +182,7 @@ function Overview({ stats, audit }: { stats: AdminStats; audit: Array<{ id: numb
         <Kpi label="Active plans" value={stats.active_subs.toLocaleString()} icon="workspace_premium" />
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <Card flush>
           <CardHeader title="Spend by model" subtitle={`Last ${stats.window_days} days`} icon={<GIcon name="memory" size={18} />} />
           <div className="overflow-x-auto">
@@ -887,7 +887,7 @@ function Providers({
                 placeholder="Gemini 5.3 Flash"
               />
             </Field>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Kind">
                 <Select
                   value={modelDraft.kind}
@@ -1085,7 +1085,7 @@ function Payments({ onToast }: { onToast: (message: string) => void }) {
         <p>Use wallets you control. Crypto payments are checked on chain every five minutes.</p>
       </div>
 
-      <div className="grid gap-3 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
         {assets.map((asset) => {
           const draft = drafts[asset.id] ?? {};
           const value = (key: keyof CryptoAsset) => String(draft[key] ?? asset[key] ?? '');
@@ -1112,7 +1112,7 @@ function Payments({ onToast }: { onToast: (message: string) => void }) {
                 />
               </Field>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label="Token contract" hint={asset.contract ? undefined : 'native coin'}>
                   <Input
                     value={value('contract')}
@@ -1185,7 +1185,7 @@ function Settings({
   };
 
   return (
-    <div className="grid gap-3 md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       {settings.map((setting) => (
         <Card key={setting.key} className="flex flex-col">
           <CardHeader title={setting.label || setting.key} subtitle={setting.key} icon={<GIcon name="tune" size={18} />} />

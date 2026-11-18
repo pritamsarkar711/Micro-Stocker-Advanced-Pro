@@ -3,7 +3,6 @@ import { GIcon } from '@/components/ui/GoogleIcon';
 import { Logo } from '@/components/layout/Logo';
 import { AuthForm } from '@/components/auth/AuthForm';
 import { useAuth } from '@/state/AuthState';
-import { licenseConfigured } from '@/lib/cloud/licensing';
 import { demoMode } from '@/lib/cloud/demo';
 import { launch } from '@/lib/launch';
 import { SplashScreen } from './SplashScreen';
@@ -15,13 +14,17 @@ import { Onboarding } from './Onboarding';
  * screen rather than a dialog because on a phone a modal over an unloaded
  * dashboard has nothing to sit on.
  */
-export function LaunchAuth({ onBack, onGuest }: { onBack: () => void; onGuest?: () => void }) {
+export function LaunchAuth({ onBack, canGoBack = true }: { onBack: () => void; canGoBack?: boolean }) {
   return (
     <div className="launch-screen flex h-dvh w-full flex-col bg-bg">
       <div className="flex items-center justify-between px-5 pt-[calc(0.75rem+env(safe-area-inset-top,0px))]">
-        <button type="button" onClick={onBack} className="launch-icon-button" aria-label="Back to the tour">
-          <GIcon name="arrow_forward" size={20} className="rotate-180" />
-        </button>
+        {canGoBack ? (
+          <button type="button" onClick={onBack} className="launch-icon-button" aria-label="Back to the tour">
+            <GIcon name="arrow_forward" size={20} className="rotate-180" />
+          </button>
+        ) : (
+          <span className="size-11" aria-hidden="true" />
+        )}
         <Logo size={26} />
       </div>
 
@@ -43,12 +46,6 @@ export function LaunchAuth({ onBack, onGuest }: { onBack: () => void; onGuest?: 
             8 characters minimum · encrypted in transit
           </p>
 
-          {onGuest && !licenseConfigured && (
-            <button type="button" onClick={onGuest} className="launch-secondary mt-3">
-              Continue without an account
-            </button>
-          )}
-
           {demoMode && (
             <p className="mt-4 rounded-[var(--r-control)] border border-line bg-surface-2 px-3 py-2 text-2xs leading-relaxed text-ink-muted">
               Preview build: any email with an 8 character password works. Use{' '}
@@ -63,16 +60,11 @@ export function LaunchAuth({ onBack, onGuest }: { onBack: () => void; onGuest?: 
 
 type Stage = 'splash' | 'welcome' | 'tour' | 'auth';
 
-export function LaunchFlow({ onDone }: { onDone: () => void }) {
+export function LaunchFlow({ onDone, resumeAtAuth = false }: { onDone: () => void; resumeAtAuth?: boolean }) {
   const { user } = useAuth();
-  const [stage, setStage] = useState<Stage>('splash');
+  // A signed-out session lands straight on the form; a cold start sees the logo.
+  const [stage, setStage] = useState<Stage>(resumeAtAuth ? 'auth' : 'splash');
   const [done, setDone] = useState(false);
-
-  const enterApp = () => {
-    launch.complete();
-    setDone(true);
-    onDone();
-  };
 
   // Signing in or registering anywhere inside the flow finishes it.
   useEffect(() => {
@@ -117,9 +109,13 @@ export function LaunchFlow({ onDone }: { onDone: () => void }) {
           setStage('auth');
         }}
         onBack={() => setStage('welcome')}
+        onSignIn={() => {
+          launch.markTourSeen();
+          setStage('auth');
+        }}
       />
     );
   }
 
-  return <LaunchAuth onBack={() => setStage('tour')} onGuest={enterApp} />;
+  return <LaunchAuth onBack={() => setStage('tour')} canGoBack={!resumeAtAuth} />;
 }

@@ -332,16 +332,27 @@ export function QualityPage() {
             e.preventDefault();
             if (e.dataTransfer.files?.length) void addFiles(e.dataTransfer.files);
           }}
+          role="button"
+          tabIndex={0}
           onClick={() => fileRef.current?.click()}
-          className="flex min-h-[22rem] cursor-pointer flex-col items-center justify-center gap-4 rounded-[var(--r-card)] border border-dashed border-line-strong bg-surface px-6 py-14 text-center transition-colors hover:border-brand hover:bg-brand-soft/30"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') fileRef.current?.click();
+          }}
+          aria-label="Add files to check"
+          className="flex min-h-[16rem] cursor-pointer flex-col items-center justify-center gap-3 rounded-[var(--r-card)] border border-dashed border-line-strong bg-surface px-5 py-10 text-center transition-colors hover:border-brand hover:bg-brand-soft/30 sm:min-h-[22rem] sm:py-14"
         >
-          <span className="inline-flex size-12 items-center justify-center rounded-[var(--r-card)] bg-brand-soft text-brand">
-            <GIcon name="fact_check" size={26} />
+          <span className="inline-flex size-14 items-center justify-center rounded-[var(--r-card)] bg-brand-soft text-brand">
+            <GIcon name="fact_check" size={28} />
           </span>
           <div>
-            <div className="text-[0.9375rem] font-semibold text-ink">Drop files</div>
-            <div className="mt-1 text-[0.8125rem] text-ink-muted">JPG, PNG, WebP, AVIF, SVG, EPS</div>
+            <div className="text-[0.9375rem] font-semibold text-ink">Tap to add files</div>
+            <div className="mt-1 max-w-[20rem] text-[0.8125rem] leading-relaxed text-ink-muted">
+              JPG, PNG, WebP, AVIF, SVG, EPS. Checks sharpness, exposure and stock-eligibility.
+            </div>
           </div>
+          <Button size="sm" variant="primary" className="mt-1 w-full max-w-[14rem] sm:w-auto" icon={<GIcon name="upload_file" size={15} />}>
+            Browse files
+          </Button>
         </div>
       ) : (
         <>

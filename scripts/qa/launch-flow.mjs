@@ -35,6 +35,7 @@ const shot = async (name) => page.screenshot({ path: path.join(out, `${name}.png
 
 await page.waitForTimeout(300);
 checks.push(`splash visible: ${await page.getByText('Contributor studio').first().isVisible()}`);
+checks.push(`dashboard not mounted during launch: ${(await page.locator('#workspace-main').count()) === 0}`);
 await shot('01-splash');
 
 await page.getByRole('button', { name: 'Get started' }).waitFor({ timeout: 6000 });
@@ -56,8 +57,10 @@ await page.waitForTimeout(300);
 checks.push(`tour step 3: ${await page.getByText('Upscale, cut out and convert on the phone').isVisible()}`);
 await shot('05-tour-3');
 
-await page.getByRole('button', { name: 'Create an account' }).click();
-await page.waitForTimeout(350);
+// The tour's own sign-in shortcut for people who already have an account.
+checks.push(`tour sign-in shortcut: ${await page.getByRole('button', { name: 'I already have an account' }).isVisible()}`);
+await page.getByRole('button', { name: 'I already have an account' }).click();
+await page.waitForTimeout(400);
 checks.push(`auth screen: ${await page.getByRole('tab', { name: 'Create account' }).isVisible()}`);
 await shot('06-auth');
 
@@ -66,9 +69,11 @@ await page.waitForTimeout(200);
 await page.getByLabel('Email').first().fill('newuser@demo.local');
 await page.getByLabel('Password', { exact: true }).fill('supersecret1');
 await shot('07-register-filled');
-await page.getByRole('button', { name: 'Register and sign in' }).click();
+await page.getByRole('button', { name: 'Create account' }).click();
 
-await page.getByRole('heading', { name: 'Overview' }).waitFor({ timeout: 12000 });
+// The phone layout hides the page h1, so the app bar title is the proof that
+// the dashboard, not the launch flow, is on screen.
+await page.locator('header').getByText('Overview', { exact: true }).waitFor({ timeout: 12000 });
 checks.push('dashboard reached after registration: true');
 checks.push(`launch flag stored: ${await page.evaluate(() => localStorage.getItem('msap.launch.done'))}`);
 await page.waitForTimeout(400);
@@ -77,7 +82,13 @@ await shot('08-dashboard');
 // A second cold start must not repeat the tour.
 await page.reload({ waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(2600);
-checks.push(`second start skips the tour: ${await page.getByRole('heading', { name: 'Overview' }).isVisible().catch(() => false)}`);
+checks.push(
+  `second start skips the tour: ${await page
+    .locator('header')
+    .getByText('Overview', { exact: true })
+    .isVisible()
+    .catch(() => false)}`,
+);
 await shot('09-second-start');
 
 console.log(checks.join('\n'));

@@ -38,10 +38,12 @@ export function Onboarding({
   onFinish,
   onSkip,
   onBack,
+  onSignIn,
 }: {
   onFinish: () => void;
   onSkip: () => void;
   onBack: () => void;
+  onSignIn?: () => void;
 }) {
   const [index, setIndex] = useState(0);
   const slide = SLIDES[index];
@@ -116,6 +118,11 @@ export function Onboarding({
           {last ? 'Create an account' : 'Next'}
           <GIcon name={last ? 'person_add' : 'arrow_forward'} size={18} />
         </button>
+        {last && onSignIn && (
+          <button type="button" onClick={onSignIn} className="launch-secondary mt-2.5 w-full">
+            I already have an account
+          </button>
+        )}
       </div>
     </div>
   );

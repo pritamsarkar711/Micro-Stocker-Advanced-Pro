@@ -192,6 +192,7 @@
   --rail-w: 264px;
   --rail-w-collapsed: 76px;
   --topbar-h: 60px;
+  --tabbar-h: 3.5rem;
 }
 
 .dark {
@@ -503,7 +504,7 @@ html.theme-switching *::after {
 
   .grid-auto-fit {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15.5rem), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
   }
 
   .grid-auto-fill {
@@ -867,6 +868,11 @@ html.reduce-motion *::after {
   }
 
   /* A range slider paints a 4 px track but still needs a 44 px thumb lane. */
+  /* The checkbox itself stays small, but its label is the real target. */
+  label:has(> input[type='checkbox']),
+  label:has(> input[type='radio']) {
+    min-height: 2.75rem;
+  }
   input[type='range'] {
     min-height: 2.5rem;
   }
@@ -915,13 +921,38 @@ html.reduce-motion *::after {
   }
 }
 
+/* The native search clear button renders as a stray blue glyph in our palette;
+   the sheet draws its own clear button instead. */
+input[type='search']::-webkit-search-cancel-button,
+input[type='search']::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 /* Landscape phones: the tab bar becomes a slim rail so the canvas keeps height. */
+/* The native search clear button renders as a stray blue glyph in our palette;
+   the sheet draws its own clear button instead. */
+input[type='search']::-webkit-search-cancel-button,
+input[type='search']::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Landscape phones: the bar gets shorter but keeps its labels, because there is
+   plenty of width and none of height. */
 @media (max-width: 1023.98px) and (orientation: landscape) and (max-height: 480px) {
-  nav[aria-label='Quick navigation'] {
-    height: calc(3rem + env(safe-area-inset-bottom, 0px));
+  :root {
+    --tabbar-h: 2.875rem;
   }
-  nav[aria-label='Quick navigation'] span:last-child {
-    display: none;
+  nav[aria-label='Quick navigation'] {
+    height: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
+  }
+  nav[aria-label='Quick navigation'] a,
+  nav[aria-label='Quick navigation'] button {
+    font-size: 0.5625rem;
+  }
+  nav[aria-label='Quick navigation'] span:first-child {
+    height: 1.375rem;
   }
 }
 
@@ -937,5 +968,21 @@ html.reduce-motion *::after {
 .tool-strip {
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
-  mask-image: linear-gradient(to right, transparent 0, #000 10px, #000 calc(100% - 18px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 20px), transparent 100%);
+}
+
+@media (max-width: 639.98px) {
+  .tool-strip {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 0.125rem;
+  }
+  .tool-strip::-webkit-scrollbar {
+    display: none;
+  }
+  .tool-strip > * {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
 }

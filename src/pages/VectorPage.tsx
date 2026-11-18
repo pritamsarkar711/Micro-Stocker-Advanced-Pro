@@ -1676,7 +1676,7 @@ export function VectorPage() {
           value={docName}
           onChange={(event) => setDocName(event.target.value)}
           aria-label="Artwork name"
-          className="hidden h-8 min-w-0 flex-1 rounded-[var(--r-control)] border border-transparent px-2 text-[0.8125rem] font-medium text-ink hover:border-line focus:border-brand focus:outline-none sm:block sm:max-w-[18rem]"
+          className="hidden h-10 min-w-0 flex-1 rounded-[var(--r-control)] border border-transparent px-2 text-[0.8125rem] font-medium text-ink hover:border-line focus:border-brand focus:outline-none sm:block sm:min-w-[9rem] sm:max-w-[18rem] lg:h-8"
         />
 
         <div className="ml-auto flex w-full items-center justify-between gap-1 sm:w-auto sm:justify-end">

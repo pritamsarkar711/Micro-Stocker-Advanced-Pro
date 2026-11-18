@@ -37,7 +37,14 @@ export function Modal({ open, onClose, title, description, children, footer, siz
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
+    // A touch user did not come here with a keyboard, and focusing the close
+    // button paints a focus ring that reads as a pressed state. Focus the panel
+    // instead; keyboard and mouse users still land on the first control.
     const timer = setTimeout(() => {
+      if (window.matchMedia('(pointer: coarse)').matches) {
+        panelRef.current?.focus();
+        return;
+      }
       const focusable = panelRef.current?.querySelector<HTMLElement>(
         'input, select, textarea, button, [tabindex]:not([tabindex="-1"])',
       );
@@ -62,11 +69,12 @@ export function Modal({ open, onClose, title, description, children, footer, siz
       />
       <div
         ref={panelRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={typeof title === 'string' ? title : 'Dialog'}
         className={clsx(
-          'relative flex w-full flex-col overflow-hidden border border-line bg-surface shadow-[var(--shadow-pop)]',
+          'relative flex w-full flex-col overflow-hidden border border-line bg-surface shadow-[var(--shadow-pop)] outline-none',
           'rounded-t-[8px] sm:r-dialog',
           'max-h-[92dvh] sm:max-h-[85dvh]',
           SIZES[size],

@@ -172,7 +172,7 @@ export function GeneratePage({ kind }: { kind: GeneratorKind }) {
       />
 
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.18fr)]">
-        <Card className="space-y-3.5 max-sm:pb-24">
+        <Card className="space-y-3.5 max-md:pb-24">
           <Field label="Idea" hint={`${prompt.length}/600`}>
             <Textarea
               value={prompt}

@@ -183,7 +183,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
 
   if (mobileOpen) {
     return (
-      <div className="fixed inset-0 z-50 flex lg:hidden">
+      <div className="fixed inset-0 z-50 flex lg:hidden" role="dialog" aria-modal="true" aria-label="Main navigation">
         <div className="fixed inset-0 bg-black/55 backdrop-blur-[2px]" onClick={onCloseMobile} aria-hidden="true" />
         <div className="relative z-10 h-full animate-in-fast pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)] shadow-[var(--elev-4)]">
           {content}

@@ -142,10 +142,23 @@ function SearchSheet({ onClose }: { onClose: () => void }) {
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search tools, pages or assets"
+            placeholder="Search tools or pages"
             aria-label="Search tools, pages or assets"
-            className="h-11 w-full rounded-[var(--r-control)] border border-line bg-surface-2 pr-3 pl-10 text-[0.875rem] text-ink placeholder:text-ink-faint focus:border-brand focus:bg-surface focus:outline-none"
+            className="h-11 w-full rounded-[var(--r-control)] border border-line bg-surface-2 pr-11 pl-10 text-[0.9375rem] text-ink placeholder:text-ink-faint focus:border-brand focus:bg-surface focus:outline-none"
           />
+          {query && (
+            <button
+              type="button"
+              onClick={() => {
+                setQuery('');
+                inputRef.current?.focus();
+              }}
+              aria-label="Clear search"
+              className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-ink-muted active:text-ink"
+            >
+              <GIcon name="close" size={18} />
+            </button>
+          )}
         </div>
         <button
           type="button"

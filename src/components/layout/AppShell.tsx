@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import clsx from 'clsx';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
@@ -31,6 +32,20 @@ export function AppShell({ children }: { children?: ReactNode }) {
     return () => window.removeEventListener('msap:file-saved', onSaved);
   }, [toast]);
 
+  // Escape closes the open drawer. The hardware back button also works because
+  // the drawer lives in the router: a pop changes the location, and the route
+  // effect below closes the drawer.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mobileOpen]);
+
+  const closeNav = useCallback(() => setMobileOpen(false), []);
+
   // Route changes should always start at the top of the workspace canvas.
   useEffect(() => {
     const main = document.getElementById('workspace-main');
@@ -47,7 +62,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
         Skip to content
       </a>
       <Sidebar />
-      {mobileOpen && <Sidebar mobileOpen onCloseMobile={() => setMobileOpen(false)} />}
+      {mobileOpen && <Sidebar mobileOpen onCloseMobile={closeNav} />}
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <div className="hidden shrink-0 lg:block">
@@ -56,7 +71,10 @@ export function AppShell({ children }: { children?: ReactNode }) {
         <MobileHeader onOpenNav={() => setMobileOpen(true)} />
         <main
           id="workspace-main"
-          className="workspace flex-1 overflow-x-hidden overflow-y-auto px-3.5 pt-3 pb-[calc(5.25rem+env(safe-area-inset-bottom,0px))] sm:px-5 sm:pt-4 lg:px-6 lg:pt-6 lg:pb-8 xl:px-8"
+          className={clsx(
+            'workspace flex-1 overflow-x-hidden overflow-y-auto px-3.5 pt-3 pb-[calc(5.25rem+env(safe-area-inset-bottom,0px))] sm:px-5 sm:pt-4 lg:px-6 lg:pt-6 lg:pb-8 xl:px-8',
+            mobileOpen && 'overflow-hidden',
+          )}
         >
           <div className="workspace workspace-enter">
             <SecurityBanner />

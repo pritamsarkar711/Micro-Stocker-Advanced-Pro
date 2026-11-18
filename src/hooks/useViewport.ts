@@ -11,12 +11,14 @@ export const BREAKPOINTS: Record<Breakpoint, number> = {
   '2xl': 1536,
 };
 
+const canMatchMedia = () =>
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function';
+
 export function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(() =>
-    typeof window === 'undefined' ? false : window.matchMedia(query).matches,
-  );
+  const [matches, setMatches] = useState(() => (canMatchMedia() ? window.matchMedia(query).matches : false));
 
   useEffect(() => {
+    if (!canMatchMedia()) return;
     const mql = window.matchMedia(query);
     const onChange = (event: MediaQueryListEvent) => setMatches(event.matches);
     setMatches(mql.matches);

@@ -16,8 +16,8 @@ export function ActionBar({ children, className }: { children: ReactNode; classN
     <div
       className={clsx(
         'z-20 flex items-center gap-2.5 border-t border-line bg-surface px-3.5 py-2.5',
-        'max-sm:fixed max-sm:inset-x-0 max-sm:bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))]',
-        'sm:static sm:border-0 sm:bg-transparent sm:p-0',
+        'max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(var(--tabbar-h)+env(safe-area-inset-bottom,0px))]',
+        'md:static md:border-0 md:bg-transparent md:p-0',
         className,
       )}
     >

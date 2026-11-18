@@ -133,7 +133,7 @@ export function PlatformsPage() {
                 type="button"
                 onClick={() => setOpen(expanded ? null : p.id)}
                 aria-expanded={expanded}
-                className="flex items-center justify-between gap-2 py-1 text-[0.75rem] font-medium text-ink-muted transition-colors hover:text-ink"
+                className="flex min-h-9 w-full items-center justify-between gap-2 py-1 text-[0.75rem] font-medium text-ink-muted transition-colors hover:text-ink max-sm:min-h-11 max-sm:text-[0.8125rem]"
               >
                 <span>{expanded ? 'Hide rules' : 'Rules and formats'}</span>
                 <GIcon name={expanded ? 'keyboard_arrow_up' : 'keyboard_arrow_down'} size={17} />
