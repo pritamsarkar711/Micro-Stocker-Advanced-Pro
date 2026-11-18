@@ -16,6 +16,7 @@ import {
   adminAssets,
   adminUpdateAsset,
   adminUpsertModel,
+  adminUpsertProvider,
   adminAdjustCredits,
   FX_BDT_USD,
   adminAudit,
@@ -634,6 +635,9 @@ function Providers({
     cost_out_per_mtok: 0.3,
   });
   const [savingModel, setSavingModel] = useState(false);
+  const [addingProvider, setAddingProvider] = useState(false);
+  const [providerDraft, setProviderDraft] = useState({ id: '', label: '', base_url: 'https://' });
+  const [savingProvider, setSavingProvider] = useState(false);
 
   const help = keyFor ? PROVIDER_HELP[keyFor.id] : undefined;
 
@@ -677,6 +681,11 @@ function Providers({
           title="Provider keys"
           subtitle={`${ready} of ${providers.length} providers ready · keys live in the server, never in the browser`}
           icon={<GIcon name="key" size={18} />}
+          action={
+            <Button size="sm" variant="outline" onClick={() => setAddingProvider(true)} icon={<GIcon name="add" size={16} />}>
+              Add provider
+            </Button>
+          }
         />
         <div className="divide-y divide-line border-t border-line">
           {providers.map((provider) => (
@@ -777,6 +786,68 @@ function Providers({
           </table>
         </div>
       </Card>
+
+      {addingProvider && (
+        <Modal
+          open
+          onClose={() => setAddingProvider(false)}
+          title="Add a provider"
+          size="sm"
+          description="Any OpenAI-compatible endpoint works. Add its key on this page afterwards."
+        >
+          <div className="space-y-3">
+            <Field label="Provider id" hint="lowercase, used by model rows">
+              <Input
+                value={providerDraft.id}
+                onChange={(event) =>
+                  setProviderDraft((draft) => ({ ...draft, id: event.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') }))
+                }
+                placeholder="tokensbd"
+              />
+            </Field>
+            <Field label="Display name">
+              <Input
+                value={providerDraft.label}
+                onChange={(event) => setProviderDraft((draft) => ({ ...draft, label: event.target.value }))}
+                placeholder="Tokens.bd"
+              />
+            </Field>
+            <Field label="Base URL" hint="the /v1 root of the API">
+              <Input
+                value={providerDraft.base_url}
+                onChange={(event) => setProviderDraft((draft) => ({ ...draft, base_url: event.target.value.trim() }))}
+                placeholder="https://tokens.bd/v1"
+              />
+            </Field>
+            <Button
+              className="w-full"
+              loading={savingProvider}
+              onClick={() => {
+                setSavingProvider(true);
+                void adminUpsertProvider({
+                  id: providerDraft.id,
+                  label: providerDraft.label || providerDraft.id,
+                  base_url: providerDraft.base_url,
+                  enabled: true,
+                } as Partial<AiProvider> & { id: string; base_url: string }).then((result) => {
+                  setSavingProvider(false);
+                  if (isFailure(result)) {
+                    toast.error('Could not save the provider', result.error);
+                    return;
+                  }
+                  onToast(`${providerDraft.label || providerDraft.id} added`, 'Store its key before enabling models on it.');
+                  setAddingProvider(false);
+                  setProviderDraft({ id: '', label: '', base_url: 'https://' });
+                  onChange();
+                });
+              }}
+              icon={<GIcon name="save" size={16} />}
+            >
+              Save provider
+            </Button>
+          </div>
+        </Modal>
+      )}
 
       {addingModel && (
         <Modal open onClose={() => setAddingModel(false)} title="Add a model" size="sm" description="Use the exact model id from the provider dashboard.">

@@ -51,7 +51,7 @@ begin
 end;
 $$;
 revoke all on function public.pro_admin_upsert_model(jsonb) from public, anon;
-grant execute on function public.pro_admin_upsert_model(jsonb) to authenticated;
+grant execute on function public.pro_admin_upsert_model(jsonb) to authenticated, service_role;
 
 create or replace function public.pro_admin_upsert_provider(p_patch jsonb)
 returns jsonb
@@ -87,4 +87,4 @@ begin
 end;
 $$;
 revoke all on function public.pro_admin_upsert_provider(jsonb) from public, anon;
-grant execute on function public.pro_admin_upsert_provider(jsonb) to authenticated;
+grant execute on function public.pro_admin_upsert_provider(jsonb) to authenticated, service_role;

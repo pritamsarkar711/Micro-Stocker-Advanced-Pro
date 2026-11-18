@@ -252,6 +252,17 @@ export const proRpcHandlers: Record<string, (params: Json, caller: DemoCaller | 
     record('model.upsert', caller, id, patch);
     return ok(existing ?? patch);
   },
+  pro_admin_upsert_provider(params, caller) {
+    if (!caller || !caller.admin) return fail('not allowed');
+    const patch = (params.p_patch ?? {}) as Record<string, unknown>;
+    if (!patch.id || !patch.base_url) return fail('provider id and base url required');
+    const providers = aiProviders as unknown as Array<Record<string, unknown>>;
+    const existing = providers.find((row) => row.id === patch.id);
+    if (existing) Object.assign(existing, patch);
+    else providers.push({ enabled: true, sort: 50, key_hint: null, ...patch });
+    record('provider.upsert', caller, String(patch.id), patch);
+    return ok(existing ?? patch);
+  },
   pro_admin_assets(_params, caller) {
     if (!caller || !caller.admin) return fail('not allowed');
     return ok(cryptoAssets);
