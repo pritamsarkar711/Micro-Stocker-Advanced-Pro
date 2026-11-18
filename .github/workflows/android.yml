@@ -1,0 +1,70 @@
+name: Android
+
+# Builds the phone build from the same web bundle the desktop uses. The debug APK
+# needs no signing key, so it is produced on every tag and on demand, which makes
+# it installable straight from the run page. A release APK appears when the four
+# signing secrets below are configured.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build the web bundle and sync it into the Android project
+        env:
+          VITE_LICENSE_SUPABASE_URL: ${{ vars.MSAP_LICENSE_SUPABASE_URL }}
+          VITE_LICENSE_SUPABASE_ANON_KEY: ${{ vars.MSAP_LICENSE_SUPABASE_ANON_KEY }}
+        run: |
+          npm run build:web
+          npx cap sync android
+
+      - name: Assemble the debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Name the artifact with the version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          mkdir -p out
+          cp android/app/build/outputs/apk/debug/app-debug.apk "out/micro-stocker-pro-${version}-debug.apk"
+          echo "version=${version}" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: micro-stocker-pro-android-${{ env.version }}
+          path: out/*.apk
+          retention-days: 90
+
+      - name: Attach the APK to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*.apk
+          fail_on_unmatched_files: false

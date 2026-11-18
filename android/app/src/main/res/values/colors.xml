@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand colours, matching the web and desktop themes. -->
+    <color name="colorPrimary">#A3124C</color>
+    <color name="colorPrimaryDark">#7A0D39</color>
+    <color name="colorAccent">#F06FA0</color>
+    <color name="ic_launcher_background">#101114</color>
+    <color name="splash_background">#101114</color>
+</resources>
