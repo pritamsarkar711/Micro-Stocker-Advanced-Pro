@@ -478,6 +478,206 @@ export function encodePng(rgba: Uint8ClampedArray, width: number, height: number
   return writer.finish();
 }
 
+export interface IndexedPngResult {
+  bytes: Uint8Array;
+  colors: number;
+  /** True when the artwork had no more colours than the palette could hold. */
+  exact: boolean;
+}
+
+interface ColourBox {
+  colours: number[];
+  counts: number[];
+  weight: number;
+}
+
+/**
+ * Palette PNG (colour type 3, 8 bit). Flat artwork, logos, icons and
+ * illustrations often drop 70 to 90 percent in size with no visible change,
+ * because every pixel becomes a single palette index instead of four channels.
+ * Colours beyond the palette are merged with median cut, and any transparency is
+ * carried in a tRNS chunk next to the palette.
+ */
+export function encodePngIndexed(
+  rgba: Uint8ClampedArray,
+  width: number,
+  height: number,
+  maxColors = 256,
+): IndexedPngResult {
+  const pixels = width * height;
+  const keys = new Map<number, { r: number; g: number; b: number; a: number; count: number }>();
+  for (let i = 0; i < pixels; i += 1) {
+    const o = i * 4;
+    const a = rgba[o + 3];
+    // Fully transparent pixels all share one key: their colour does not matter.
+    const r = a === 0 ? 0 : rgba[o];
+    const g = a === 0 ? 0 : rgba[o + 1];
+    const b = a === 0 ? 0 : rgba[o + 2];
+    const key = ((r << 24) | (g << 16) | (b << 8) | a) >>> 0;
+    const found = keys.get(key);
+    if (found) found.count += 1;
+    else keys.set(key, { r, g, b, a, count: 1 });
+  }
+
+  const exact = keys.size <= maxColors;
+  let palette: { r: number; g: number; b: number; a: number }[];
+
+  if (exact) {
+    palette = Array.from(keys.values());
+  } else {
+    const entries = Array.from(keys.values());
+    const boxes: ColourBox[] = [
+      {
+        colours: entries.map((_, index) => index),
+        counts: entries.map((entry) => entry.count),
+        weight: entries.reduce((total, entry) => total + entry.count, 0),
+      },
+    ];
+    while (boxes.length < maxColors) {
+      let target = -1;
+      let widest = 0;
+      let channel = 0;
+      boxes.forEach((box, index) => {
+        if (box.colours.length < 2) return;
+        for (let c = 0; c < 3; c += 1) {
+          let min = 255;
+          let max = 0;
+          for (const colourIndex of box.colours) {
+            const entry = entries[colourIndex];
+            const value = c === 0 ? entry.r : c === 1 ? entry.g : entry.b;
+            if (value < min) min = value;
+            if (value > max) max = value;
+          }
+          if (max - min > widest) {
+            widest = max - min;
+            target = index;
+            channel = c;
+          }
+        }
+      });
+      if (target < 0 || widest === 0) break;
+      const box = boxes[target];
+      box.colours.sort((a, b) => {
+        const ea = entries[a];
+        const eb = entries[b];
+        return (channel === 0 ? ea.r - eb.r : channel === 1 ? ea.g - eb.g : ea.b - eb.b);
+      });
+      const half = box.weight / 2;
+      let running = 0;
+      let split = 1;
+      for (let i = 0; i < box.colours.length - 1; i += 1) {
+        running += box.counts[i];
+        if (running >= half) {
+          split = Math.max(1, i + 1);
+          break;
+        }
+      }
+      const left = box.colours.slice(0, split);
+      const right = box.colours.slice(split);
+      if (!left.length || !right.length) break;
+      const weightOf = (list: number[]) => list.reduce((total, index) => total + entries[index].count, 0);
+      boxes.splice(
+        target,
+        1,
+        { colours: left, counts: left.map((index) => entries[index].count), weight: weightOf(left) },
+        { colours: right, counts: right.map((index) => entries[index].count), weight: weightOf(right) },
+      );
+    }
+
+    palette = boxes.map((box) => {
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let a = 0;
+      let total = 0;
+      for (const index of box.colours) {
+        const entry = entries[index];
+        r += entry.r * entry.count;
+        g += entry.g * entry.count;
+        b += entry.b * entry.count;
+        a += entry.a * entry.count;
+        total += entry.count;
+      }
+      const n = Math.max(1, total);
+      return {
+        r: Math.round(r / n),
+        g: Math.round(g / n),
+        b: Math.round(b / n),
+        a: Math.round(a / n),
+      };
+    });
+  }
+
+  const count = Math.min(palette.length, maxColors);
+  palette = palette.slice(0, count);
+
+  const lookup = new Map<number, number>();
+  const nearest = (r: number, g: number, b: number, a: number) => {
+    const key = ((r << 24) | (g << 16) | (b << 8) | a) >>> 0;
+    const cached = lookup.get(key);
+    if (cached !== undefined) return cached;
+    let best = 0;
+    let bestDistance = Infinity;
+    for (let i = 0; i < count; i += 1) {
+      const entry = palette[i];
+      const dr = entry.r - r;
+      const dg = entry.g - g;
+      const db = entry.b - b;
+      const da = (entry.a - a) * 2;
+      const distance = dr * dr + dg * dg + db * db + da * da;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = i;
+        if (distance === 0) break;
+      }
+    }
+    if (lookup.size < 200000) lookup.set(key, best);
+    return best;
+  };
+
+  const indices = new Uint8Array(pixels);
+  for (let i = 0; i < pixels; i += 1) {
+    const o = i * 4;
+    indices[i] = nearest(rgba[o], rgba[o + 1], rgba[o + 2], rgba[o + 3]);
+  }
+
+  const writer = new ByteWriter();
+  writer.bytes(PNG_SIGNATURE);
+  const ihdr = new ByteWriter();
+  ihdr.u32be(width).u32be(height).u8(8).u8(3).u8(0).u8(0).u8(0);
+  writer.bytes(pngChunk('IHDR', ihdr.finish()));
+
+  const plte = new Uint8Array(count * 3);
+  for (let i = 0; i < count; i += 1) {
+    plte[i * 3] = palette[i].r;
+    plte[i * 3 + 1] = palette[i].g;
+    plte[i * 3 + 2] = palette[i].b;
+  }
+  writer.bytes(pngChunk('PLTE', plte));
+
+  if (palette.some((entry) => entry.a < 255)) {
+    const trns = new Uint8Array(count);
+    for (let i = 0; i < count; i += 1) trns[i] = palette[i].a;
+    writer.bytes(pngChunk('tRNS', trns));
+  }
+
+  const raw = new Uint8Array(height * (1 + width));
+  for (let y = 0; y < height; y += 1) {
+    const row = y * (1 + width);
+    // Up filter: palette indices of flat artwork repeat vertically, so the
+    // difference stream deflates far better than raw indices.
+    raw[row] = 2;
+    for (let x = 0; x < width; x += 1) {
+      const value = indices[y * width + x];
+      const above = y === 0 ? 0 : indices[(y - 1) * width + x];
+      raw[row + 1 + x] = (value - above) & 0xff;
+    }
+  }
+  writer.bytes(pngChunk('IDAT', pako.deflate(raw, { level: 9 })));
+  writer.bytes(pngChunk('IEND', new Uint8Array()));
+  return { bytes: writer.finish(), colors: count, exact };
+}
+
 function pngSample(row: Uint8Array, sampleIndex: number, bitDepth: number): number {
   if (bitDepth === 8) return row[sampleIndex];
   if (bitDepth === 16) return (row[sampleIndex * 2] << 8) | row[sampleIndex * 2 + 1];

@@ -7,6 +7,8 @@
  * without a canvas.
  */
 
+import { encodePng, encodePngIndexed } from './imageCodecs';
+
 export type OptimizeFormat = 'jpg' | 'webp' | 'avif' | 'png';
 
 export interface RasterLike {
@@ -177,6 +179,24 @@ function clampQuality(value: number, floor?: number): number {
 }
 
 /** Conservative quality guesses per format at "visually lossless" settings. */
+/**
+ * Smallest lossless PNG for this raster: palette PNG when the artwork fits in
+ * 256 colours (or quantises cleanly), truecolour PNG otherwise.
+ */
+export function encodePngBest(raster: RasterLike, maxColors = 256): Uint8Array {
+  const truecolour = encodePng(raster.data, raster.width, raster.height);
+  let indexed: ReturnType<typeof encodePngIndexed>;
+  try {
+    indexed = encodePngIndexed(raster.data, raster.width, raster.height, maxColors);
+  } catch {
+    return truecolour;
+  }
+  // Quantising a photo to 256 colours is a visible loss, so only take the
+  // palette path when it is lossless or when a large share of bytes is saved.
+  const worthwhile = indexed.exact || indexed.bytes.byteLength < truecolour.byteLength * 0.6;
+  return worthwhile && indexed.bytes.byteLength < truecolour.byteLength ? indexed.bytes : truecolour;
+}
+
 export const DEFAULT_QUALITY: Record<OptimizeFormat, number> = {
   jpg: 0.86,
   webp: 0.88,

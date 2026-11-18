@@ -149,6 +149,7 @@ import { APP_NAME, APP_VERSION } from '@/lib/version';
 import { recommendUpscale } from '@/lib/stock/upscale/recommend';
 import { analysePixels } from '@/lib/vision/analyse';
 import { sanitizeBackup } from '@/lib/stock/backup';
+import { parsePostScript, postScriptToSvg } from '@/lib/vector/postscript';
 import { checkPassword } from '@/lib/auth/password';
 import { DEFAULT_FLAGS, kindOf, megapixels, type StockItem } from '@/lib/stock/types';
 
@@ -746,6 +747,7 @@ import {
   measureSvg,
 } from '@/lib/stock/quality';
 import { downscaleRaster, optimizeRaster, suggestedFormat } from '@/lib/tools/optimizer';
+import { decodePng, encodePng, encodePngIndexed } from '@/lib/tools/imageCodecs';
 import { pathToPostScript, starPath, svgToEps, toMatrix } from '@/lib/vector/editor';
 
 test('SVG analysis separates editable artwork from flattened exports', () => {
@@ -784,7 +786,9 @@ test('pixel metrics detect softness, clipping and duplicates', () => {
   for (let y = 0; y < 32; y += 1) {
     for (let x = 0; x < 32; x += 1) {
       const i = (y * 32 + x) * 4;
-      const v = (x + y) % 2 === 0 ? 255 : 0;
+      // 4 px blocks: a real high contrast edge pattern, not a per-pixel pattern
+      // that sits beyond any camera's sampling limit.
+      const v = (Math.floor(x / 4) + Math.floor(y / 4)) % 2 === 0 ? 255 : 0;
       checker[i] = v;
       checker[i + 1] = v;
       checker[i + 2] = v;
@@ -794,6 +798,22 @@ test('pixel metrics detect softness, clipping and duplicates', () => {
   const sharp = measurePixels(checker, 32, 32);
   assert(sharp.sharpness > soft.sharpness, 'checkerboard is sharper');
   assert(sharp.clipped > 0.9, 'black and white clipping detected');
+
+  // Grain must not read as focus: a noisy flat frame is still soft.
+  const grainy = new Uint8ClampedArray(64 * 64 * 4);
+  let seed = 2463534242;
+  for (let i = 0; i < grainy.length; i += 4) {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    const v = 120 + ((seed >>> 16) & 0x1f) - 16;
+    grainy[i] = v;
+    grainy[i + 1] = v;
+    grainy[i + 2] = v;
+    grainy[i + 3] = 255;
+  }
+  const noisyFlat = measurePixels(grainy, 64, 64);
+  assert(noisyFlat.sharpness < 80, `grain alone must not read as ready (${noisyFlat.sharpness.toFixed(1)})`);
+  assert(noisyFlat.sharpness < sharp.sharpness * 0.7, 'real edges outrank grain');
+  assert(noisyFlat.noise > 4, `grain is reported (${noisyFlat.noise.toFixed(1)})`);
 
   const hash = differenceHash(checker, 32, 32);
   equal(hash.length, 64);
@@ -813,6 +833,56 @@ test('pixel metrics detect softness, clipping and duplicates', () => {
   assert(ids.includes('img-resolution'), 'small file flagged');
   assert(ids.includes('img-soft'), 'soft file flagged');
   assert(report.platforms.every((p) => !p.ok), 'no agency accepts it');
+});
+
+test('palette PNG keeps flat artwork exact and quantises photos tightly', () => {
+  const w = 16;
+  const h = 16;
+  const flat = new Uint8ClampedArray(w * h * 4);
+  const tones = [
+    [194, 24, 91, 255],
+    [255, 255, 255, 255],
+    [22, 24, 28, 255],
+    [0, 0, 0, 0],
+  ];
+  for (let i = 0; i < w * h; i += 1) {
+    const tone = tones[i % tones.length];
+    flat.set(tone, i * 4);
+  }
+  const exact = encodePngIndexed(flat, w, h, 256);
+  assert(exact.exact, 'four colours fit the palette');
+  equal(exact.colors, 4);
+  const back = decodePng(exact.bytes);
+  equal(back.width, w);
+  equal(back.height, h);
+  for (let i = 0; i < w * h; i += 1) {
+    const o = i * 4;
+    equal(back.data[o], flat[o], 'red channel survives a palette round trip');
+    equal(back.data[o + 1], flat[o + 1], 'green channel survives');
+    equal(back.data[o + 2], flat[o + 2], 'blue channel survives');
+    equal(back.data[o + 3], flat[o + 3], 'alpha survives through tRNS');
+  }
+
+  const photo = new Uint8ClampedArray(w * h * 4);
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      const o = (y * w + x) * 4;
+      photo[o] = x * 16;
+      photo[o + 1] = y * 16;
+      photo[o + 2] = 128;
+      photo[o + 3] = 255;
+    }
+  }
+  const quantised = encodePngIndexed(photo, w, h, 16);
+  assert(!quantised.exact, 'a gradient needs quantising');
+  equal(quantised.colors, 16);
+  const rebuilt = decodePng(quantised.bytes);
+  let worst = 0;
+  for (let i = 0; i < w * h; i += 1) {
+    worst = Math.max(worst, Math.abs(rebuilt.data[i * 4] - photo[i * 4]));
+  }
+  assert(worst <= 48, `quantisation error stays bounded (${worst})`);
+  assert(quantised.bytes.byteLength < encodePng(photo, w, h).byteLength, 'palette PNG is smaller');
 });
 
 test('optimizer downscales with a box filter and never enlarges', () => {
@@ -1208,6 +1278,48 @@ test('backup import rebuilds items and rejects hostile input', () => {
 
   const bad = sanitizeBackup({ items: 'nope' });
   equal(bad.items.length, 0);
+});
+
+test('EPS reader converts paths, colours, width and procedures', () => {
+  const eps = [
+    '%!PS-Adobe-3.0 EPSF-3.0',
+    '%%BoundingBox: 0 0 200 100',
+    '/box { newpath 10 10 moveto 90 10 lineto 90 60 lineto 10 60 lineto closepath } bind def',
+    '1 0 0 setrgbcolor',
+    'box fill',
+    '0 0 1 setrgbcolor',
+    '2 setlinewidth',
+    'newpath 100 20 moveto 180 80 lineto stroke',
+    'showpage',
+  ].join('\n');
+  const doc = parsePostScript(eps);
+  equal(doc.width, 200);
+  equal(doc.height, 100);
+  equal(doc.shapes.length, 2);
+  equal(doc.shapes[0].fill, '#ff0000');
+  equal(doc.shapes[0].d.includes('Z'), true);
+  equal(doc.shapes[1].stroke, '#0000ff');
+  equal(doc.shapes[1].strokeWidth, 2);
+  // Bottom-left PostScript origin becomes top-left SVG space.
+  equal(doc.shapes[1].d.startsWith('M100 80'), true);
+  const svg = postScriptToSvg(doc);
+  equal(svg.startsWith('<svg'), true);
+  equal((svg.match(/<path/g) ?? []).length, 2);
+});
+
+test('EPS reader handles transforms, arcs and missing boxes', () => {
+  const eps = [
+    '%!PS-Adobe-3.0',
+    '%%BoundingBox: (atend)',
+    'gsave 50 50 translate 2 2 scale',
+    '0.5 setgray',
+    'newpath 0 0 20 0 360 arc fill',
+    'grestore',
+  ].join('\n');
+  const doc = parsePostScript(eps);
+  equal(doc.shapes.length, 1);
+  equal(doc.width > 0 && doc.height > 0, true);
+  equal(doc.shapes[0].fill, '#808080');
 });
 
 test('password policy refuses common and short passwords', () => {

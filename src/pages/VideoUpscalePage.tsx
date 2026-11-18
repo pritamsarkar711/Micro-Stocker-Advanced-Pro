@@ -63,7 +63,7 @@ export function VideoUpscalePage() {
   const [targetId, setTargetId] = useState<string>('4k');
   const [outFormat, setOutFormat] = useState<'mp4' | 'webm'>('mp4');
   const [fps, setFps] = useState<24 | 30 | 60>(30);
-  const [bitrateMbps, setBitrateMbps] = useState(32);
+  const [bitrateMbps, setBitrateMbps] = useState(20);
   const [keepAudio, setKeepAudio] = useState(true);
 
   const [installed, setInstalled] = useState<Record<string, boolean>>({});
@@ -427,7 +427,7 @@ export function VideoUpscalePage() {
                   />
                 </Field>
                 <div className="flex items-end pb-1">
-                  <div><Switch checked={keepAudio} onChange={setKeepAudio} label="Preserve audio" /><p className="mt-1 text-2xs text-ink-muted">Audio may play while recording. Turn this off for silent clips.</p></div>
+                  <Switch checked={keepAudio} onChange={setKeepAudio} label="Preserve audio" />
                 </div>
               </div>
             </div>
@@ -575,7 +575,7 @@ export function VideoUpscalePage() {
               action={<Badge tone="neutral">{filteredModels.length}</Badge>}
             />
 
-            <p className="mb-3 text-xs text-ink-muted">Built-in presets use a shared resize and sharpening filter, not AI or specialized shader algorithms. Neural models and frame interpolation are not yet supported by video rendering. Check each model and asset licence before commercial use.</p>
+            <p className="mb-3 text-2xs text-ink-muted">Built-in resampling. Check model licences before commercial use.</p>
 
             <div className="mb-3 flex flex-wrap gap-1">
               {VIDEO_PURPOSES.map((p) => (

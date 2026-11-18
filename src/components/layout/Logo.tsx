@@ -8,9 +8,10 @@ export interface LogoProps {
 }
 
 /**
- * Micro Stocker mark: a flat pink tile with a white capture monogram.
- * No gradients, no glows — it stays crisp from 16px to 512px and matches the
- * application icon down to the corner radius.
+ * Micro Stocker mark: a capture frame with a focus dot, drawn as flat shapes on
+ * a pink tile. The four corner brackets stay legible down to 16 px, the centre
+ * dot reads as an aperture, and the spark marks the AI assisted tools. No
+ * gradients, no glows, so it matches the application icon exactly.
  */
 export function LogoMark({
   size = 32,
@@ -32,16 +33,20 @@ export function LogoMark({
       aria-hidden={decorative ? true : undefined}
       className={clsx('shrink-0', className)}
     >
-      <rect width="48" height="48" rx="9" fill="var(--brand)" />
-      <path
-        d="M12.75 34V17.6c0-1.6 1.9-2.4 3-1.2L24 25.6l8.25-9.2c1.1-1.2 3-0.4 3 1.2V34"
+      <rect width="48" height="48" rx="11" fill="var(--brand)" />
+      <g
         fill="none"
         stroke="#ffffff"
-        strokeWidth="4.2"
+        strokeWidth="3.6"
         strokeLinecap="round"
         strokeLinejoin="round"
-      />
-      <circle cx="35.25" cy="12.75" r="2.6" fill="#ffffff" />
+      >
+        <path d="M13 19.5V14.6a1.6 1.6 0 0 1 1.6-1.6H19.5" />
+        <path d="M28.5 13h4.9a1.6 1.6 0 0 1 1.6 1.6v4.9" />
+        <path d="M35 28.5v4.9a1.6 1.6 0 0 1-1.6 1.6h-4.9" />
+        <path d="M19.5 35h-4.9a1.6 1.6 0 0 1-1.6-1.6v-4.9" />
+      </g>
+      <circle cx="24" cy="24" r="5.6" fill="#ffffff" />
     </svg>
   );
 }

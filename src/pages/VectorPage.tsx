@@ -39,6 +39,7 @@ import {
   type AlignMode,
   type Box,
 } from '@/lib/vector/editor';
+import { parsePostScript, postScriptToSvg } from '@/lib/vector/postscript';
 
 /* -------------------------------------------------------------------------- */
 /*  Studio                                                                    */
@@ -819,16 +820,56 @@ export function VectorPage() {
   const loadFile = useCallback(
     async (file: File, mode: 'open' | 'place') => {
       try {
-        const text = await file.text();
-        const parsed = parseSvgDocument(text);
+        const isPostScript =
+          /\.(eps|ai|ps|epsf)$/i.test(file.name) || /^%!PS/.test((await file.slice(0, 8).text()).trim());
+
+        let parsed: SVGSVGElement;
+        let importedFromPs: ReturnType<typeof parsePostScript> | null = null;
+
+        if (isPostScript) {
+          importedFromPs = parsePostScript(new Uint8Array(await file.arrayBuffer()));
+          if (importedFromPs.shapes.length) {
+            parsed = parseSvgDocument(postScriptToSvg(importedFromPs));
+          } else if (importedFromPs.preview) {
+            // No editable vectors, but the file carries a preview: place the
+            // artwork as a reference layer so it can still be inspected.
+            const bytes = importedFromPs.preview.bytes;
+            const copy = new Uint8Array(bytes.byteLength);
+            copy.set(bytes);
+            const url = URL.createObjectURL(new Blob([copy], { type: importedFromPs.preview.mime }));
+            parsed = parseSvgDocument(
+              `<svg xmlns="http://www.w3.org/2000/svg" width="${importedFromPs.width}" height="${importedFromPs.height}" viewBox="0 0 ${importedFromPs.width} ${importedFromPs.height}"><image href="${url}" x="0" y="0" width="${importedFromPs.width}" height="${importedFromPs.height}" /></svg>`,
+            );
+          } else {
+            throw new Error(
+              'This file has no supported vector data and no embedded preview. Re-save it from Illustrator as EPS with a preview, or export a PDF.',
+            );
+          }
+        } else {
+          const text = await file.text();
+          parsed = parseSvgDocument(text);
+        }
         if (mode === 'open') {
           const before = snapshotText();
           mount(parsed);
-          setDocName(file.name.replace(/\.svg$/i, ''));
+          setDocName(file.name.replace(/\.(svg|eps|ai|ps|epsf)$/i, ''));
           setSelectedIds([]);
           commit(before);
           window.setTimeout(() => fitView(), 30);
-          toast.success(`Opened ${file.name}. Every object stays editable`);
+          if (importedFromPs) {
+            const count = importedFromPs.shapes.length;
+            toast.success(
+              `Opened ${file.name}`,
+              count
+                ? `${count} editable shape${count === 1 ? '' : 's'} converted from PostScript.`
+                : 'Placed the embedded preview as a reference layer.',
+            );
+            if (importedFromPs.skipped.length) {
+              toast.info('Not converted', Array.from(new Set(importedFromPs.skipped)).join(', '));
+            }
+          } else {
+            toast.success(`Opened ${file.name}. Every object stays editable`);
+          }
         } else {
           const root = svgRef.current;
           if (!root) return;
@@ -904,6 +945,33 @@ export function VectorPage() {
       });
     },
     [doc.h, doc.w, mutate, selectedEls],
+  );
+
+  /** Select every object painted like the current selection. */
+  const selectSamePaint = useCallback(
+    (kind: 'fill' | 'stroke') => {
+      const root = svgRef.current;
+      const base = selectedEls[0];
+      if (!root || !base) return;
+      const target = kind === 'fill' ? fillOf(base) : strokeOf(base).color;
+      const matches = Array.from(root.querySelectorAll('path, rect, circle, ellipse, polygon, polyline, line, text'))
+        .filter((el) => {
+          if (el.closest('[data-guide]')) return false;
+          const id = el.getAttribute('id');
+          if (!id) return false;
+          const value = kind === 'fill' ? fillOf(el as SVGElement) : strokeOf(el as SVGElement).color;
+          return value === target;
+        })
+        .map((el) => el.getAttribute('id')!)
+        .filter(Boolean);
+      if (!matches.length) {
+        toast.info('Nothing else shares that colour');
+        return;
+      }
+      setSelectedIds(matches);
+      toast.success(`Selected ${matches.length} object${matches.length === 1 ? '' : 's'}`, `Same ${kind} colour`);
+    },
+    [selectedEls, toast],
   );
 
   const setStrokeWidth = useCallback(
@@ -1275,7 +1343,7 @@ export function VectorPage() {
   }, [doc.h, doc.w]);
 
   const exportArtwork = useCallback(
-    async (kind: 'svg' | 'png1' | 'png2' | 'png4' | 'eps') => {
+    async (kind: 'svg' | 'png1' | 'png2' | 'png4' | 'eps' | 'ai') => {
       setMenu(null);
       const root = svgRef.current;
       if (!root) return;
@@ -1285,11 +1353,18 @@ export function VectorPage() {
           toast.success('SVG exported', 'Editable vectors, ready for any marketplace.');
           return;
         }
-        if (kind === 'eps') {
-          const { eps, skipped } = svgToEps(root, docName || 'Micro Stocker Advanced Pro');
-          triggerBlobDownload(new Blob([eps], { type: 'application/postscript' }), `${docName || 'artwork'}.eps`);
-          if (skipped.length) toast.info(`EPS exported. Skipped: ${Array.from(new Set(skipped)).join(', ')}`);
-          else toast.success('EPS exported');
+        if (kind === 'eps' || kind === 'ai') {
+          const { eps, skipped } = svgToEps(root, docName || 'Micro Stocker Advanced Pro', kind);
+          const label = kind === 'ai' ? 'AI' : 'EPS';
+          triggerBlobDownload(
+            new Blob([eps], { type: 'application/postscript' }),
+            `${docName || 'artwork'}.${kind}`,
+          );
+          if (skipped.length) {
+            toast.info(`${label} exported. Skipped: ${Array.from(new Set(skipped)).join(', ')}`);
+          } else {
+            toast.success(`${label} exported`);
+          }
           return;
         }
         const scale = kind === 'png1' ? 1 : kind === 'png2' ? 2 : 4;
@@ -1567,10 +1642,11 @@ export function VectorPage() {
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
+          title="Open SVG, EPS or AI"
           className="inline-flex h-8 items-center gap-1 rounded-[var(--r-control)] border border-line px-2 text-[0.75rem] font-medium text-ink-muted hover:border-brand hover:text-ink"
         >
           <StudioIcon name="image" size={14} />
-          Open SVG
+          Open artwork
         </button>
 
         <span className="mx-0.5 hidden h-5 w-px bg-line sm:block" />
@@ -1650,6 +1726,7 @@ export function VectorPage() {
                   { id: 'png2' as const, label: 'PNG 2×', hint: `${doc.w * 2} × ${doc.h * 2}` },
                   { id: 'png4' as const, label: 'PNG 4×', hint: `${doc.w * 4} × ${doc.h * 4}` },
                   { id: 'eps' as const, label: 'EPS', hint: 'Print & marketplace' },
+                  { id: 'ai' as const, label: 'Adobe Illustrator', hint: 'AI compatible' },
                 ].map((item) => (
                   <button
                     key={item.id}
@@ -1685,8 +1762,8 @@ export function VectorPage() {
               type="button"
               onClick={() => fileRef.current?.click()}
               className="flex h-8 w-full items-center justify-center rounded-[var(--r-control)] text-ink-muted hover:bg-surface-2 hover:text-ink"
-              aria-label="Open SVG"
-              title="Open an SVG file"
+              aria-label="Open artwork"
+              title="Open SVG, EPS or AI"
             >
               <StudioIcon name="image" size={16} />
             </button>
@@ -1959,6 +2036,24 @@ export function VectorPage() {
                         />
                       ))}
                     </div>
+                    {selectedEls.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        <button
+                          type="button"
+                          onClick={() => selectSamePaint('fill')}
+                          className="rounded-[var(--r-xs)] border border-line px-1.5 py-1 text-2xs text-ink-muted hover:border-brand hover:text-ink"
+                        >
+                          Select same fill
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => selectSamePaint('stroke')}
+                          className="rounded-[var(--r-xs)] border border-line px-1.5 py-1 text-2xs text-ink-muted hover:border-brand hover:text-ink"
+                        >
+                          Select same stroke
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -2238,7 +2333,7 @@ export function VectorPage() {
       <input
         ref={fileRef}
         type="file"
-        accept=".svg,image/svg+xml"
+        accept=".svg,.eps,.ai,.ps,image/svg+xml,application/postscript,application/illustrator"
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0];

@@ -3,6 +3,55 @@
 All notable changes to Micro Stocker Advanced Pro are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.0.0] - 2026-11-17
+
+### Added
+- **New identity.** A rebuilt logo mark (pink tile, corner brackets, aperture dot)
+  plus matching favicons, app icons and installer artwork in every size.
+- **Open EPS and AI artwork in Vector Studio.** Files are read in the app: paths,
+  colours, stroke widths, line caps, joins, dashes, arcs, text and transforms are
+  converted into editable objects, with skipped PostScript operators reported
+  instead of failing silently. Files without vector data fall back to their
+  embedded preview so they can still be inspected.
+- **Export AI.** Illustrator compatible output alongside SVG, EPS and PNG up to 4x.
+- **26 new vector elements** (dividers, ribbons, badge sets, hexagon, dotted,
+  corner and arch frames, curved, loop and dashed arrows, sun, cloud, leaf, chat,
+  browser, phone, cursor and avatar shapes) for 174 elements in total.
+- **Select same colour** in Vector Studio to restyle every object that shares the
+  current fill or stroke in one step.
+- **Palette PNG (PNG-8)** in the Converter and a palette size control in the
+  Optimizer. Flat artwork, logos and illustrations drop 70 to 90 percent in size
+  losslessly, and the Optimizer keeps truecolour whenever quantising would show.
+- **Settings: workflow defaults.** Confirmation before removing assets, plus the
+  starting output format for the Optimizer and the Upscaler.
+
+### Changed
+- **The library can now let go.** Every asset has a remove action, selections can
+  be removed in bulk, and **Clear library** empties the workspace so a different
+  file set can be imported. Files on disk are never touched.
+- **Metadata is written from the picture.** The local engine now describes what it
+  sees (scene, subject placement, negative space, palette, focus, grain) and the
+  title, description and keywords are drafted from that, not from the old title.
+- **The Metadata Editor shows what the app sees**: scene badge, match confidence,
+  negative space, detail tags, palette dots and a measured quality score.
+- **The Quality Checker measures focus without being fooled by grain.** Sharpness
+  now reads edge acutance after grain removal, so a noisy phone frame is no longer
+  reported as crisp and a clean studio frame is no longer reported as soft.
+- **Topbar search works.** The field opens a command palette with page jumps and
+  library results, arrow key navigation, Enter to open and Ctrl or Cmd K to focus.
+- **Upscaler output is smaller.** WebP at a balanced quality is the default, and
+  the quality readout says Max, Balanced or Compact instead of guessing.
+
+### Performance
+- **Strip wise image filtering.** The upscaler's sharpen and restore passes now
+  work in 512 row strips instead of two full frame copies, cutting the memory
+  working set on a 24 MP frame from roughly 200 MB to under 10 MB and removing the
+  allocation spike that spun up fans.
+- **Video renders on new frames only.** The capture loop now uses the decoder's
+  frame callback and a frame interval check, so a 30 fps clip is drawn 30 times a
+  second instead of 60 to 120, with less GPU load, heat and battery drain.
+- Trimmed instructional copy from both upscaler pages.
+
 ## [1.9.0] - 2026-11-17
 
 ### Added

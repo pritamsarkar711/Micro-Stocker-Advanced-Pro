@@ -73,23 +73,30 @@ minute, precise enough to clean up a real SVG.
   opacity, rotation, corner radius, and text size, weight, tracking and
   alignment. X/Y/W/H fields give exact numbers, and the align row snaps objects
   to the canvas or to each other. Group, ungroup, duplicate, reorder and lock.
-- **Elements** — 150 ready shapes, marketplace marks, arrows, frames, interface
-  icons, nature and people glyphs across eight categories. Search by name,
-  insert with one click, and every insert steps across the canvas so it never
-  hides behind the last one.
+- **Elements** — 174 ready shapes, marketplace marks, arrows, frames, interface
+  icons, nature and people glyphs across eight categories, including dividers,
+  ribbons, badge sets and sticker frames. Search by name, insert with one click,
+  and every insert steps across the canvas so it never hides behind the last one.
 - **Layers** — search the object list, rename in place (double click), drag rows
   to restack, Shift+click for several objects, mute or lock without leaving the
   panel.
 - **Transform extras** — flip horizontally or vertically, centre on the canvas,
   duplicate, plus copy and paste with ⌘/Ctrl+C and ⌘/Ctrl+V.
-- **Import** — `Open SVG` replaces the canvas with a real, editable document;
-  dropping a file (or `Open SVG` while another artwork is open) places it as a
-  group that you can move, scale and restyle.
+- **Import** — `Open artwork` accepts SVG, EPS, AI and PS. PostScript files are
+  read in the app: paths, colours, stroke widths, dashes, arcs, text and
+  transforms become editable objects, and anything that could not be converted is
+  named in a toast. A file with no vector data but an embedded preview is placed
+  as a reference image. Opening replaces the canvas, dropping a file (or opening
+  while another artwork is loaded) places it as a group you can move, scale and
+  restyle.
 - **Live preview** — the panel in the inspector renders the current document on
   every change, exactly as exported. **Present** opens it full screen.
-- **Export** — sanitised SVG, PNG at 1×, 2× or 4×, or a vector EPS built from
-  PostScript paths. Live text is reported as skipped in EPS because agencies
-  require outlines.
+- **Style everything at once** — `Select same fill` and `Select same stroke`
+  gather every object painted like the current selection, so a palette change
+  takes one click instead of twenty.
+- **Export** — sanitised SVG, PNG at 1×, 2× or 4×, a vector EPS built from
+  PostScript paths, or an Illustrator compatible `.ai`. Live text is reported as
+  skipped in vector formats because agencies require outlines.
 - **Never lose work** — every change is undoable (⌘/Ctrl+Z, ⇧⌘Z) and the canvas
   is autosaved locally; reopen the studio and your last artwork is there.
 

@@ -163,6 +163,58 @@ export function SettingsPage() {
           </div>
         </Card>
 
+        {/* Workflow defaults */}
+        <Card>
+          <CardHeader title="Workflow defaults" icon={<GIcon name="tune" size={17} />} />
+          <div className="space-y-4">
+            <Switch
+              checked={settings.confirmRemove}
+              onChange={(confirmRemove) => updateSettings({ confirmRemove })}
+              label="Confirm before removing assets"
+            />
+
+            <Field label="Optimizer output">
+              <div className="grid grid-cols-5 gap-1 rounded-[var(--r-control)] border border-line bg-surface-2 p-0.5">
+                {(['keep', 'jpg', 'webp', 'avif', 'png'] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => updateSettings({ optimizeFormat: value })}
+                    className={clsx(
+                      'h-7 rounded-[5px] text-2xs font-semibold uppercase',
+                      settings.optimizeFormat === value
+                        ? 'bg-accent text-on-brand'
+                        : 'text-ink-muted hover:text-ink',
+                    )}
+                  >
+                    {value === 'keep' ? 'Keep' : value}
+                  </button>
+                ))}
+              </div>
+            </Field>
+
+            <Field label="Upscaler output">
+              <div className="grid grid-cols-3 gap-1 rounded-[var(--r-control)] border border-line bg-surface-2 p-0.5">
+                {(['jpg', 'webp', 'png'] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => updateSettings({ upscaleFormat: value })}
+                    className={clsx(
+                      'h-7 rounded-[5px] text-2xs font-semibold uppercase',
+                      settings.upscaleFormat === value
+                        ? 'bg-accent text-on-brand'
+                        : 'text-ink-muted hover:text-ink',
+                    )}
+                  >
+                    {value}
+                  </button>
+                ))}
+              </div>
+            </Field>
+          </div>
+        </Card>
+
         {/* Account & Workspace Backup */}
         <div className="space-y-5">
           <Card>

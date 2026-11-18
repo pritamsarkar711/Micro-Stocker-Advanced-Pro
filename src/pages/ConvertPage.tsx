@@ -47,6 +47,8 @@ export function ConvertPage() {
   const [resizePreset, setResizePreset] = useState('original');
   const [customLongEdge, setCustomLongEdge] = useState('3840');
   const [preserveMetadata, setPreserveMetadata] = useState(true);
+  // Palette PNG: same .png output, 256 colours, usually far smaller.
+  const [palettePng, setPalettePng] = useState(false);
 
   const [queue, setQueue] = useState<ConvertItem[]>([]);
   const [running, setRunning] = useState(false);
@@ -157,6 +159,7 @@ export function ConvertPage() {
             resizePreset,
             customLongEdge: Number(customLongEdge) || 3840,
             preserveMetadata,
+            palettePng,
           });
           const outUrl = BROWSER_DISPLAYABLE.has(res.format)
             ? URL.createObjectURL(res.blob)
@@ -298,6 +301,18 @@ export function ConvertPage() {
                     className="w-full accent-[var(--accent)]"
                   />
                 </Field>
+              )}
+
+              {activeFormat.id === 'png' && (
+                <label className="flex cursor-pointer items-center gap-2 text-[0.8125rem] text-ink-muted">
+                  <input
+                    type="checkbox"
+                    checked={palettePng}
+                    onChange={(e) => setPalettePng(e.target.checked)}
+                    className="accent-[var(--accent)]"
+                  />
+                  Palette PNG (256 colours, much smaller)
+                </label>
               )}
 
               <Field label="Resize">

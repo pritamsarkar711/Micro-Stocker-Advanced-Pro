@@ -451,7 +451,11 @@ interface Ctx {
   height: number;
 }
 
-export function svgToEps(svg: SVGSVGElement, title = 'Micro Stocker Advanced Pro'): EpsExportResult {
+export function svgToEps(
+  svg: SVGSVGElement,
+  title = 'Micro Stocker Advanced Pro',
+  kind: 'eps' | 'ai' = 'eps',
+): EpsExportResult {
   const viewBox = (svg.getAttribute('viewBox') ?? '').split(/[\s,]+/).map(Number);
   const width = Number(svg.getAttribute('width')) || (Number.isFinite(viewBox[2]) ? viewBox[2] : 1000);
   const height = Number(svg.getAttribute('height')) || (Number.isFinite(viewBox[3]) ? viewBox[3] : 1000);
@@ -460,6 +464,13 @@ export function svgToEps(svg: SVGSVGElement, title = 'Micro Stocker Advanced Pro
   ctx.lines.push('%!PS-Adobe-3.0 EPSF-3.0');
   ctx.lines.push(`%%Creator: ${title}`);
   ctx.lines.push(`%%Title: ${title}`);
+  ctx.lines.push(`%%For: ${kind === 'ai' ? 'Adobe Illustrator' : 'Micro Stocker Advanced Pro'}`);
+  if (kind === 'ai') {
+    // Illustrator opens EPS compatible .ai files, and this header keeps the
+    // file recognisable to its own importer and to CorelDRAW and Affinity.
+    ctx.lines.push('%%AI5_FileFormat: 3');
+    ctx.lines.push('%%DocumentProcessColors: Cyan Magenta Yellow Black');
+  }
   ctx.lines.push('%%LanguageLevel: 3');
   ctx.lines.push(`%%BoundingBox: 0 0 ${Math.ceil(width)} ${Math.ceil(height)}`);
   ctx.lines.push('%%DocumentData: Clean7Bit');
