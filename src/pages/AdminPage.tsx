@@ -3,7 +3,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Field, Input, Switch } from '@/components/ui/Field';
+import { Field, Input, Select, Switch } from '@/components/ui/Field';
 import { Modal } from '@/components/ui/Modal';
 import { Tabs } from '@/components/ui/Tabs';
 import { GIcon } from '@/components/ui/GoogleIcon';
@@ -15,6 +15,7 @@ import { useToast } from '@/state/ToastState';
 import {
   adminAssets,
   adminUpdateAsset,
+  adminUpsertModel,
   adminAdjustCredits,
   FX_BDT_USD,
   adminAudit,
@@ -551,6 +552,16 @@ function Plans({ onToast }: { onToast: (message: string) => void }) {
  * provider dashboard before: one link, three steps, the shape of the key.
  */
 const PROVIDER_HELP: Record<string, { keysUrl: string; blurb: string; steps: string[]; placeholder: string }> = {
+  tokensbd: {
+    keysUrl: 'https://tokens.bd/dashboard',
+    blurb: 'The primary supply. One key reaches every model, paid in BDT.',
+    steps: [
+      'Sign in to tokens.bd and open the dashboard.',
+      'Create an API key and copy the value that starts with tok_live_.',
+      'Paste it here. Model ids are the namespaced names from the dashboard, such as deepseek/deepseek-v4.1-flash.',
+    ],
+    placeholder: 'tok_live_...',
+  },
   moonshot: {
     keysUrl: 'https://platform.moonshot.ai/console/api-keys',
     blurb: 'Used by the vector and AI generators (Kimi K2.5).',
@@ -611,6 +622,18 @@ function Providers({
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [keyError, setKeyError] = useState('');
+  const [addingModel, setAddingModel] = useState(false);
+  const [modelDraft, setModelDraft] = useState({
+    id: '',
+    provider_id: providers[0]?.id ?? 'tokensbd',
+    upstream_id: '',
+    label: '',
+    kind: 'vector' as AiModel['kind'],
+    enabled: true,
+    cost_in_per_mtok: 0.1,
+    cost_out_per_mtok: 0.3,
+  });
+  const [savingModel, setSavingModel] = useState(false);
 
   const help = keyFor ? PROVIDER_HELP[keyFor.id] : undefined;
 
@@ -702,7 +725,16 @@ function Providers({
       </Card>
 
       <Card flush>
-        <CardHeader title="Models" subtitle="Enable, price and retire models without a release." icon={<GIcon name="memory" size={18} />} />
+        <CardHeader
+          title="Models"
+          subtitle="Enable, price, add and retire models without a release."
+          icon={<GIcon name="memory" size={18} />}
+          action={
+            <Button size="sm" variant="outline" onClick={() => setAddingModel(true)} icon={<GIcon name="add" size={16} />}>
+              Add model
+            </Button>
+          }
+        />
         <div className="overflow-x-auto border-t border-line">
           <table className="w-full min-w-[720px] text-[0.8125rem]">
             <thead className="bg-surface-2 text-2xs uppercase tracking-wide text-ink-muted">
@@ -745,6 +777,102 @@ function Providers({
           </table>
         </div>
       </Card>
+
+      {addingModel && (
+        <Modal open onClose={() => setAddingModel(false)} title="Add a model" size="sm" description="Use the exact model id from the provider dashboard.">
+          <div className="space-y-3">
+            <Field label="Model id" hint="short name used by the app">
+              <Input
+                value={modelDraft.id}
+                onChange={(event) => setModelDraft((draft) => ({ ...draft, id: event.target.value.trim() }))}
+                placeholder="tb-gemini-flash"
+              />
+            </Field>
+            <Field label="Provider">
+              <Select
+                value={modelDraft.provider_id}
+                onChange={(event) => setModelDraft((draft) => ({ ...draft, provider_id: event.target.value }))}
+              >
+                {providers.map((provider) => (
+                  <option key={provider.id} value={provider.id}>
+                    {provider.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Upstream id" hint="what the provider calls it">
+              <Input
+                value={modelDraft.upstream_id}
+                onChange={(event) => setModelDraft((draft) => ({ ...draft, upstream_id: event.target.value.trim() }))}
+                placeholder="google/gemini-5.3-flash"
+              />
+            </Field>
+            <Field label="Display name">
+              <Input
+                value={modelDraft.label}
+                onChange={(event) => setModelDraft((draft) => ({ ...draft, label: event.target.value }))}
+                placeholder="Gemini 5.3 Flash"
+              />
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Kind">
+                <Select
+                  value={modelDraft.kind}
+                  onChange={(event) => setModelDraft((draft) => ({ ...draft, kind: event.target.value as AiModel['kind'] }))}
+                >
+                  <option value="vector">Vector and chat</option>
+                  <option value="image">Image</option>
+                </Select>
+              </Field>
+              <Field label={`${bdtUnit()} per 1M in`}>
+                <Input
+                  type="number"
+                  value={Math.round(modelDraft.cost_in_per_mtok * FX_BDT_USD)}
+                  onChange={(event) =>
+                    setModelDraft((draft) => ({ ...draft, cost_in_per_mtok: Number(event.target.value) / FX_BDT_USD }))
+                  }
+                />
+              </Field>
+            </div>
+            <label className="flex items-center justify-between gap-3 rounded-[var(--r-control)] border border-line px-3 py-2 text-[0.8125rem]">
+              Enabled for customers
+              <Switch
+                checked={modelDraft.enabled}
+                onChange={(checked) => setModelDraft((draft) => ({ ...draft, enabled: checked }))}
+              />
+            </label>
+            <Button
+              className="w-full"
+              loading={savingModel}
+              onClick={() => {
+                setSavingModel(true);
+                void adminUpsertModel({
+                  id: modelDraft.id,
+                  provider_id: modelDraft.provider_id,
+                  upstream_id: modelDraft.upstream_id || modelDraft.id,
+                  label: modelDraft.label || modelDraft.id,
+                  kind: modelDraft.kind,
+                  enabled: modelDraft.enabled,
+                  cost_in_per_mtok: modelDraft.cost_in_per_mtok,
+                  cost_out_per_mtok: modelDraft.cost_out_per_mtok,
+                } as Partial<AiModel> & { id: string }).then((result) => {
+                  setSavingModel(false);
+                  if (isFailure(result)) {
+                    toast.error('Could not save the model', result.error);
+                    return;
+                  }
+                  onToast(`${modelDraft.label || modelDraft.id} saved`);
+                  setAddingModel(false);
+                  onChange();
+                });
+              }}
+              icon={<GIcon name="save" size={16} />}
+            >
+              Save model
+            </Button>
+          </div>
+        </Modal>
+      )}
 
       {keyFor && (
         <Modal

@@ -309,6 +309,10 @@ export async function verifyCrypto(invoiceId: string, txHash?: string) {
 
 export const adminStats = (days = 30) => rpc<AdminStats>('pro_admin_stats', { p_days: days });
 export const adminUsers = (search?: string) => rpc<AdminUser[]>('pro_admin_users', { p_search: search ?? null });
+export const adminUpsertModel = (patch: Partial<AiModel> & { id: string }) =>
+  rpc<AiModel>('pro_admin_upsert_model', { p_patch: patch });
+export const adminUpsertProvider = (patch: Partial<AiProvider> & { id: string; base_url: string }) =>
+  rpc<AiProvider>('pro_admin_upsert_provider', { p_patch: patch });
 export const adminAssets = () => rpc<CryptoAsset[]>('pro_admin_assets');
 export const adminUpdateAsset = (id: string, patch: Partial<CryptoAsset>) =>
   rpc<CryptoAsset>('pro_admin_update_asset', { p_id: id, p_patch: patch });

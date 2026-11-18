@@ -240,6 +240,18 @@ export const proRpcHandlers: Record<string, (params: Json, caller: DemoCaller | 
         }),
     );
   },
+  pro_admin_upsert_model(params, caller) {
+    if (!caller || !caller.admin) return fail('not allowed');
+    const patch = (params.p_patch ?? {}) as Record<string, unknown>;
+    const id = String(patch.id ?? '');
+    if (!id) return fail('model id required');
+    const models = aiModels as unknown as Array<Record<string, unknown>>;
+    const existing = models?.find((row) => row.id === id);
+    if (existing) Object.assign(existing, patch);
+    else models.push({ premium: false, enabled: true, cost_in_per_mtok: 0, cost_out_per_mtok: 0, cost_per_image_usd: 0, ...patch });
+    record('model.upsert', caller, id, patch);
+    return ok(existing ?? patch);
+  },
   pro_admin_assets(_params, caller) {
     if (!caller || !caller.admin) return fail('not allowed');
     return ok(cryptoAssets);

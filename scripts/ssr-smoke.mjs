@@ -47,6 +47,7 @@ import { LibraryProvider } from '@/state/library';
 import { ToastProvider } from '@/state/ToastState';
 import { ReleasesProvider } from '@/state/releases';
 import { BankProvider } from '@/state/bank';
+import { WorkspaceSyncProvider } from '@/state/WorkspaceSync';
 import { AppShell } from '@/components/layout/AppShell';
 
 const PAGES = {
@@ -85,7 +86,8 @@ const PAGES = {
                 h(BankProvider, null,
                   h(ReleasesProvider, null,
                     h(LibraryProvider, null,
-                      h(AppShell, null, h(Page))))))))));
+                      h(WorkspaceSyncProvider, null,
+                        h(AppShell, null, h(Page)))))))))));
       const html = renderToString(tree);
       const textOnly = html.replace(/<[^>]+>/g, ' ');
       const badValue = /NaN|undefined<|>undefined|\\[object Object\\]/.test(html);
