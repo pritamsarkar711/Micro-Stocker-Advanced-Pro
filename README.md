@@ -34,6 +34,10 @@ large library does not depend on an internet connection.
 
 ![Subscription](docs/assets/screens/subscription.png)
 
+**Admin console.** Providers, keys, model prices and plans change without a release.
+
+![Admin console](docs/assets/screens/admin.png)
+
 ## Everything inside
 
 | Module | What it does |
@@ -53,7 +57,7 @@ large library does not depend on an internet connection.
 | Planner | Per portal queues with real publishing caps, including first batch windows and monthly limits. |
 | Releases | Model and property release registry with expiry tracking, linked per file. |
 | Earnings | Import each portal sales CSV with automatic column detection and get one ledger, a monthly trend and best sellers. |
-| Admin console | Plans, prices, orders, users, provider keys, crypto wallets and audit log, all without touching the source. |
+| Admin console | Plans, prices, orders, users, provider keys, new providers and models, crypto wallets and audit log, all without touching the source. |
 | Sync | Accounts, subscriptions, credits, settings and workspace data follow you between devices. Pixels stay on the device that made them. |
 
 ## Supported marketplaces
