@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import { MaskEditor } from '@/components/tools/MaskEditor';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -11,6 +12,7 @@ import { GIcon } from '@/components/ui/GoogleIcon';
 import { FormatIcon } from '@/components/ui/FormatIcon';
 import { useLibrary } from '@/state/library';
 import { useToast } from '@/state/ToastState';
+import { useLicense } from '@/state/LicenseState';
 import { desktop, triggerBlobDownload, type ModelProgressEvent } from '@/lib/desktop';
 import {
   cancelModelInstall,
@@ -46,6 +48,8 @@ interface CutoutEntry {
 export function BgRemovePage() {
   const { items: libItems, getBlob, addGeneratedBlob } = useLibrary();
   const toast = useToast();
+  const navigate = useNavigate();
+  const { premium: hasPlan } = useLicense();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [purpose, setPurpose] = useState<BgPurpose>('all');
@@ -630,11 +634,19 @@ export function BgRemovePage() {
                   license={model.license}
                   sizeMB={model.sizeMB}
                   selected={modelId === model.id}
+                  locked={Boolean(model.premium) && !hasPlan}
                   builtin={model.kind === 'builtin'}
                   installed={Boolean(installed[model.id])}
                   isDesktop={desktop.isDesktop}
                   progress={dlProgress[model.id]}
-                  onSelect={() => setModelId(model.id)}
+                  onSelect={() => {
+                    if (model.premium && !hasPlan) {
+                      toast.info('Premium model', 'Included with any plan. It uses no credits.');
+                      navigate('/subscription');
+                      return;
+                    }
+                    setModelId(model.id);
+                  }}
                   onInstall={() => void handleInstall(model)}
                   onCancel={() => void cancelModelInstall(model.id)}
                   onUninstall={() => void handleUninstall(model)}
