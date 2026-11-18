@@ -4,8 +4,6 @@ import { AppShell } from '@/components/layout/AppShell';
 import { PageLoading } from '@/components/layout/PageLoading';
 import { AppProvider } from '@/state/AppState';
 import { AuthProvider } from '@/state/AuthState';
-import { AuthGate } from '@/components/auth/AuthGate';
-import { AccountGate } from '@/components/auth/AccountGate';
 import { PremiumGate } from '@/components/auth/PremiumGate';
 import { AdminGate } from '@/components/auth/AdminGate';
 import { LicenseProvider } from '@/state/LicenseState';
@@ -15,6 +13,7 @@ import { BankProvider } from '@/state/bank';
 import { ReleasesProvider } from '@/state/releases';
 
 const SubscriptionPage = lazy(() => import('@/pages/SubscriptionPage').then((m) => ({ default: m.SubscriptionPage })));
+const GeneratePage = lazy(() => import('@/pages/GeneratePage').then((m) => ({ default: m.GeneratePage })));
 const OverviewPage = lazy(() => import('@/pages/OverviewPage').then((m) => ({ default: m.OverviewPage })));
 const LibraryPage = lazy(() => import('@/pages/LibraryPage').then((m) => ({ default: m.LibraryPage })));
 const PreparePage = lazy(() => import('@/pages/PreparePage').then((m) => ({ default: m.PreparePage })));
@@ -45,9 +44,7 @@ export default function App() {
     <AppProvider>
       <ToastProvider>
         <AuthProvider>
-          <AuthGate>
           <LicenseProvider>
-          <AccountGate>
           <LibraryProvider>
             <BankProvider>
               <ReleasesProvider>
@@ -56,12 +53,16 @@ export default function App() {
                     <Routes>
                       <Route element={<AppShell />}>
                         <Route path="subscription" element={<SubscriptionPage />} />
-                        <Route element={<PremiumGate><Outlet /></PremiumGate>}>
+                        <Route element={<Outlet />}>
                         <Route index element={<OverviewPage />} />
                         <Route path="library" element={<LibraryPage />} />
                         <Route path="prepare" element={<PreparePage />} />
                         <Route path="export" element={<ExportPage />} />
                         <Route path="upscale" element={<UpscalePage />} />
+                        <Route path="generate/eps" element={<PremiumGate feature="vector"><GeneratePage kind="eps" /></PremiumGate>} />
+                        <Route path="generate/svg" element={<PremiumGate feature="vector"><GeneratePage kind="svg" /></PremiumGate>} />
+                        <Route path="generate/ai" element={<PremiumGate feature="vector"><GeneratePage kind="ai" /></PremiumGate>} />
+                        <Route path="generate/jpg" element={<PremiumGate feature="jpg"><GeneratePage kind="jpg" /></PremiumGate>} />
                         <Route path="video-upscale" element={<VideoUpscalePage />} />
                         <Route path="bg-remove" element={<BgRemovePage />} />
                         <Route path="vector" element={<VectorPage />} />
@@ -90,9 +91,7 @@ export default function App() {
               </ReleasesProvider>
             </BankProvider>
           </LibraryProvider>
-          </AccountGate>
           </LicenseProvider>
-          </AuthGate>
         </AuthProvider>
       </ToastProvider>
     </AppProvider>

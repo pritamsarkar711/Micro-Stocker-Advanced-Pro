@@ -4,7 +4,6 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button, ButtonLink } from '@/components/ui/Button';
 import { GIcon } from '@/components/ui/GoogleIcon';
-import { ActivationCard } from '@/components/auth/ActivationCard';
 import { useLicense } from '@/state/LicenseState';
 import { useAuth } from '@/state/AuthState';
 import { dateTime } from '@/lib/format';
@@ -111,16 +110,18 @@ export function SubscriptionPage() {
         </Card>
 
         <Card>
-          <CardHeader title="Activate a code" icon={<GIcon name="redeem" size={18} />} />
-          <ActivationCard />
-          <div className="mt-5 space-y-2 border-t border-line pt-4 text-[0.8125rem] text-ink-muted">
-            {['All studio tools and exports', 'Unlimited local processing', 'Works offline once activated'].map((line) => (
+          <CardHeader title="Everyday tools stay free" icon={<GIcon name="check_circle" size={18} />} />
+          <div className="space-y-2 text-[0.8125rem] text-ink-muted">
+            {['Converter, optimiser and background remover', 'Standard upscale models', 'Vector Studio and general tools'].map((line) => (
               <div key={line} className="flex items-center gap-2">
                 <GIcon name="check_circle" size={17} className="text-ok" />
                 {line}
               </div>
             ))}
           </div>
+          <p className="mt-4 border-t border-line pt-4 text-[0.8125rem] text-ink-muted">
+            A subscription only unlocks the premium generators, the JPG studio and the top upscale models.
+          </p>
         </Card>
       </div>
     </div>

@@ -1,21 +1,23 @@
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useLicense } from '@/state/LicenseState';
+import { useAuth } from '@/state/AuthState';
 import { PageLoading } from '@/components/layout/PageLoading';
-import { ActivationCard } from './ActivationCard';
+import { Button } from '@/components/ui/Button';
 import { GIcon } from '@/components/ui/GoogleIcon';
 
 /**
- * Blocks the workspace until the server confirms an active entitlement.
- * Administrators always pass. The activation form lives here so a brand new
- * account can unlock itself without hunting through the navigation.
+ * Wraps the premium generators. Everything else in the studio stays open, so
+ * this is the only place a subscription is enforced in the interface (the server
+ * enforces the same rule again before a single credit is spent).
  */
-export function PremiumGate({ children }: { children: ReactNode }) {
-  const { premium, loading, error, expiresAt } = useLicense();
-  const [justActivated, setJustActivated] = useState(false);
+export function PremiumGate({ children, feature }: { children: ReactNode; feature?: 'vector' | 'jpg' }) {
+  const { premium, loading, hasFeature } = useLicense();
+  const { user, openAuth } = useAuth();
+  const allowed = feature ? hasFeature(feature) : premium;
 
-  if (premium) return <>{children}</>;
-  if (loading) return <PageLoading label="Checking your subscription…" />;
+  if (allowed) return <>{children}</>;
+  if (loading) return <PageLoading label="Checking your plan…" />;
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col items-center py-6">
@@ -24,39 +26,32 @@ export function PremiumGate({ children }: { children: ReactNode }) {
           <span className="inline-flex size-12 items-center justify-center rounded-[var(--r-control)] bg-white/18">
             <GIcon name="workspace_premium" size={26} />
           </span>
-          <h1 className="mt-4 text-[1.375rem] font-bold">Activate your subscription</h1>
+          <h1 className="mt-4 text-[1.375rem] font-bold">This tool is part of Pro</h1>
           <p className="mt-1 max-w-md text-[0.875rem] text-white/85">
-            {expiresAt ? 'Your plan has expired.' : 'A subscription is required to use the studio.'}
+            The generators and the premium upscale models are included with an active subscription. Every other tool in the studio stays free.
           </p>
         </div>
 
-        <div className="space-y-5 p-6">
-          {error && (
-            <div className="flex items-start gap-2.5 rounded-[var(--r-control)] border border-danger/30 bg-danger-soft px-3 py-2.5 text-[0.8125rem] text-danger">
-              <GIcon name="info" size={18} className="mt-0.5" />
-              <div>
-                <p className="font-semibold">We could not verify your plan.</p>
-                <p className="mt-0.5 opacity-90">{error}</p>
-              </div>
-            </div>
-          )}
+        <div className="space-y-4 p-6">
+          <ul className="grid gap-2 text-[0.8125rem] text-ink-muted sm:grid-cols-2">
+            <li className="flex items-center gap-2"><GIcon name="check" size={18} className="text-ok" />EPS, SVG and AI generators</li>
+            <li className="flex items-center gap-2"><GIcon name="check" size={18} className="text-ok" />Premium upscale models</li>
+            <li className="flex items-center gap-2"><GIcon name="check" size={18} className="text-ok" />JPG image studio</li>
+            <li className="flex items-center gap-2"><GIcon name="check" size={18} className="text-ok" />Metadata and quality checks</li>
+          </ul>
 
-          {justActivated && (
-            <div className="rounded-[var(--r-control)] border border-ok/30 bg-ok-soft px-3 py-2.5 text-[0.8125rem] font-medium text-ok">
-              Plan activated.
-            </div>
-          )}
-
-          <ActivationCard onActivated={() => setJustActivated(true)} />
-
-          <div className="grid gap-2 border-t border-line pt-4 text-[0.8125rem] text-ink-muted sm:grid-cols-2">
-            <Link to="/subscription" className="flex items-center gap-2 hover:text-ink">
-              <GIcon name="receipt_long" size={18} />
-              Subscription details
+          <div className="flex flex-wrap gap-2 border-t border-line pt-4">
+            <Link to="/subscription">
+              <Button icon={<GIcon name="workspace_premium" size={18} />}>See plans</Button>
             </Link>
-            <Link to="/contact" className="flex items-center gap-2 hover:text-ink">
+            {!user && (
+              <Button variant="outline" onClick={() => openAuth('login')} icon={<GIcon name="login" size={18} />}>
+                Sign in
+              </Button>
+            )}
+            <Link to="/contact" className="flex items-center gap-2 px-1 text-[0.8125rem] text-ink-muted hover:text-ink">
               <GIcon name="support_agent" size={18} />
-              Need a code? Contact support
+              Need help?
             </Link>
           </div>
         </div>
