@@ -97,7 +97,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={api}>
       {children}
       <div
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-[100] flex flex-col items-center gap-2 p-3 safe-bottom sm:inset-x-auto sm:right-4 sm:bottom-4 sm:items-end sm:p-0"
+        // Phones show toasts under the app bar: a bottom toast would sit on top of
+        // the tab bar or the page action bar for the few seconds it lives.
+        className="pointer-events-none fixed inset-x-0 top-[calc(var(--topbar-h)+env(safe-area-inset-top,0px))] z-[100] flex flex-col items-center gap-2 p-3 lg:inset-x-auto lg:top-auto lg:right-4 lg:bottom-4 lg:items-end lg:p-0"
         role="status"
         aria-live="polite"
       >

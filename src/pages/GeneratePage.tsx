@@ -63,6 +63,8 @@ export function GeneratePage({ kind }: { kind: GeneratorKind }) {
   const [error, setError] = useState<{ message: string; detail?: string } | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const startedAt = useRef(0);
+  const outputRef = useRef<HTMLDivElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
   const [eta, setEta] = useState('');
 
   const copy = COPY[kind];
@@ -133,12 +135,23 @@ export function GeneratePage({ kind }: { kind: GeneratorKind }) {
           );
       setArtifact(result);
       toast.success('File ready', result.quality ? `Quality ${result.quality.score} of 100` : undefined);
+      // On a phone the result sits below a long form; bring it into view
+      // instead of leaving the user staring at an unchanged page.
+      if (window.matchMedia('(max-width: 1023.98px)').matches) {
+        window.setTimeout(() => {
+          outputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 120);
+      }
     } catch (cause) {
       const failure = cause instanceof GenerationError ? cause : null;
-      setError({
-        message: failure?.message ?? (cause instanceof Error ? cause.message : 'Generation failed'),
-        detail: failure?.detail,
-      });
+      const message = failure?.message ?? (cause instanceof Error ? cause.message : 'Generation failed');
+      setError({ message, detail: failure?.detail });
+      // The error card lives under a long form on a phone, so say it out loud
+      // as a toast and bring it into view: a tap must never look ignored.
+      toast.error('Nothing was charged', message);
+      window.setTimeout(() => {
+        errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 80);
     } finally {
       setBusy(false);
       setProgress(null);
@@ -335,7 +348,11 @@ export function GeneratePage({ kind }: { kind: GeneratorKind }) {
           )}
 
           {error && (
-            <div className="flex items-start gap-2 rounded-[var(--r-control)] border border-danger/30 bg-danger-soft px-3 py-2.5 text-[0.8125rem] text-danger">
+            <div
+              ref={errorRef}
+              role="alert"
+              className="flex items-start gap-2 rounded-[var(--r-control)] border border-danger/30 bg-danger-soft px-3 py-2.5 text-[0.8125rem] text-danger"
+            >
               <GIcon name="info" size={18} className="mt-0.5 shrink-0" />
               <div>
                 <p className="font-semibold">{error.message}</p>
@@ -346,6 +363,7 @@ export function GeneratePage({ kind }: { kind: GeneratorKind }) {
         </Card>
 
         <Card flush className="overflow-hidden">
+          <span ref={outputRef} className="block scroll-mt-16" aria-hidden="true" />
           <CardHeader
             title="Output"
             subtitle={artifact ? artifact.file?.filename ?? 'File ready' : undefined}
