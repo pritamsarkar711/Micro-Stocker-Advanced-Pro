@@ -115,6 +115,11 @@ export async function upscaleClassic(blob: Blob, options: ClassicOptions): Promi
       source = pre;
     }
 
+    // Large intermediates are the main memory cost of a 16 MP upscale, so each
+    // pass releases the canvas it just copied from instead of waiting for GC.
+    let releaseAfterDraw: OffscreenCanvas | HTMLCanvasElement | null = null;
+    let bitmapOpen = true;
+
     const totalFactor = exactScale ?? scale;
     const steps: number[] = [];
     if (totalFactor <= 1) {
@@ -143,6 +148,16 @@ export async function upscaleClassic(blob: Blob, options: ClassicOptions): Promi
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(source as CanvasImageSource, 0, 0, nextW, nextH);
+
+      if (bitmapOpen) {
+        bitmap.close?.();
+        bitmapOpen = false;
+      }
+      if (releaseAfterDraw) {
+        releaseAfterDraw.width = 0;
+        releaseAfterDraw.height = 0;
+      }
+      releaseAfterDraw = canvas as OffscreenCanvas | HTMLCanvasElement;
 
       const isLast = i === steps.length - 1;
       if (isLast && mode !== 'plain' && nextW * nextH <= 34_000_000) {
@@ -173,6 +188,6 @@ export async function upscaleClassic(blob: Blob, options: ClassicOptions): Promi
       ),
     );
   } finally {
-    bitmap.close();
+    bitmap.close?.();
   }
 }

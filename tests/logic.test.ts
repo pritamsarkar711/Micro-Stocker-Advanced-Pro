@@ -147,6 +147,8 @@ import { SCHEMA_SQL } from '@/lib/cloud/schema';
 import { sizeCapOptions } from '@/lib/stock/sizecaps';
 import { APP_NAME, APP_VERSION } from '@/lib/version';
 import { recommendUpscale } from '@/lib/stock/upscale/recommend';
+import { analysePixels } from '@/lib/vision/analyse';
+import { sanitizeBackup } from '@/lib/stock/backup';
 import { checkPassword } from '@/lib/auth/password';
 import { DEFAULT_FLAGS, kindOf, megapixels, type StockItem } from '@/lib/stock/types';
 
@@ -994,6 +996,218 @@ test('universal csv keeps one column count on every line', () => {
   equal(fields(lines[0]).length, 7);
   equal(fields(lines[1]).length, 7);
   equal(fields(lines[2]).length, 7);
+});
+
+
+/* -------------------------------------------------------------------------- */
+/* Local image understanding                                                  */
+/* -------------------------------------------------------------------------- */
+
+type Rgba = [number, number, number, number];
+
+function canvasOf(width: number, height: number, paint: (x: number, y: number) => Rgba): Uint8ClampedArray {
+  const data = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const [r, g, b, a] = paint(x, y);
+      const i = (y * width + x) * 4;
+      data[i] = r;
+      data[i + 1] = g;
+      data[i + 2] = b;
+      data[i + 3] = a;
+    }
+  }
+  return data;
+}
+
+test('vision engine detects a studio cutout on white', () => {
+  const data = canvasOf(320, 320, (x, y) => {
+    const inSquare = x > 110 && x < 210 && y > 110 && y < 210;
+    if (inSquare) {
+      // Subtle texture so the subject is not a perfectly flat block.
+      const n = ((x * 7 + y * 13) % 9) * 3;
+      return [176 + n, 40 + n, 52 + n, 255];
+    }
+    return [252, 252, 252, 255];
+  });
+  const insight = analysePixels(data, 320, 320);
+  equal(insight.uniformBackground, true);
+  assert(['product', 'cutout', 'document'].includes(insight.kind), `cutout kind was ${insight.kind}`);
+  assert(insight.palette.some((colour) => colour.name === 'red'), 'red object in palette');
+  equal(insight.quality.noiseLabel, 'clean');
+});
+
+test('vision engine reads sky and ground as a landscape', () => {
+  const data = canvasOf(360, 240, (_x, y) => {
+    if (y < 120) {
+      const t = y / 120;
+      return [Math.round(96 + t * 60), Math.round(150 + t * 50), 226, 255];
+    }
+    const t = (y - 120) / 120;
+    return [Math.round(40 + t * 30), Math.round(130 - t * 30), Math.round(56 + t * 10), 255];
+  });
+  const insight = analysePixels(data, 360, 240);
+  assert(
+    ['landscape', 'nature', 'photo'].includes(insight.kind),
+    `landscape kind was ${insight.kind}`,
+  );
+  assert(insight.labels.some((label) => label.includes('sky')), 'sky label present');
+  equal(insight.orientation, 'landscape');
+});
+
+test('vision engine spots a portrait by skin tones in the centre', () => {
+  const data = canvasOf(300, 400, (x, y) => {
+    const dx = (x - 150) / 70;
+    const dy = (y - 190) / 90;
+    if (dx * dx + dy * dy < 1) return [206, 158, 128, 255];
+    return [232, 230, 226, 255];
+  });
+  const insight = analysePixels(data, 300, 400);
+  assert(
+    ['portrait', 'people', 'product'].includes(insight.kind),
+    `portrait kind was ${insight.kind}`,
+  );
+  equal(insight.orientation, 'portrait');
+  assert(insight.labels.some((label) => label.includes('person')), 'person label present');
+});
+
+test('vision engine flags flat artwork and text layouts', () => {
+  const flat = canvasOf(300, 300, (x) => {
+    if (x < 100) return [34, 40, 54, 255];
+    if (x < 200) return [226, 96, 132, 255];
+    return [244, 214, 86, 255];
+  });
+  const flatInsight = analysePixels(flat, 300, 300);
+  assert(flatInsight.flatArt, 'flat art detected');
+  assert(['illustration', 'pattern', 'abstract', 'photo'].includes(flatInsight.kind), `flat kind was ${flatInsight.kind}`);
+  assert(flatInsight.palette.length >= 3, 'three colour palette');
+
+  const text = canvasOf(400, 300, (x, y) => {
+    const band = Math.floor(y / 20);
+    const inGlyph =
+      y % 20 > 6 && y % 20 < 15 && x > 30 && x < 370 && ((x + band * 13) % 34 < 22);
+    return inGlyph ? [18, 18, 18, 255] : [250, 250, 248, 255];
+  });
+  const textInsight = analysePixels(text, 400, 300);
+  assert(textInsight.hasFineText, 'text layout detected');
+  assert(['document', 'screenshot', 'photo'].includes(textInsight.kind), `text kind was ${textInsight.kind}`);
+});
+
+test('vision engine measures noise and transparency honestly', () => {
+  let seed = 12345;
+  const rand = () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed / 2147483648;
+  };
+  const noisy = canvasOf(256, 256, () => {
+    const value = Math.round(120 + rand() * 90);
+    return [value, value, value, 255];
+  });
+  const noisyInsight = analysePixels(noisy, 256, 256);
+  assert(noisyInsight.quality.noise > 7, `noise measured ${noisyInsight.quality.noise}`);
+
+  const alpha = canvasOf(256, 256, (x, y) => {
+    const dx = x - 128;
+    const dy = y - 128;
+    return dx * dx + dy * dy < 90 * 90 ? [70, 120, 190, 255] : [0, 0, 0, 0];
+  });
+  const alphaInsight = analysePixels(alpha, 256, 256);
+  equal(alphaInsight.hasTransparency, true);
+  equal(alphaInsight.kind, 'cutout');
+});
+
+test('local metadata from vision is specific and valid', () => {
+  const data = canvasOf(360, 240, (x, y) => {
+    if (y < 120) return [110, 168, 226, 255];
+    if (y > 190) return [214, 196, 150, 255];
+    return [64, 140, 72, 255];
+  });
+  const insight = analysePixels(data, 360, 240);
+  const meta = draftMetadata(
+    { name: 'coastline.jpg', format: 'jpg', width: 360, height: 240, flags: { aiGenerated: false, editorial: false, illustration: false } },
+    35,
+    null,
+    insight,
+  );
+  assert(meta.title.split(/\s+/).length >= 5, 'title has enough words');
+  assert(meta.title.length <= 70, 'title length within 70');
+  assert(!/[,–—]/.test(meta.title), 'title has no commas or dashes');
+  assert(meta.keywords.length >= 25, `keyword count ${meta.keywords.length}`);
+  equal(new Set(meta.keywords).size, meta.keywords.length);
+  assert(meta.categories.some((c) => (SHUTTERSTOCK_CATEGORIES as readonly string[]).includes(c)), 'valid category');
+  assert(!/commercial high resolution scene|modern vector graphic/i.test(meta.title), 'no generic filler title');
+});
+
+test('upscale recommendation follows measured quality', () => {
+  let seed = 987654;
+  const rand = () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed / 2147483648;
+  };
+  const noisyImage = canvasOf(300, 300, () => {
+    const value = Math.round(110 + rand() * 90);
+    return [value, value, value, 255];
+  });
+  const noisyInsight = analysePixels(noisyImage, 300, 300);
+  const noisyRec = recommendUpscale(
+    { width: 300, height: 300, bytes: 90_000, filename: 'grain.jpg', insight: noisyInsight },
+    {},
+  );
+  equal(noisyRec.modelId, 'photo-restore');
+  assert(noisyRec.evidence.length > 0, 'evidence recorded');
+
+  const textImage = canvasOf(400, 300, (x, y) => {
+    const inGlyph = y % 20 > 6 && y % 20 < 15 && x > 30 && x < 370;
+    return inGlyph ? [18, 18, 18, 255] : [250, 250, 248, 255];
+  });
+  const textRec = recommendUpscale(
+    { width: 400, height: 300, bytes: 60_000, filename: 'page.png', insight: analysePixels(textImage, 400, 300) },
+    {},
+  );
+  assert(['lanczos-pro', 'edge-crisp'].includes(textRec.modelId), `text model ${textRec.modelId}`);
+  equal(textRec.format, 'png');
+
+  const alphaRec = recommendUpscale(
+    { width: 800, height: 800, bytes: 400_000, filename: 'cut.png', hasAlpha: true },
+    {},
+  );
+  equal(alphaRec.format, 'png');
+  equal(alphaRec.kind, 'transparent');
+});
+
+test('backup import rebuilds items and rejects hostile input', () => {
+  const hostile = JSON.parse(
+    JSON.stringify({
+      version: 2,
+      items: [
+        {
+          id: 'keep-1',
+          name: '../../etc/passwd.jpg',
+          format: 'jpg',
+          sizeBytes: 1024,
+          metadata: { title: 'T'.repeat(500), keywords: ['ok', 42, ' ok ', ''], categories: ['Nature'] },
+          flags: { aiGenerated: true, license: 'bogus' },
+          embeddedAt: 'not-a-date',
+        },
+        { id: '', name: 'no-id.jpg' },
+        'string item',
+        { __proto__: { polluted: true }, id: 'keep-2', name: 'plain.png', format: 'nope' },
+      ],
+    }),
+  );
+  const restored = sanitizeBackup(hostile);
+  equal(restored.items.length, 2);
+  equal(restored.skipped, 2);
+  equal(restored.items[0].name, '.._.._etc_passwd.jpg');
+  equal(restored.items[0].metadata.title.length, 200);
+  equal(restored.items[0].metadata.keywords.includes('ok'), true);
+  equal(restored.items[0].flags.license, 'free');
+  equal(restored.items[1].format, 'jpg');
+  equal(({} as Record<string, unknown>).polluted, undefined);
+  equal(restored.metadataOnly, true);
+
+  const bad = sanitizeBackup({ items: 'nope' });
+  equal(bad.items.length, 0);
 });
 
 test('password policy refuses common and short passwords', () => {

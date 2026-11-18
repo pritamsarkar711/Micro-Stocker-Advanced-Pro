@@ -19,6 +19,27 @@ import { DEFAULT_AI, loadAiSettings, PROVIDERS, type AiSettings } from '@/lib/st
 import { formatMetadataForClipboard, parseKeywordInput } from '@/lib/stock/metadata';
 import { formatBytes } from '@/lib/modelStore';
 
+/** Row preview that loads its blob only when the row actually renders. */
+function PreviewThumb({
+  item,
+}: {
+  item: { id: string; name: string; format: string; thumbUrl?: string };
+}) {
+  const { ensureThumb } = useLibrary();
+  useEffect(() => {
+    if (!item.thumbUrl) void ensureThumb(item.id);
+  }, [ensureThumb, item.id, item.thumbUrl]);
+  return (
+    <div className="checkerboard flex size-13 shrink-0 items-center justify-center overflow-hidden rounded-[var(--r-xs)] border border-line bg-surface-2">
+      {item.thumbUrl ? (
+        <img src={item.thumbUrl} alt={item.name} className="size-full object-cover" />
+      ) : (
+        <FormatIcon format={item.format as never} size={18} />
+      )}
+    </div>
+  );
+}
+
 export function LibraryPage() {
   const {
     items,
@@ -50,6 +71,9 @@ export function LibraryPage() {
   const [batchKwText, setBatchKwText] = useState('');
   const [draftProgress, setDraftProgress] = useState<{ done: number; total: number } | null>(null);
   const [embedding, setEmbedding] = useState(false);
+  // Large libraries would mount hundreds of full-size previews at once, so the
+  // grid renders a window of rows and extends it on demand.
+  const [visibleCount, setVisibleCount] = useState(60);
 
   useEffect(() => {
     void loadAiSettings().then(setAiSettings);
@@ -83,6 +107,11 @@ export function LibraryPage() {
     });
   }, [filter, items, search]);
 
+  useEffect(() => {
+    setVisibleCount(60);
+  }, [filter, search]);
+
+  const visibleItems = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
   const activeItem = items.find((i) => i.id === activeId) ?? filtered[0] ?? null;
   const targetIds = selected.size > 0 ? Array.from(selected) : filtered.map((i) => i.id);
   const provider = PROVIDERS[aiSettings.kind];
@@ -324,7 +353,7 @@ export function LibraryPage() {
             className="xl:col-span-6"
           >
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {filtered.map((item) => {
+              {visibleItems.map((item) => {
                 const isActive = activeItem?.id === item.id;
                 const isSelected = selected.has(item.id);
                 const tagged =
@@ -356,16 +385,10 @@ export function LibraryPage() {
                       />
                     </button>
 
-                    <div className="checkerboard flex size-13 shrink-0 items-center justify-center overflow-hidden rounded-[var(--r-xs)] border border-line bg-surface-2">
-                      {item.thumbUrl ? (
-                        <img src={item.thumbUrl} alt={item.name} className="size-full object-cover" />
-                      ) : (
-                        <FormatIcon format={item.format} size={18} />
-                      )}
-                    </div>
+                    <PreviewThumb item={item} />
 
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-xs font-semibold text-ink">
+                      <div className="line-clamp-2 text-xs leading-snug font-semibold text-ink">
                         {item.metadata.title || item.name}
                       </div>
                       <div className="mt-0.5 truncate text-2xs text-ink-muted">
@@ -384,6 +407,21 @@ export function LibraryPage() {
                 );
               })}
             </div>
+
+            {filtered.length > visibleItems.length && (
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-[var(--r-card)] border border-line bg-surface px-3 py-2">
+                <span className="text-2xs text-ink-muted">
+                  Showing {visibleItems.length} of {filtered.length}
+                </span>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setVisibleCount((count) => count + 60)}
+                >
+                  Show 60 more
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Right detail & metadata generator */}

@@ -16,6 +16,7 @@ import {
   suggestedFormat,
   type OptimizeFormat,
 } from '@/lib/tools/optimizer';
+import { analyseBlob } from '@/lib/vision';
 
 type Mode = 'auto' | 'target' | 'quality';
 
@@ -86,24 +87,39 @@ export function OptimizePage() {
   /** Inspect the first file once and propose a format the user can accept. */
   const suggestFor = useCallback(async (file: File) => {
     try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      const raster = await decodeRaster(bytes, file.name);
-      let hasAlpha = false;
-      for (let i = 3; i < raster.data.length; i += 4) {
-        if (raster.data[i] < 250) {
-          hasAlpha = true;
-          break;
+      // The vision pass works on a downsample, so there is no need to decode
+      // the full file just to learn whether it carries alpha.
+      const insight = await analyseBlob(file);
+      let hasAlpha = Boolean(insight?.hasTransparency);
+      if (!insight) {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const raster = await decodeRaster(bytes, file.name);
+        for (let i = 3; i < raster.data.length; i += 4) {
+          if (raster.data[i] < 250) {
+            hasAlpha = true;
+            break;
+          }
         }
       }
       const original = extensionOf(file.name);
-      const format = suggestedFormat(hasAlpha, original);
-      const reason = hasAlpha
+      const format = suggestedFormat(hasAlpha || Boolean(insight?.hasTransparency), original, {
+        hasFineText: insight?.hasFineText,
+        flatArt: insight?.flatArt,
+        noise: insight?.quality.noise,
+      });
+      const reason = hasAlpha || insight?.hasTransparency
         ? format === 'webp'
           ? 'Transparency detected. WebP keeps the alpha channel at a fraction of PNG size.'
           : 'Transparent PNG stays PNG so the alpha channel is never flattened.'
-        : original === 'jpg' || original === 'jpeg'
-          ? 'Opaque photo already in JPEG. Staying in JPEG avoids generation loss.'
-          : 'Opaque image. WebP is smaller than JPEG and PNG at the same quality.';
+        : insight?.hasFineText
+          ? 'Text and thin lines detected. PNG keeps them crisp without ringing.'
+          : insight?.flatArt
+            ? 'Flat artwork compresses cleanly in WebP with no visible loss.'
+            : insight && insight.quality.noise > 13
+              ? 'Visible grain. JPEG keeps the texture without bloating the file.'
+              : original === 'jpg' || original === 'jpeg'
+                ? 'Opaque photo already in JPEG. Staying in JPEG avoids generation loss.'
+                : 'Opaque image. WebP is smaller than JPEG and PNG at the same quality.';
       setSuggestion({ format, reason });
       if (!manualFormat) setFormat(format);
     } catch {
@@ -473,8 +489,11 @@ export function OptimizePage() {
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-2">
-                <Badge tone="brand" icon={<GIcon name="compress" size={13} />}>
-                  {totals.percent}% smaller
+                <Badge
+                  tone={totals.percent > 0 ? 'brand' : 'neutral'}
+                  icon={<GIcon name="compress" size={13} />}
+                >
+                  {totals.percent > 0 ? `${totals.percent}% smaller` : 'Already tight'}
                 </Badge>
                 <span className="text-[0.8125rem] text-ink-muted">
                   {formatBytes(totals.before)} → {formatBytes(totals.after)}

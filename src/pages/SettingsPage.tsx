@@ -17,6 +17,7 @@ import { useAuth } from '@/state/AuthState';
 import { useLibrary } from '@/state/library';
 import { useToast } from '@/state/ToastState';
 import { CURRENCIES, type CurrencyCode } from '@/lib/format';
+import { sanitizeBackup } from '@/lib/stock/backup';
 import { desktop } from '@/lib/desktop';
 
 export function SettingsPage() {
@@ -58,14 +59,19 @@ export function SettingsPage() {
   }
 
   async function restoreLibrary() {
-    const res = await desktop.fs.openJson<{ items?: typeof items }>();
+    const res = await desktop.fs.openJson<unknown>();
     if (!res.ok || res.canceled) return;
-    if (!Array.isArray(res.value?.items)) {
-      toast.error('Invalid backup file');
+    const restored = sanitizeBackup(res.value);
+    if (!restored.items.length) {
+      toast.error('Invalid backup file', 'No readable assets were found in it.');
       return;
     }
-    replaceAll(res.value.items);
-    toast.success(`Restored ${res.value.items.length} assets`);
+    replaceAll(restored.items);
+    const suffix = restored.skipped ? ` · ${restored.skipped} skipped` : '';
+    toast.success(
+      `Restored ${restored.items.length} assets${suffix}`,
+      restored.metadataOnly ? 'Metadata only. File contents stay in the original library.' : undefined,
+    );
   }
 
   return (

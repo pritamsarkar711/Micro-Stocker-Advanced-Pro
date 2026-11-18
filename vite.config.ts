@@ -77,18 +77,14 @@ export default defineConfig(({ command }) => ({
           if (!id.includes('node_modules')) return undefined;
           if (id.includes('onnxruntime-web')) return 'onnx';
           if (id.includes('@supabase')) return 'supabase';
-          if (
-            id.includes('@jsquash') ||
-            id.includes('codec-openjpeg') ||
-            id.includes('pdfjs-dist') ||
-            id.includes('libraw-wasm') ||
-            id.includes('heic-to') ||
-            id.includes('ag-psd') ||
-            id.includes('utif2') ||
-            id.includes('jpeg-js')
-          )
-            return 'codecs';
-          return 'vendor';
+          // Only the framework shell is hoisted into a shared vendor chunk.
+          // Everything else keeps Rollup's default splitting, so heavy codec,
+          // PDF and image libraries stay inside the lazy route chunks that
+          // actually use them and never delay first paint.
+          if (/(?:^|\/)node_modules\/(react|react-dom|react-router|react-router-dom|scheduler|clsx|tailwind-merge|zustand|sonner|lucide-react)\//.test(id)) {
+            return 'vendor';
+          }
+          return undefined;
         },
       },
     },

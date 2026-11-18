@@ -1,4 +1,6 @@
 import type { StockItem, StockMetadata } from './types';
+import type { ImageInsight, SceneKind } from '@/lib/vision/analyse';
+import { COLOUR_ADJECTIVES, COMMERCIAL_TERMS, SCENE_PROFILES } from '@/lib/vision/scene-vocabulary';
 
 /**
  * Built in offline Local AI metadata generator, keyword sanitizer and
@@ -293,11 +295,147 @@ export function cleanStockSentence(text: string, maxChars: number, noCommas = fa
   return out;
 }
 
+/** Primary colour word that is worth putting in a title, or an empty string. */
+function titleColour(insight: ImageInsight): string {
+  const top = insight.palette.find(
+    (colour) => colour.share > 0.16 && !['grey', 'silver', 'white', 'black', 'charcoal'].includes(colour.name),
+  );
+  return top ? (COLOUR_ADJECTIVES[top.name] ?? top.name) : '';
+}
+
+function lightWord(insight: ImageInsight): string {
+  const { meanLuma, contrast } = insight.quality;
+  if (meanLuma > 182) return 'bright airy light';
+  if (meanLuma < 74) return 'dramatic low light';
+  if (contrast > 72) return 'high contrast light';
+  return 'soft natural light';
+}
+
+function sceneTitle(insight: ImageInsight, isVector: boolean): string {
+  const colour = titleColour(insight);
+  const light = lightWord(insight);
+  const withColour = (word: string) => (colour ? `${colour} ${word}` : word);
+  const kind: SceneKind = insight.kind;
+  let title: string;
+  switch (kind) {
+    case 'cutout':
+      title = `Isolated ${withColour('object')} on a transparent background`;
+      break;
+    case 'product':
+      title = insight.backgroundHex && /^#f/i.test(insight.backgroundHex)
+        ? `Clean product still life on a white background`
+        : `Studio still life on a ${colour ? `${colour} ` : ''}background`;
+      break;
+    case 'portrait':
+      title = `Portrait of a person in ${light}`;
+      break;
+    case 'people':
+      title = `People together in ${light}`;
+      break;
+    case 'landscape':
+      title = `Wide ${withColour('landscape')} under an open sky`;
+      break;
+    case 'nature':
+      title = `${withColour('Foliage')} close up with natural texture`;
+      break;
+    case 'architecture':
+      title = `Modern building facade with clean ${colour || 'neutral'} lines`;
+      break;
+    case 'food':
+      title = `Warm tabletop food scene in ${light}`;
+      break;
+    case 'screenshot':
+      title = 'Clean interface screenshot with crisp readable text';
+      break;
+    case 'document':
+      title = 'Printed document page on a plain white surface';
+      break;
+    case 'illustration':
+      title = `Flat ${withColour('vector illustration')} with bold shapes`;
+      break;
+    case 'pattern':
+      title = `Seamless ${withColour('geometric pattern')} for surface design`;
+      break;
+    case 'abstract':
+      title = `Abstract ${withColour('composition')} with soft gradients`;
+      break;
+    default:
+      title = `${colour ? `${colour} toned ` : ''}Photograph in ${light}`;
+  }
+  if (isVector && !/vector|illustration/i.test(title)) title = `${title} as a scalable vector graphic`;
+  return title;
+}
+
+function sceneDescription(insight: ImageInsight, isVector: boolean): string {
+  const profile = SCENE_PROFILES[insight.kind];
+  const subject =
+    insight.kind === 'cutout'
+      ? 'The subject is isolated with a clean edge and no background, ready to drop into a layout.'
+      : insight.kind === 'landscape'
+        ? 'The frame opens onto a wide horizon with room for headline copy.'
+        : insight.kind === 'portrait'
+          ? 'Natural expression and even light keep the frame usable for editorial and commercial work.'
+          : insight.kind === 'pattern'
+            ? 'The repeat tiles seamlessly across packaging, fabric and web backgrounds.'
+            : insight.kind === 'document' || insight.kind === 'screenshot'
+              ? 'Text and interface elements stay legible at full size.'
+              : `The ${profile.category.toLowerCase()} subject fills the frame with clean detail.`;
+  return `${sceneTitle(insight, isVector)}. ${subject}`;
+}
+
+function draftFromInsight(
+  item: Pick<StockItem, 'name' | 'format' | 'width' | 'height' | 'flags'>,
+  insight: ImageInsight,
+  targetKeywordCount: number,
+): StockMetadata {
+  const profile = SCENE_PROFILES[insight.kind];
+  const isVector = item.format === 'eps' || item.format === 'ai' || item.format === 'svg';
+  const tokens = tokensFromFilename(item.name).filter((token) => !BANNED_STOCK_TERMS.has(token));
+  const title = cleanStockSentence(sceneTitle(insight, isVector), 70, true);
+  const description = cleanStockSentence(sceneDescription(insight, isVector), 195, false);
+
+  const paletteWords = insight.palette
+    .slice(0, 3)
+    .map((colour) => (COLOUR_ADJECTIVES[colour.name] ? `${COLOUR_ADJECTIVES[colour.name]} tones` : ''))
+    .filter(Boolean);
+  const lightTerms =
+    insight.quality.meanLuma > 182
+      ? ['bright', 'airy', 'high key', 'natural light']
+      : insight.quality.meanLuma < 74
+        ? ['dark', 'moody', 'low key', 'dramatic lighting']
+        : ['natural light', 'well lit'];
+  const composition = [
+    insight.orientation === 'landscape' ? 'horizontal' : insight.orientation === 'portrait' ? 'vertical' : 'square',
+    'copy space',
+    insight.orientation === 'portrait' ? 'story format' : 'wide shot',
+  ];
+
+  const pool = [
+    ...profile.keywords,
+    ...tokens,
+    ...paletteWords,
+    ...lightTerms,
+    ...composition,
+    ...(insight.hasTransparency ? ['isolated', 'transparent background', 'cutout'] : []),
+    ...(insight.uniformBackground ? ['studio backdrop', 'seamless background'] : []),
+    ...(insight.labels.includes('soft focus') ? [] : ['sharp detail']),
+    ...COMMERCIAL_TERMS,
+  ];
+  const keywords = scrubStockKeywords(pool, Math.min(49, Math.max(12, targetKeywordCount)));
+  const categories = [profile.category, ...(profile.secondary ? [profile.secondary] : [])].slice(0, 2);
+
+  return { title, description, keywords, categories };
+}
+
 export function draftMetadata(
   item: Pick<StockItem, 'name' | 'format' | 'width' | 'height' | 'flags'>,
   targetKeywordCount = 35,
   visuals?: VisualCueSummary | null,
+  insight?: ImageInsight | null,
 ): StockMetadata {
+  if (insight && !['eps', 'ai', 'svg'].includes(item.format)) {
+    return draftFromInsight(item, insight, targetKeywordCount);
+  }
   const tokens = tokensFromFilename(item.name).filter((t) => !BANNED_STOCK_TERMS.has(t));
   const pool: string[] = [...tokens];
   const categories: string[] = [];

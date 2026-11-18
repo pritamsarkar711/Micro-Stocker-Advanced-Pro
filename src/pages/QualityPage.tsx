@@ -235,6 +235,33 @@ export function QualityPage() {
     [items, getBlob],
   );
 
+  /** Audit every asset already in the library, without re-picking files. */
+  const addFromLibrary = useCallback(async () => {
+    if (!items.length) {
+      toast.info('No library files yet', 'Import artwork in Library first.');
+      return;
+    }
+    const files: File[] = [];
+    for (const item of items) {
+      try {
+        const blob = await getBlob(item.id);
+        if (!blob) continue;
+        files.push(new File([blob], item.name, { type: blob.type || 'application/octet-stream' }));
+      } catch {
+        /* unreadable entries are reported as missing below */
+      }
+    }
+    const fresh = files.filter(
+      (file) => !checks.some((check) => check.name === file.name && check.bytes === file.size),
+    );
+    if (!fresh.length) {
+      toast.info('Everything is already checked');
+      return;
+    }
+    await addFiles(fresh);
+    toast.success(`Checking ${fresh.length} librar${fresh.length === 1 ? 'y file' : 'y files'}`);
+  }, [items, getBlob, checks, addFiles, toast]);
+
   const downloadReport = () => {
     const payload = {
       generatedAt: new Date().toISOString(),
@@ -270,6 +297,15 @@ export function QualityPage() {
                 </Button>
               </>
             )}
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<GIcon name="photo_library" size={16} />}
+              onClick={() => void addFromLibrary()}
+              disabled={busy}
+            >
+              From Library
+            </Button>
             <Button size="sm" icon={<GIcon name="add" size={16} />} onClick={() => fileRef.current?.click()}>
               Check files
             </Button>

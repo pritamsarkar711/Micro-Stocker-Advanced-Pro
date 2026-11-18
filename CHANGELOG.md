@@ -3,6 +3,59 @@
 All notable changes to Micro Stocker Advanced Pro are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.9.0] - 2026-11-17
+
+### Added
+- **A real image understanding engine.** Uploaded artwork is now decoded and
+  measured in the app: 14 scene categories, an 8 colour palette that knows its own
+  colour names, subject placement, skin and sky share, flat-colour and text-layout
+  detection, transparency, plus a quality read out of sharpness, noise, exposure,
+  clipping, colour range and bits per pixel. It runs offline on every platform and
+  feeds every suggestion below.
+- **Smarter upscale recommendations.** The upscaler reports what it measured
+  ("soft edges, clean grain, 1.9 MP"), then picks the model, marketplace preset and
+  output format that fits, and keeps the reason on screen with a one click
+  **Use suggestion**.
+- **Metadata drafted from the picture, not from the filename.** Titles, descriptions
+  and keywords come from the scene, palette, subject placement and time of day,
+  with commercial buyer terms added and duplicates, filler and over-long keywords
+  filtered out.
+- **AI drafts get the same picture.** The prompt now carries the measured scene,
+  palette, subject position and quality notes, and the returned title, description
+  and keywords are length checked and ranked so searchable terms come first.
+- **From Library in the Quality Checker.** Audit every asset already in the
+  library without picking files again.
+- **Error budget for AI models.** A model that is not available on the provider
+  surfaces the provider message and the fix instead of a silent failure.
+
+### Changed
+- **First paint is 1.2 MB lighter.** The 4.4 MB codec bundle no longer loads on
+  launch; only the framework shell is preloaded and every codec arrives with the
+  tool that needs it.
+- **Library scales to large collections.** Previews load as rows render instead of
+  reading every file at startup, and the grid renders in pages of 60 with a
+  **Show 60 more** control.
+- **Restoring a backup is validated.** Imported JSON is rebuilt field by field, so
+  unknown fields, wrong types, prototype keys and oversized strings cannot enter
+  the library; the toast says when only metadata could be restored.
+- **Card headers wrap on narrow screens**, so three actions never push a button
+  past the card edge.
+- **Stripping EXIF re-inspects the file**, so the list shows Clean instead of
+  advertising tags that were just removed.
+
+### Fixed
+- Export CSV column list clipped mid word on narrow screens.
+- Library row titles were cut to one line with an ellipsis; they now show two.
+- Quality Checker had no way to audit library assets.
+- Model catalogue and provider errors no longer hide behind a generic failure.
+
+### Audited
+- 24 routes at ten widths (320 to 1920), axe-core WCAG 2.1 AA in both themes,
+  interaction, contrast, text, suggestion, vector, security rule sweeps, and an
+  end to end run of all six studio tools with real files: upscaler, background
+  remover, optimizer, converter, quality checker and the library import plus
+  offline metadata draft.
+
 ## [1.8.0] - 2026-11-17
 
 ### Added

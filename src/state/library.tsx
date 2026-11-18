@@ -134,6 +134,8 @@ export interface LibraryState {
   ) => Promise<{ ok: number; failed: number; embedded: number }>;
 
   getBlob: (id: string) => Promise<Blob | null>;
+  /** Load a preview URL on demand, for rows that scroll into view. */
+  ensureThumb: (id: string) => Promise<void>;
   embedInto: (ids: string[], options?: { downloadInBrowser?: boolean; silent?: boolean }) => Promise<{ ok: number; failed: number }>;
   downloadEmbeddedFile: (id: string) => Promise<boolean>;
   copyItemMetadata: (id: string) => Promise<boolean>;
@@ -176,8 +178,13 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     (async () => {
       const saved = await kv.get<PersistedItem[]>(STORAGE_KEY, []);
       if (cancelled) return;
-      const hydrated: StockItem[] = await Promise.all(
-        saved.map(async (item) => {
+      // Only the first screenful is hydrated up front: reading every file in a
+      // large library would stall startup and hold hundreds of full-size blobs
+      // in memory. The rest load through ensureThumb as they scroll into view.
+      const head = saved.slice(0, 60);
+      const tail = saved.slice(60);
+      const hydratedHead: StockItem[] = await Promise.all(
+        head.map(async (item) => {
           if (item.path && desktop.isDesktop && item.format !== 'eps' && item.format !== 'ai') {
             try {
               const bytes = await desktop.fs.readBytes(item.path);
@@ -195,7 +202,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
         }),
       );
       if (!cancelled) {
-        setItems(hydrated);
+        setItems([...hydratedHead, ...tail]);
         setReady(true);
       }
     })();
@@ -470,6 +477,27 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       }
     }
     return null;
+  }, []);
+
+  const ensureThumb = useCallback(async (id: string) => {
+    if (thumbs.current.has(id)) return;
+    const item = itemsRef.current.find((it) => it.id === id);
+    if (!item || !item.path || !desktop.isDesktop) return;
+    if (item.format === 'eps' || item.format === 'ai') return;
+    try {
+      const bytes = await desktop.fs.readBytes(item.path);
+      const copy = new Uint8Array(bytes.byteLength);
+      copy.set(bytes);
+      const url = URL.createObjectURL(new Blob([copy], { type: MIME_BY_FORMAT[item.format] }));
+      if (thumbs.current.has(id)) {
+        URL.revokeObjectURL(url);
+        return;
+      }
+      thumbs.current.set(id, url);
+      setItems((prev) => prev.map((it) => (it.id === id ? { ...it, thumbUrl: url } : it)));
+    } catch {
+      /* a missing file simply keeps the format icon */
+    }
   }, []);
 
   /** Write IPTC and XMP packets directly into in memory blobs or desktop files. */
@@ -784,6 +812,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       autoDraft,
       aiDraft,
       getBlob,
+      ensureThumb,
       embedInto,
       downloadEmbeddedFile,
       copyItemMetadata,
@@ -814,6 +843,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       autoDraft,
       aiDraft,
       getBlob,
+      ensureThumb,
       embedInto,
       downloadEmbeddedFile,
       copyItemMetadata,

@@ -76,13 +76,19 @@ export function PreparePage() {
   async function cleanJpegs() {
     setBusy(true);
     let cleaned = 0;
+    let untouched = 0;
+    const next: Record<string, JpegReport> = { ...reports };
     try {
       for (const it of jpegs) {
         const blob = await getBlob(it.id);
         if (!blob) continue;
         const src = new Uint8Array(await blob.arrayBuffer());
         const { bytes, removed } = stripJpegMetadata(src, { photoshop: stripIrb });
-        if (!removed.length) continue;
+        if (!removed.length) {
+          untouched += 1;
+          next[it.id] = inspectJpeg(src);
+          continue;
+        }
         const copy = new Uint8Array(bytes.byteLength);
         copy.set(bytes);
         if (it.path && desktop.isDesktop) {
@@ -90,11 +96,20 @@ export function PreparePage() {
         } else {
           triggerBlobDownload(new Blob([copy], { type: 'image/jpeg' }), it.name);
         }
-        cleaned++;
+        cleaned += 1;
+        // Re-inspect the cleaned bytes so the row stops advertising tags that
+        // are gone and the list reflects reality straight away.
+        next[it.id] = inspectJpeg(copy);
       }
-      toast.success(
-        cleaned > 0 ? `Stripped camera EXIF from ${cleaned} files` : 'No camera EXIF or GPS found',
-      );
+      setReports(next);
+      if (cleaned > 0) {
+        toast.success(
+          `Stripped metadata from ${cleaned} file${cleaned === 1 ? '' : 's'}`,
+          untouched > 0 ? `${untouched} file${untouched === 1 ? ' was' : 's were'} already clean.` : undefined,
+        );
+      } else {
+        toast.info('Nothing to remove', 'These files carry no camera EXIF or GPS tags.');
+      }
     } finally {
       setBusy(false);
     }

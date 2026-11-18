@@ -333,6 +333,38 @@ function guessMime(name: string, bytes: Uint8Array): string {
   return 'image/png';
 }
 
+/**
+ * Encode through the browser's own canvas codec. WebP has no pure JS encoder in
+ * the bundle, and every supported Chromium build ships one natively.
+ */
+async function encodeCanvasRaster(
+  raster: Raster,
+  mime: string,
+  quality?: number,
+): Promise<Uint8Array> {
+  const { width, height, data } = raster;
+  if (typeof OffscreenCanvas !== 'undefined') {
+    const canvas = new OffscreenCanvas(Math.max(1, width), Math.max(1, height));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas 2D context unavailable');
+    ctx.putImageData(new ImageData(new Uint8ClampedArray(data), Math.max(1, width), Math.max(1, height)), 0, 0);
+    const blob = await canvas.convertToBlob(quality === undefined ? { type: mime } : { type: mime, quality });
+    if (blob.type !== mime) throw new Error(`${mime} encoding is not available in this browser.`);
+    return new Uint8Array(await blob.arrayBuffer());
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, width);
+  canvas.height = Math.max(1, height);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas 2D context unavailable');
+  ctx.putImageData(new ImageData(new Uint8ClampedArray(data), canvas.width, canvas.height), 0, 0);
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, mime, quality),
+  );
+  if (!blob) throw new Error(`Could not encode ${mime}.`);
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
 export async function encodeRaster(
   raster: Raster,
   format: ConvertFormat,
@@ -422,9 +454,10 @@ export async function encodeRaster(
     case 'qoi':
       return encodeQoi(data, width, height);
     case 'webp':
+      return encodeCanvasRaster(raster, 'image/webp', q);
     case 'ico':
     case 'cur':
-      throw new Error(`${format.toUpperCase()} encoding needs the canvas pipeline.`);
+      throw new Error(`${format.toUpperCase()} needs the icon pipeline.`);
     default:
       throw new Error(`Unsupported output format: ${String(format)}.`);
   }

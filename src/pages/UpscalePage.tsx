@@ -32,6 +32,8 @@ import {
 } from '@/lib/stock/upscale/models';
 import { runUpscale } from '@/lib/stock/upscale/engine';
 import { recommendUpscale, type UpscaleRecommendation } from '@/lib/stock/upscale/recommend';
+import { analyseBlob } from '@/lib/vision';
+import type { ImageInsight } from '@/lib/vision';
 
 interface QueueEntry {
   id: string;
@@ -107,6 +109,7 @@ export function UpscalePage() {
   const [running, setRunning] = useState(false);
   const [manualPick, setManualPick] = useState(false);
   const [autoNote, setAutoNote] = useState<UpscaleRecommendation | null>(null);
+  const [autoInsight, setAutoInsight] = useState<ImageInsight | null>(null);
 
   const queueRef = useRef<QueueEntry[]>([]);
   queueRef.current = queue;
@@ -154,18 +157,21 @@ export function UpscalePage() {
   const autoApply = useCallback(
     async (entry: QueueEntry) => {
       const inspected = await inspectImage(entry.blob);
+      const insight = await analyseBlob(entry.blob);
       const next = recommendUpscale(
         {
-          width: entry.width,
-          height: entry.height,
+          width: entry.width || insight?.width || 0,
+          height: entry.height || insight?.height || 0,
           bytes: entry.blob.size,
-          hasAlpha: inspected.hasAlpha,
+          hasAlpha: inspected.hasAlpha || Boolean(insight?.hasTransparency),
           filename: entry.name,
           format: entry.name.split('.').pop(),
+          insight,
         },
         { installed, isDesktop: desktop.isDesktop },
       );
       setAutoNote(next);
+      setAutoInsight(insight);
       if (!manualPick) {
         setModelId(next.modelId);
         setTargetId(next.targetId);
@@ -518,7 +524,7 @@ export function UpscalePage() {
                 icon={<GIcon name="tune" size={17} />}
                 action={<Badge tone="brand">Auto</Badge>}
               />
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 <p className="text-xs leading-relaxed text-ink-muted">{autoNote.reason}</p>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Badge tone="neutral">{UPSCALE_MODELS.find((m) => m.id === autoNote.modelId)?.name}</Badge>
@@ -529,6 +535,29 @@ export function UpscalePage() {
                     <Badge tone="warn">Best model needs a download</Badge>
                   )}
                 </div>
+                {autoInsight && (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-line pt-2.5 text-2xs text-ink-muted">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="flex -space-x-1">
+                        {autoInsight.palette.slice(0, 3).map((colour) => (
+                          <span
+                            key={colour.hex}
+                            title={colour.name}
+                            className="size-3.5 rounded-full border border-surface"
+                            style={{ backgroundColor: colour.hex }}
+                          />
+                        ))}
+                      </span>
+                      {autoInsight.palette[0]?.name ?? 'neutral'} palette
+                    </span>
+                    <span className="capitalize">{autoInsight.quality.sharpnessLabel} focus</span>
+                    <span className="capitalize">{autoInsight.quality.noiseLabel}</span>
+                    <span className="capitalize">{autoNote.kind}</span>
+                  </div>
+                )}
+                {autoNote.evidence.length > 0 && (
+                  <p className="text-2xs text-ink-faint">{autoNote.evidence.join('. ')}.</p>
+                )}
                 {(manualPick || modelId !== autoNote.modelId || targetId !== autoNote.targetId) && (
                   <Button
                     size="xs"
