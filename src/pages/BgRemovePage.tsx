@@ -318,7 +318,7 @@ export function BgRemovePage() {
             <div className="space-y-3.5">
               <div>
                 <div className="mb-1.5 text-xs font-medium text-ink-muted">Backdrop</div>
-                <div className="grid grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-2 gap-1.5">
                   {(
                     [
                       { id: 'transparent', label: 'Transparent', icon: 'grid_view' as const },
@@ -335,14 +335,14 @@ export function BgRemovePage() {
                         if (bg.id === 'transparent' && outFormat === 'jpg') setOutFormat('png');
                       }}
                       className={clsx(
-                        'flex h-9 items-center justify-center gap-1 rounded-[var(--r-control)] border px-2 text-2xs font-semibold',
+                        'flex min-h-9 items-center justify-center gap-1.5 rounded-[var(--r-control)] border px-2 py-1.5 text-2xs font-semibold',
                         backdrop === bg.id
                           ? 'border-accent bg-accent-soft text-accent'
                           : 'border-line bg-surface text-ink-muted hover:text-ink',
                       )}
                     >
                       <GIcon name={bg.icon} size={13} />
-                      <span className="truncate">{bg.label}</span>
+                      <span className="leading-tight">{bg.label}</span>
                     </button>
                   ))}
                 </div>

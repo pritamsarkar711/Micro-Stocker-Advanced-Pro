@@ -1,4 +1,6 @@
 import { kv } from '@/lib/kv';
+import { analyseBlob } from '@/lib/vision';
+import type { ImageInsight } from '@/lib/vision';
 import { httpRequest } from '@/lib/desktop';
 import type { BrandId } from '@/components/ui/BrandLogo';
 import type { StockItem, StockMetadata } from './types';
@@ -427,6 +429,7 @@ function buildPrompt(
   item: Pick<StockItem, 'name' | 'format' | 'width' | 'height' | 'flags' | 'metadata'>,
   settings: AiSettings,
   hasImage: boolean,
+  insight?: ImageInsight | null,
 ): string {
   const toneGuide =
     settings.tone === 'editorial'
@@ -442,9 +445,21 @@ function buildPrompt(
       : item.flags.illustration
         ? 'digital illustration'
         : 'photograph';
+  const measured = insight
+    ? [
+        `Local measurements (reliable, from the pixels): scene guess ${insight.kind}, orientation ${insight.orientation}, ` +
+          `${(insight.palette.slice(0, 3).map((colour) => colour.name).join(', ') || 'neutral')} palette, ` +
+          `${insight.quality.sharpnessLabel} focus, ${insight.quality.noiseLabel}` +
+          (insight.hasTransparency ? ', transparent background' : '') +
+          (insight.uniformBackground ? `, uniform ${insight.backgroundHex ?? ''} background` : '') +
+          '.',
+        'Treat these measurements as ground truth where they describe the file, but trust the image itself for the subject.',
+      ].join('\n')
+    : '';
   const hints = [
     item.metadata.title ? `Current title hint: ${item.metadata.title}` : '',
     item.metadata.keywords.length ? `Seed tags: ${item.metadata.keywords.slice(0, 10).join(', ')}` : '',
+    measured,
   ]
     .filter(Boolean)
     .join('\n');
@@ -503,12 +518,15 @@ export function extractJsonMetadata(raw: string, fallback: StockMetadata, target
   }
 
   const rawTitle = typeof parsed.title === 'string' ? parsed.title : fallback.title;
-  const title = cleanStockSentence(rawTitle, 200, true) || fallback.title;
+  // Marketplaces cap titles hard (Shutterstock at 200 characters, Adobe at 70
+  // characters per line), and a rambling title loses buyer trust.
+  let title = cleanStockSentence(rawTitle, 70, true) || fallback.title;
+  if (title.split(/\s+/).filter(Boolean).length < 5) title = fallback.title;
 
-  const rawDesc = typeof parsed.description === 'string' ? parsed.description : title;
-  let description = cleanStockSentence(rawDesc, 200, false) || title;
-  if (description.split(/\s+/).filter(Boolean).length < 5) {
-    description = cleanStockSentence(`${description}. Commercial stock asset ready for creative projects.`, 200, false);
+  const rawDesc = typeof parsed.description === 'string' ? parsed.description : fallback.description;
+  let description = cleanStockSentence(rawDesc, 195, false) || fallback.description;
+  if (description.split(/\s+/).filter(Boolean).length < 8 || description.toLowerCase() === title.toLowerCase()) {
+    description = fallback.description;
   }
 
   const kwSource = parsed.keywords ?? parsed.tags;
@@ -517,7 +535,18 @@ export function extractJsonMetadata(raw: string, fallback: StockMetadata, target
     : typeof kwSource === 'string'
       ? kwSource.split(/[,;\n]+/)
       : [];
-  const keywords = scrubStockKeywords(rawKeywords, Math.min(49, Math.max(7, targetCount)));
+  // Keywords must be searchable: 1 to 3 words, no bare numbers, no duplicates.
+  const cleaned = rawKeywords
+    .map((word) => String(word).trim())
+    .filter((word) => word && word.split(/\s+/).length <= 3 && !/^\d+$/.test(word))
+    .map((word) => word.toLowerCase());
+  const titleWords = new Set(title.toLowerCase().split(/\s+/).filter((word) => word.length > 3));
+  const ranked = [...new Set(cleaned)].sort((left, right) => {
+    const leftHit = titleWords.has(left) ? 1 : 0;
+    const rightHit = titleWords.has(right) ? 1 : 0;
+    return rightHit - leftHit;
+  });
+  const keywords = scrubStockKeywords(ranked, Math.min(49, Math.max(7, targetCount)));
 
   const catSource = parsed.categories ?? parsed.category;
   const rawCats = Array.isArray(catSource)
@@ -804,7 +833,8 @@ export async function generateAiMetadata(
   // Built in Local AI: zero keys, inspects pixels + filename + stock rules.
   if (cleanSettings.kind === 'local') {
     const visuals = cleanSettings.useVision ? await analyzeImageVisuals(options?.imageBlob) : null;
-    const drafted = draftMetadata(item, cleanSettings.targetKeywords, visuals);
+    const insight = cleanSettings.useVision ? await analyseBlob(options?.imageBlob) : null;
+    const drafted = draftMetadata(item, cleanSettings.targetKeywords, visuals, insight);
     if (cleanSettings.tone === 'editorial') {
       return {
         ...drafted,
@@ -829,13 +859,14 @@ export async function generateAiMetadata(
   }
 
   const preset = PROVIDERS[cleanSettings.kind];
-  const fallback = draftMetadata(item, cleanSettings.targetKeywords);
+  const insight = await analyseBlob(options?.imageBlob);
+  const fallback = draftMetadata(item, cleanSettings.targetKeywords, null, insight);
   const canSee =
     cleanSettings.useVision &&
     Boolean(options?.imageBlob) &&
     modelSupportsVision(cleanSettings.kind, cleanSettings.model);
   const vision = canSee ? await blobToVisionPayload(options?.imageBlob) : null;
-  const prompt = buildPrompt(item, cleanSettings, Boolean(vision));
+  const prompt = buildPrompt(item, cleanSettings, Boolean(vision), insight);
 
   let raw: string;
   if (preset.protocol === 'gemini') {

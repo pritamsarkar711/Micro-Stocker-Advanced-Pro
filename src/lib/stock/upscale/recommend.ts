@@ -8,6 +8,7 @@
  * why, so the user can accept it in one click or override it.
  */
 import { UPSCALE_MODELS, UPSCALE_TARGETS, type UpscaleModel, type UpscalePurpose } from './models';
+import type { ImageInsight } from '@/lib/vision/analyse';
 
 export interface UpscaleSample {
   width: number;
@@ -16,6 +17,8 @@ export interface UpscaleSample {
   hasAlpha?: boolean;
   filename?: string;
   format?: string;
+  /** Measured pixels, when the caller has already decoded the image. */
+  insight?: ImageInsight | null;
 }
 
 export interface UpscaleRecommendation {
@@ -31,7 +34,9 @@ export interface UpscaleRecommendation {
   readyNow: boolean;
   needsDownload: boolean;
   /** Detected subject type, useful for the purpose filter. */
-  kind: 'photo' | 'art' | 'transparent' | 'small' | 'large';
+  kind: 'photo' | 'art' | 'transparent' | 'small' | 'large' | 'text' | 'portrait';
+  /** Why the model was chosen, in the order the checks ran. */
+  evidence: string[];
   /** Output format that will not destroy the source. */
   format: 'jpg' | 'png' | 'webp';
 }
@@ -71,45 +76,96 @@ export function recommendUpscale(
   const megapixels = pixels / 1_000_000;
   const bytesPerPixel = sample.bytes > 0 ? sample.bytes / pixels : 0.5;
   const longEdge = Math.max(sample.width, sample.height);
-  const art = looksLikeArt(sample, bytesPerPixel);
-  const transparent = Boolean(sample.hasAlpha);
+  const insight = sample.insight ?? null;
+  const transparent = Boolean(sample.hasAlpha) || Boolean(insight?.hasTransparency);
+  const art = insight
+    ? insight.flatArt || ['illustration', 'pattern', 'abstract'].includes(insight.kind)
+    : looksLikeArt(sample, bytesPerPixel);
   const ready = (id: string) => model(id).family === 'builtin' || Boolean(installed[id]);
 
   const notes: string[] = [];
+  const evidence: string[] = [];
   let kind: UpscaleRecommendation['kind'] = 'photo';
   let modelId = 'lanczos-pro';
   let bestModelId = 'realesrgan-x4plus';
+
+  const sharpness = insight?.quality.sharpness ?? null;
+  const noise = insight?.quality.noise ?? 0;
+  const textHeavy = Boolean(insight && (insight.kind === 'document' || insight.kind === 'screenshot' || insight.hasFineText));
 
   if (transparent) {
     kind = 'transparent';
     modelId = 'edge-crisp';
     bestModelId = 'edge-crisp';
-    notes.push('Transparency kept intact.');
+    notes.push('Transparency stays intact.');
+    evidence.push('Alpha channel detected');
+  } else if (textHeavy) {
+    // Generative models hallucinate glyphs; an edge aware resampler keeps text legible.
+    kind = 'text';
+    modelId = 'lanczos-pro';
+    bestModelId = 'edge-crisp';
+    notes.push('Text and thin lines stay legible.');
+    evidence.push('Text or interface layout detected');
   } else if (art) {
     kind = 'art';
     modelId = 'edge-crisp';
     bestModelId = 'realesr-animevideov3';
-    notes.push('Flat artwork stays crisp without halos.');
-  } else if (bytesPerPixel < 0.18) {
+    notes.push('Flat artwork keeps clean outlines.');
+    evidence.push('Flat colour areas with few gradients');
+  } else if (insight && noise > 13) {
+    kind = 'photo';
+    modelId = 'photo-restore';
+    bestModelId = 'realesrgan-general-wdn';
+    notes.push('Grain is cleaned before detail is added.');
+    evidence.push(`Visible grain (${noise.toFixed(1)})`);
+  } else if (insight && sharpness !== null && sharpness < 45) {
+    kind = 'photo';
+    modelId = 'photo-restore';
+    bestModelId = 'realesrgan-x4plus';
+    notes.push('Soft focus recovered instead of magnified.');
+    evidence.push(`Soft focus (${sharpness.toFixed(0)})`);
+  } else if (insight && insight.kind === 'portrait') {
+    kind = 'portrait';
+    modelId = 'lanczos-pro';
+    bestModelId = 'realesrgan-x4plus';
+    notes.push('Facial texture stays natural.');
+    evidence.push('Portrait subject detected');
+  } else if (bytesPerPixel < 0.18 && bytesPerPixel > 0) {
     kind = 'small';
     modelId = 'photo-restore';
     bestModelId = 'realesrgan-x4plus';
     notes.push('Heavily compressed source, so light denoise comes first.');
+    evidence.push('Low bits per pixel');
+  } else if (insight && sharpness !== null && sharpness >= 200 && megapixels >= 8) {
+    kind = 'large';
+    modelId = 'lanczos-pro';
+    bestModelId = 'lanczos-pro';
+    notes.push('Already crisp. A faithful resize keeps it honest.');
+    evidence.push(`Sharp source (${sharpness.toFixed(0)}) at ${megapixels.toFixed(1)} MP`);
   } else if (megapixels < 1 || longEdge < 1400) {
     kind = 'small';
     modelId = 'lanczos-pro';
     bestModelId = 'realesrgan-x4plus';
     notes.push('Small source: a detail model adds the most.');
+    evidence.push(`Only ${megapixels.toFixed(1)} MP`);
   } else if (megapixels >= 24) {
     kind = 'large';
     modelId = 'lanczos-pro';
     bestModelId = 'realesrnet-x4plus';
     notes.push('Already stock sized, so a faithful pass is enough.');
+    evidence.push(`${megapixels.toFixed(0)} MP source`);
   } else {
     kind = 'photo';
     modelId = 'lanczos-pro';
     bestModelId = 'realesrgan-x4plus';
     notes.push('Photo detail without invented texture.');
+  }
+
+  if (insight?.quality.highlightClip && insight.quality.highlightClip > 0.02) {
+    evidence.push('Clipped highlights');
+  }
+  if (insight?.quality.shadowClip && insight.quality.shadowClip > 0.03) {
+    evidence.push('Crushed shadows');
   }
 
   // The best model may not be usable yet. Never preselect something the user
@@ -122,17 +178,19 @@ export function recommendUpscale(
   const best = bestModelId;
   const bestReady = ready(best);
   const transparentSource = kind === 'transparent';
-  const targetId = transparentSource
-    ? 'canva'
-    : kind === 'large'
-      ? 'shutterstock'
-      : pickTarget(megapixels);
-  const outFormat: UpscaleRecommendation['format'] = transparentSource ? 'png' : 'jpg';
+  const targetId = transparentSource ? 'canva' : pickTarget(megapixels);
+  const outFormat: UpscaleRecommendation['format'] = transparentSource
+    ? 'png'
+    : kind === 'text'
+      ? 'png'
+      : 'jpg';
   const chosenModel = model(chosen);
   const bestModel = model(best);
 
+  const subject =
+    kind === 'art' ? 'artwork' : kind === 'transparent' ? 'cutout' : kind === 'text' ? 'text layout' : kind === 'portrait' ? 'portrait' : 'photo';
   const reason = bestReady
-    ? `${bestModel.name} for this ${kind === 'art' ? 'artwork' : kind === 'transparent' ? 'cutout' : 'photo'} at ${megapixels.toFixed(1)} MP.`
+    ? `${bestModel.name} for this ${subject} at ${megapixels.toFixed(1)} MP. ${notes[0] ?? ''}`.trim()
     : `${chosenModel.name} now. ${bestModel.name} adds more detail once installed.`;
 
   return {
@@ -144,6 +202,7 @@ export function recommendUpscale(
     needsDownload: !bestReady && model(best).family !== 'builtin' && isDesktop,
     kind,
     format: outFormat,
+    evidence: evidence.slice(0, 3),
   };
 }
 

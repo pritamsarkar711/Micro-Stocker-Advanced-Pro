@@ -184,8 +184,22 @@ export const DEFAULT_QUALITY: Record<OptimizeFormat, number> = {
   png: 1,
 };
 
-export function suggestedFormat(hasAlpha: boolean, originalFormat: string): OptimizeFormat {
+export interface FormatHint {
+  hasFineText?: boolean;
+  flatArt?: boolean;
+  noise?: number;
+}
+
+export function suggestedFormat(
+  hasAlpha: boolean,
+  originalFormat: string,
+  hint?: FormatHint | null,
+): OptimizeFormat {
   if (hasAlpha) return originalFormat === 'png' ? 'png' : 'webp';
+  // Screenshots and scanned pages: lossless keeps glyph edges from ringing.
+  if (hint?.hasFineText) return 'png';
+  // Flat artwork survives WebP's prediction almost perfectly at a low weight.
+  if (hint?.flatArt) return 'webp';
   if (originalFormat === 'jpg' || originalFormat === 'jpeg') return 'jpg';
   return 'webp';
 }

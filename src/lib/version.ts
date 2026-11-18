@@ -7,4 +7,4 @@
  * by a test in `tests/logic.test.ts`.
  */
 export const APP_NAME = 'Micro Stocker Advanced Pro';
-export const APP_VERSION = '1.8.0';
+export const APP_VERSION = '1.9.0';

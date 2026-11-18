@@ -2,7 +2,7 @@
   "name": "micro-stocker-advanced-pro",
   "productName": "Micro Stocker Advanced Pro",
   "private": false,
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "Cross platform microstock contributor studio for AI metadata generation, lossless IPTC and XMP embedding, per agency CSV export across 14 marketplaces, open source image and video upscaling, background removal and multi format image conversion.",
   "author": {
     "name": "pritamsarkar711",
@@ -36,7 +36,9 @@
     "qa:interaction": "node scripts/qa/interaction-audit.mjs",
     "qa:security": "node scripts/qa/security-rules.mjs && node scripts/qa/security-check.mjs",
     "qa:suggest": "node scripts/qa/suggest-check.mjs",
-    "qa:text": "node scripts/qa/text-check.mjs"
+    "qa:text": "node scripts/qa/text-check.mjs",
+    "qa:tools": "node scripts/qa/tools-audit.mjs",
+    "qa:all": "npm run qa:deep && npm run qa:a11y && npm run qa:contrast && npm run qa:interaction && npm run qa:text && npm run qa:suggest && npm run qa:vector && npm run qa:security && npm run qa:tools"
   },
   "dependencies": {
     "@cornerstonejs/codec-openjpeg": "^1.3.6",

@@ -55,7 +55,9 @@ export function CardHeader({ title, subtitle, icon, action, className }: CardHea
           {subtitle && <p className="mt-0.5 text-[0.75rem] text-ink-muted">{subtitle}</p>}
         </div>
       </div>
-      {action && <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div>}
+      {action && (
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 sm:shrink-0">{action}</div>
+      )}
     </div>
   );
 }

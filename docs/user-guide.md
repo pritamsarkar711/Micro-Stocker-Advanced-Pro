@@ -98,9 +98,20 @@ Shortcuts: `V` select, `R` rectangle, `U` rounded box, `O` ellipse, `C` circle,
 arrows nudge, `Shift`+arrows nudge further, `[` / `]` send back / bring front,
 `0` fit, `Space`+drag pans, ⌘/Ctrl+scroll zooms.
 
+## 4b. What the app sees in your image
+
+Every upload is analysed locally, with no network call: scene category, an eight
+colour palette with names, where the subject sits, how much of the frame is
+background, flat colour or text, transparency, and a quality read out of
+sharpness, grain, exposure, clipping, colour range and compression. The same
+reading powers the metadata titles, descriptions and keywords, the upscale
+recommendation, the optimizer's format suggestion and the overview's next step,
+so the advice stays consistent from tool to tool.
+
 ## 5. Quality Checker
 
-Drop JPG, PNG, WebP, AVIF, SVG, EPS or AI files before uploading them.
+Drop JPG, PNG, WebP, AVIF, SVG, EPS or AI files before uploading them, or press
+**From Library** to audit every asset you already imported in one run.
 
 - Each file gets a 0–100 score and a verdict (**Ready**, **Review**, **At risk**).
 - Vector checks answer "is it really editable?": flattened raster exports,
@@ -137,13 +148,15 @@ Drop JPG, PNG, WebP, AVIF, SVG, EPS or AI files before uploading them.
 
 ### Suggested setup
 
-Add an image and the studio inspects it (size, aspect, compression and
-transparency) before choosing a model and a marketplace preset. **Suggested for
-this image** explains the pick in one sentence, for example "Edge Guided Sharp
-for this artwork" or "Lanczos Pro now, RealESRGAN x4plus adds more detail once
-installed". Change anything and **Use suggestion** restores the recommendation.
-The output format follows the source: transparent artwork stays PNG, photos stay
-JPEG.
+Add an image and the studio measures it properly: resolution, aspect, scene type,
+palette, subject placement, edge sharpness, grain, exposure, clipping and
+transparency. It then chooses a model, a marketplace preset and an output format,
+and **Suggested for this image** explains the pick in one sentence, for example
+"Soft edges and clean grain. Photo Restore recovers detail" or "Flat artwork
+reproduces cleanly. Lanczos Pro keeps hard edges, and RealESRGAN x4plus adds
+detail once installed". Change anything and **Use suggestion** restores the
+recommendation. The output format follows the source: transparent artwork stays
+PNG, photos stay JPEG.
 
 Three fields: **source**, **target**, **engine**.
 

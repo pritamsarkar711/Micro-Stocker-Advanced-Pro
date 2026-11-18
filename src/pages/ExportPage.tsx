@@ -230,7 +230,7 @@ export function ExportPage() {
             title={`${platform.name} CSV`}
             icon={<PlatformLogo id={platformId} size={22} />}
             action={
-              <div className="flex items-center gap-1.5">
+              <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto sm:justify-end">
                 <Button
                   size="xs"
                   variant="ghost"
@@ -266,10 +266,12 @@ export function ExportPage() {
                 {generated.skipped.length > 0 && (
                   <Badge tone="danger">{generated.skipped.length} excluded by policy</Badge>
                 )}
-                <span>Columns: {platform.csv?.columns.join(', ')}</span>
+                <span className="min-w-0 basis-full break-words sm:basis-auto">
+                  Columns: {platform.csv?.columns.join(', ')}
+                </span>
               </div>
 
-              <pre className="max-h-72 overflow-auto rounded-[var(--r-control)] border border-line bg-surface-2/70 p-3 font-mono text-2xs leading-relaxed text-ink">
+              <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-[var(--r-control)] border border-line bg-surface-2/70 p-3 font-mono text-2xs leading-relaxed text-ink">
                 {generated.content.replace(/^\uFEFF/, '').slice(0, 4000)}
               </pre>
             </div>
