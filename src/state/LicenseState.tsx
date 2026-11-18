@@ -154,7 +154,7 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
       plan: entitlement?.plan ?? null,
       planName: entitlement?.plan_name ?? null,
       credits: entitlement?.credits ?? 0,
-      costs: { vector: 2, jpg: 8, premium_upscale: 2, video_premium: 6, ...(entitlement?.credit_costs ?? {}) },
+      costs: { vector: 2, jpg: 8, premium_upscale: 0, video_premium: 0, background: 0, ...(entitlement?.credit_costs ?? {}) },
       limits: { daily_generations: 60, rate_gen_per_minute: 6, ...(entitlement?.limits ?? {}) },
       features: premium ? features : FREE_FEATURES,
       hasFeature: (feature) => premium && Boolean(features[feature]),

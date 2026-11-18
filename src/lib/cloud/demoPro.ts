@@ -82,7 +82,7 @@ export const aiModels: DemoRow[] = [
 
 export const appSettings: DemoRow[] = [
   { id: 'fx_bdt_usd', key: 'fx_bdt_usd', value: 122, label: 'BDT per USD', updated_at: now() },
-  { id: 'credits', key: 'credits', value: { vector: 1, jpg: 5, premium_upscale: 2, video_premium: 6 }, label: 'Credit cost per action', updated_at: now() },
+  { id: 'credits', key: 'credits', value: { vector: 2, jpg: 8, premium_upscale: 0, video_premium: 0, background: 0 }, label: 'Credit cost per action', updated_at: now() },
   { id: 'limits', key: 'limits', value: { daily_generations: 60, max_pending_orders: 3, max_prompt_chars: 600, rate_gen_per_minute: 6 }, label: 'Daily limits and rate limits', updated_at: now() },
   { id: 'payment', key: 'payment', value: { order_ttl_minutes: 90, crypto_ttl_minutes: 120, review_hours: 24 }, label: 'Payment windows', updated_at: now() },
 ];
