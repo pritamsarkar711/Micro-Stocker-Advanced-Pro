@@ -230,10 +230,10 @@ export function Topbar({ onOpenMobileNav }: TopbarProps) {
                 ? 'border-line bg-surface text-ink-muted hover:bg-surface-2 hover:text-ink'
                 : 'border-brand bg-brand-soft text-brand-fg hover:bg-brand hover:text-on-brand',
             )}
-            title={premium ? 'Subscription active' : 'Activate a subscription'}
+            title={premium ? 'Subscription active' : 'Choose a plan'}
           >
-            <GIcon name={premium ? 'verified' : 'key'} size={16} />
-            <span>{premium ? `${daysLeft}d left` : 'Activate'}</span>
+            <GIcon name={premium ? 'verified' : 'workspace_premium'} size={16} />
+            <span>{premium ? `${daysLeft}d left` : 'Go Pro'}</span>
           </button>
         )}
 

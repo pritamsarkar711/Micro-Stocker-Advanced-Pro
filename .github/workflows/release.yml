@@ -23,6 +23,17 @@ jobs:
           test -n "$VITE_LICENSE_SUPABASE_URL" || { echo "Licensing project URL is not configured"; exit 1; }
           test -n "$VITE_LICENSE_SUPABASE_ANON_KEY" || { echo "Licensing public key is not configured"; exit 1; }
           npm run verify
+      - name: Check the backend wiring
+        shell: bash
+        env:
+          BACKEND_URL: ${{ vars.MSAP_LICENSE_SUPABASE_URL }}
+        run: |
+          host=$(printf '%s' "$BACKEND_URL" | sed -E 's#^https?://([^.]+)\..*#\1#')
+          echo "Bundled backend project: $host"
+          case "$BACKEND_URL" in
+            *djlmbsaltjqsqpwqdvsg*) echo "Points at the Pro platform project" ;;
+            *) echo "MSAP_LICENSE_SUPABASE_URL does not point at the Pro platform project"; exit 1 ;;
+          esac
       - run: npx electron-builder --config electron-builder.yml --win --x64 --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"

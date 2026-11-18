@@ -10,6 +10,7 @@ import { GIcon } from '@/components/ui/GoogleIcon';
 import { FormatIcon } from '@/components/ui/FormatIcon';
 import { PlatformLogo } from '@/components/stock/PlatformLogo';
 import { useApp } from '@/state/AppState';
+import { useLicense } from '@/state/LicenseState';
 import { useLibrary } from '@/state/library';
 import { useToast } from '@/state/ToastState';
 import { desktop, triggerBlobDownload, type ModelProgressEvent } from '@/lib/desktop';
@@ -28,6 +29,7 @@ import {
   UPSCALE_MODELS,
   UPSCALE_PURPOSES,
   UPSCALE_TARGETS,
+  isPremiumUpscaleModel,
   type UpscaleModel,
   type UpscalePurpose,
 } from '@/lib/stock/upscale/models';
@@ -97,6 +99,8 @@ export function UpscalePage() {
   const { settings } = useApp();
   const { items: libItems, getBlob, addGeneratedBlob } = useLibrary();
   const toast = useToast();
+  const { hasFeature } = useLicense();
+  const premiumAllowed = hasFeature('premium_upscale');
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [purpose, setPurpose] = useState<UpscalePurpose>('all');
@@ -776,6 +780,10 @@ export function UpscalePage() {
                   isDesktop={desktop.isDesktop}
                   progress={dlProgress[model.id]}
                   onSelect={() => {
+                    if (isPremiumUpscaleModel(model.id) && !premiumAllowed) {
+                      toast.warning('Pro model', 'This is one of the top tier models. Upgrade to use it.');
+                      return;
+                    }
                     setModelId(model.id);
                     setManualPick(true);
                   }}

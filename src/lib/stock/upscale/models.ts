@@ -793,3 +793,28 @@ export function resolveTargetSize(
 /** Legacy exports retained for test compatibility. */
 export const MODELS = UPSCALE_MODELS;
 export const TARGETS = UPSCALE_TARGETS;
+
+/**
+ * The highest quality models are the only ones behind Pro.
+ *
+ * Everything else stays free: the built-in resamplers, the cleanup filters and
+ * every standard neural model a customer already uses for catalogue work.
+ */
+const PREMIUM_UPSCALE_MODELS = new Set([
+  'realesrgan-x4plus',
+  'realesrgan-x4plus-anime',
+  'realesrgan-general-wdn',
+  'realcugan-pro',
+  'lsdir-4x',
+  'lsdir-plus-clean',
+  'hfa2k-4x',
+  'ultrasharp-4x',
+  'ultramix-balanced-4x',
+  'nomos8k-sc',
+  'digital-art-4x',
+  'uniscale-restore-4x',
+]);
+
+export function isPremiumUpscaleModel(id: string): boolean {
+  return PREMIUM_UPSCALE_MODELS.has(id);
+}
