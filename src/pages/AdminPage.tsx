@@ -650,6 +650,13 @@ function Providers({
           subtitle={`${ready} of ${providers.length} providers ready · keys live in the server, never in the browser`}
           icon={<GIcon name="key" size={18} />}
         />
+        {providers.length > 0 && ready === 0 && (
+          <p className="border-t border-line bg-surface-2 px-4 py-2.5 text-[0.8125rem] leading-relaxed text-ink">
+            No provider has a key yet, so AI generation and JPG rendering will stop with “no API key saved”. Press
+            <span className="font-semibold"> Add key</span> on the provider you pay for — the dialog links straight to
+            that provider's key page.
+          </p>
+        )}
         <div className="divide-y divide-line border-t border-line">
           {providers.map((provider) => (
             <div key={provider.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">

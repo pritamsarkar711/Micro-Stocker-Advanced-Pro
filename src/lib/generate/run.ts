@@ -86,9 +86,14 @@ const FRIENDLY: Record<string, string> = {
   'daily limit reached': 'Daily generation limit reached. It resets every 24 hours.',
   'plan does not include vector': 'Your plan does not include the vector generators.',
   'plan does not include jpg': 'Your plan does not include the JPG studio.',
-  'provider key not configured': 'The AI provider key is not configured yet. Ask an administrator to add it in the admin panel.',
+  'provider key not configured':
+    'No API key is saved for this provider yet. An administrator adds it in Admin console → Providers, then presses Add key.',
   'provider disabled': 'That provider is disabled in the admin panel.',
   'model unavailable': 'That model is not available. Pick another one.',
+  'two factor code required':
+    'Enter your two step verification code first: sign out and sign in again, or open Security in Settings.',
+  'enable two step verification on your own account first':
+    'Turn on two step verification for your own account (Settings → Security) before enabling it for other administrators.',
   slow: 'Too many requests. Give it a few seconds and try again.',
 };
 

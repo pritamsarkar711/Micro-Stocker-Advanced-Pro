@@ -55,8 +55,9 @@ supabase secrets set BSCSCAN_API_KEY=... POLYGONSCAN_API_KEY=... TRON_API_KEY=..
 Without those the crypto verifier answers `pending` and an administrator approves
 the order by hand, which is the same path as bKash and Nagad.
 
-The migrations and the three functions are live on `djlmbsaltjqsqpwqdvsg`, and the
-`pro-exports` bucket exists. One thing is still missing: no provider key has been
+The migrations and the three functions are live on `djlmbsaltjqsqpwqdvsg` —
+`admin-config` is at version 2, which adds the Remove key action and rejects
+pasted dashboard URLs and placeholders — and the `pro-exports` bucket exists. One thing is still missing: no provider key has been
 stored yet, so a generation answers `provider key not configured` and nothing is
 charged until an administrator adds a key under Providers in the admin console.
 Without the explorer secrets the crypto verifier answers `pending` and an
