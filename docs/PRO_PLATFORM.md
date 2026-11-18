@@ -55,6 +55,12 @@ supabase secrets set BSCSCAN_API_KEY=... POLYGONSCAN_API_KEY=... TRON_API_KEY=..
 Without those the crypto verifier answers `pending` and an administrator approves
 the order by hand, which is the same path as bKash and Nagad.
 
+The migrations are already applied to `djlmbsaltjqsqpwqdvsg`. The three functions
+still have to be deployed and at least one provider key has to be stored before a
+paid generation can run: until then the generator answers
+`provider key not configured` and nothing is charged. `deno check` on the
+functions needs network access to `esm.sh`, so run it on a machine that has it.
+
 ## Making yourself an administrator
 
 ```sql
@@ -89,6 +95,17 @@ BDT, API spend in USD and BDT, and the resulting margin.
   then `pro_settle_crypto` writes the result. A hash that already settled another
   invoice is rejected, and a short payment never settles.
 
+## Pro tools on the desktop
+
+* **Image upscaler** - the twelve top tier models (`isPremiumUpscaleModel`) need
+  `premium_upscale`. Built in resamplers and the standard neural models stay free.
+* **Video upscaler** - 4K and 8K masters and the 60 fps stock presets need
+  `video_premium`; free renders stop at 2K QHD. A downgrade moves the selection
+  back to Full HD instead of leaving a gated preset armed.
+* Rendering happens on the machine, so it spends no credits. Credits meter the
+  cloud generators only: `pro_begin_generation` reserves them, `pro_finish_generation`
+  refunds a failed job.
+
 ## What the quality gate checks
 
 `checkArtwork` runs before a download exists: path syntax, artboard bounds,
@@ -102,4 +119,10 @@ rejects the job and refunds the credit through `pro_finish_generation`.
 ```bash
 npm test                 # domain tests, the SQL suite against real Postgres (PGlite), SSR smoke
 npm run qa:generate      # renders ten specs, verifies the gate, EPS header and AI trailer
+node scripts/qa/_signed-in-shots.mjs admin@demo.local /tmp/shots   # signed in pages
+node scripts/qa/_admin-flow.mjs                                     # every admin tab, approves one order
+node scripts/qa/_checkout-flow.mjs                                  # bKash order and a crypto invoice
 ```
+
+The three browser passes need the dev server on port 5173 with
+`VITE_DEMO_MODE=1`, and they fail the run on any page error.

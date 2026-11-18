@@ -3,6 +3,39 @@
 All notable changes to Micro Stocker Advanced Pro are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.1.0] - 2026-11-17
+
+### Added
+- **Subscription page is a real checkout.** Three tiers by monthly, six month and
+  yearly terms, a feature comparison against the free tier, the current plan with
+  its expiry and credit balance, and order history with crypto confirmations.
+  Paying with bKash or Nagad takes the number, the TrxID and an optional sender, and
+  paying with crypto creates an invoice with the exact amount, the address and a
+  confirmation counter.
+- **Admin console.** Revenue, provider cost and margin for the last thirty days,
+  spend per model, pending work and the audit tail; order review with a note; user
+  search with plan grants and credit adjustments; editable plan prices, credits and
+  visibility; provider keys, enable switches and per model costs; JSON editors for
+  the credit table, daily limits, payment windows and the BDT rate.
+- **Coin and wallet marks.** Nine coin marks (BTC, USDT, USDC, BNB, SOL, LTC, DAI,
+  TRX, MATIC) drawn from their real vector artwork, plus bKash and Nagad marks.
+- **Video upscaler has a free tier.** Free renders stop at 2K QHD; 4K, 8K and the
+  60 fps stock presets are Pro. Gated presets are marked and a downgrade moves the
+  selection back to Full HD.
+
+### Changed
+- Every price, credit count and provider cost in the console is shown in taka, so
+  no screen mixes currencies.
+- Crypto amounts print to six places, the precision wallets show, instead of an
+  eighteen digit tail.
+- The checkout sheet stays open after an order so the receipt or the invoice stays
+  on screen until it is dismissed.
+
+### Fixed
+- Placing an order closed the sheet before the crypto invoice could be read.
+- The admin overview printed raw dollars next to taka revenue.
+- Plan badges read `Active · renews` with no date for administrator accounts.
+
 ## [2.0.0] - 2026-11-17
 
 ### Added

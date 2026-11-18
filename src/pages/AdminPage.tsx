@@ -1,741 +1,717 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import clsx from 'clsx';
+import { useCallback, useEffect, useState } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Field, Input, Select } from '@/components/ui/Field';
+import { Field, Input, Switch } from '@/components/ui/Field';
 import { Modal } from '@/components/ui/Modal';
 import { Tabs } from '@/components/ui/Tabs';
 import { GIcon } from '@/components/ui/GoogleIcon';
+import { Kpi } from '@/components/ui/Kpi';
+import { Spinner } from '@/components/ui/Misc';
 import { useToast } from '@/state/ToastState';
-import { useLicense } from '@/state/LicenseState';
-import { licensingClient } from '@/lib/cloud/licensing';
-import { date, dateTime } from '@/lib/format';
+import {
+  adminAdjustCredits,
+  FX_BDT_USD,
+  adminAudit,
+  adminGrant,
+  adminModels,
+  adminOrders,
+  adminProviders,
+  adminReviewOrder,
+  adminSettings,
+  adminStats,
+  adminUsers,
+  isFailure,
+  setProviderKey,
+  termLabel,
+  updateModel,
+  updatePrice,
+  updateProvider,
+  updateSetting,
+  type AdminStats,
+  type AdminUser,
+  type AiModel,
+  type AiProvider,
+  type Order,
+  type Setting,
+} from '@/lib/pro/api';
 
-interface CodeRow {
-  id: string;
-  kind: string;
-  duration_seconds: number;
-  created_at: string;
-  redeemed_at: string | null;
-  redeemed_by: string | null;
-  revoked_at: string | null;
-}
-interface UserRow {
+type TabId = 'overview' | 'orders' | 'users' | 'plans' | 'providers' | 'settings';
+
+interface AdminOrder extends Order {
   user_id: string;
-  email: string;
-  created_at: string;
-  expires_at: string | null;
-  is_blocked: boolean;
-}
-interface Stats {
-  users_total: number;
-  users_active: number;
-  users_blocked: number;
-  codes_total: number;
-  codes_available: number;
-  codes_redeemed: number;
-}
-interface AuditRow {
-  id: number;
-  action: string;
-  actor_email: string | null;
-  target_email: string | null;
-  detail: Record<string, unknown>;
-  created_at: string;
-}
-
-
-const DURATIONS = [
-  { id: '1d', label: '1 day', seconds: 86_400 },
-  { id: '7d', label: '7 days', seconds: 604_800 },
-  { id: '30d', label: '30 days', seconds: 2_592_000 },
-  { id: '90d', label: '90 days', seconds: 7_776_000 },
-  { id: '180d', label: '6 months', seconds: 15_552_000 },
-  { id: '365d', label: '1 year', seconds: 31_536_000 },
-];
-
-function humanDuration(seconds: number): string {
-  const days = seconds / 86_400;
-  if (days >= 365) return `${Math.round(days / 365)}y`;
-  if (days >= 30) return `${Math.round(days / 30)}mo`;
-  if (days >= 1) return `${Math.round(days)}d`;
-  return `${Math.round(seconds / 60)}m`;
-}
-
-function codeStatus(row: CodeRow): { label: string; tone: 'ok' | 'warn' | 'danger' | 'neutral' } {
-  if (row.revoked_at) return { label: 'Revoked', tone: 'danger' };
-  if (row.redeemed_at) return { label: 'Used', tone: 'neutral' };
-  return { label: 'Available', tone: 'ok' };
-}
-
-function planState(row: UserRow): { label: string; tone: 'ok' | 'warn' | 'danger' } {
-  if (row.is_blocked) return { label: 'Blocked', tone: 'danger' };
-  if (row.expires_at && new Date(row.expires_at).getTime() > Date.now()) return { label: 'Active', tone: 'ok' };
-  return { label: 'No plan', tone: 'warn' };
-}
-
-async function copyText(value: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(value);
-    return true;
-  } catch {
-    try {
-      const area = document.createElement('textarea');
-      area.value = value;
-      area.style.position = 'fixed';
-      area.style.opacity = '0';
-      document.body.appendChild(area);
-      area.select();
-      const ok = document.execCommand('copy');
-      document.body.removeChild(area);
-      return ok;
-    } catch {
-      return false;
-    }
-  }
+  sender_hint: string | null;
+  contact: string | null;
 }
 
 export function AdminPage() {
   const toast = useToast();
-  const { refresh: refreshLicense, isAdmin } = useLicense();
-
-  const [tab, setTab] = useState<'codes' | 'users' | 'activity'>('codes');
+  const [tab, setTab] = useState<TabId>('overview');
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [providers, setProviders] = useState<AiProvider[]>([]);
+  const [models, setModels] = useState<AiModel[]>([]);
+  const [settings, setSettings] = useState<Setting[]>([]);
+  const [audit, setAudit] = useState<Array<{ id: number; action: string; target: string | null; created_at: string }>>([]);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState('');
   const [error, setError] = useState('');
-  const [codes, setCodes] = useState<CodeRow[]>([]);
-  const [users, setUsers] = useState<UserRow[]>([]);
-  const [audit, setAudit] = useState<AuditRow[]>([]);
-  const [stats, setStats] = useState<Stats | null>(null);
-
-  const [kind, setKind] = useState<'premium' | 'trial'>('premium');
-  const [durationId, setDurationId] = useState('30d');
-  const [customDays, setCustomDays] = useState('30');
-  const [quantity, setQuantity] = useState('1');
-  const [issued, setIssued] = useState<string[]>([]);
-
-  const [codeQuery, setCodeQuery] = useState('');
-  const [codeFilter, setCodeFilter] = useState('all');
-  const [userQuery, setUserQuery] = useState('');
-
-  const [grantEmail, setGrantEmail] = useState('');
-  const [grantDaysInput, setGrantDaysInput] = useState('30');
-
-  const [expiryUser, setExpiryUser] = useState<UserRow | null>(null);
-  const [expiryValue, setExpiryValue] = useState('');
-
-  const client = useMemo(() => licensingClient(), []);
 
   const load = useCallback(async () => {
-    if (!client) return;
     setLoading(true);
-    setError('');
-    try {
-      const [codeRes, userRes, statsRes, auditRes] = await Promise.all([
-        client.rpc('msap_admin_codes'),
-        client.rpc('msap_admin_users'),
-        client.rpc('msap_admin_stats'),
-        client.rpc('msap_admin_audit'),
-      ]);
-      const failure = codeRes.error || userRes.error || statsRes.error || auditRes.error;
-      if (failure) throw new Error(failure.message);
-      setCodes((codeRes.data ?? []) as CodeRow[]);
-      setUsers((userRes.data ?? []) as UserRow[]);
-      setStats(((statsRes.data ?? [])[0] ?? null) as Stats | null);
-      setAudit((auditRes.data ?? []) as AuditRow[]);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load admin data.');
-    } finally {
-      setLoading(false);
-    }
-  }, [client]);
+    const [statsResult, ordersResult, usersResult, providersResult, modelsResult, settingsResult, auditResult] = await Promise.all([
+      adminStats(30),
+      adminOrders(),
+      adminUsers(),
+      adminProviders(),
+      adminModels(),
+      adminSettings(),
+      adminAudit(),
+    ]);
+    if (!isFailure(statsResult)) setStats(statsResult);
+    else setError(statsResult.error);
+    if (!isFailure(ordersResult)) setOrders(ordersResult);
+    if (!isFailure(usersResult)) setUsers(usersResult);
+    if (!isFailure(providersResult)) setProviders(providersResult);
+    if (!isFailure(modelsResult)) setModels(modelsResult);
+    if (!isFailure(settingsResult)) setSettings(settingsResult);
+    if (!isFailure(auditResult)) setAudit(auditResult);
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    if (isAdmin) void load();
-  }, [isAdmin, load]);
+    void load();
+  }, [load]);
 
-  const filteredCodes = useMemo(() => {
-    const q = codeQuery.trim().toLowerCase();
-    return codes.filter((row) => {
-      const status = codeStatus(row).label.toLowerCase();
-      if (codeFilter !== 'all' && status !== codeFilter) return false;
-      if (!q) return true;
-      return (
-        row.id.toLowerCase().includes(q) ||
-        row.kind.toLowerCase().includes(q) ||
-        (row.redeemed_by ?? '').toLowerCase().includes(q)
-      );
-    });
-  }, [codes, codeQuery, codeFilter]);
+  const filteredUsers = users.filter((entry) => {
+    if (!search.trim()) return true;
+    const needle = search.toLowerCase();
+    return (entry.email ?? '').toLowerCase().includes(needle) || (entry.display_name ?? '').toLowerCase().includes(needle);
+  });
 
-  const filteredUsers = useMemo(() => {
-    const q = userQuery.trim().toLowerCase();
-    if (!q) return users;
-    return users.filter((u) => u.email.toLowerCase().includes(q) || u.user_id.includes(q));
-  }, [users, userQuery]);
-
-  async function generate() {
-    if (!client) return;
-    const preset = DURATIONS.find((d) => d.id === durationId);
-    const days = durationId === 'custom' ? Number(customDays) : (preset?.seconds ?? 2_592_000) / 86_400;
-    const seconds = Math.round(days * 86_400);
-    const count = Math.min(25, Math.max(1, Number(quantity) || 1));
-    if (!Number.isFinite(seconds) || seconds < 60 || seconds > 315_360_000) {
-      setError('Duration must be between 1 minute and 10 years.');
-      return;
-    }
-    setBusy(true);
-    setError('');
-    setIssued([]);
-    try {
-      const created: string[] = [];
-      for (let i = 0; i < count; i += 1) {
-        const { data, error: failure } = await client.rpc('msap_create_code', {
-          p_duration_seconds: seconds,
-          p_kind: kind,
-        });
-        if (failure) throw new Error(failure.message);
-        const code = (data as { code?: string }[] | null)?.[0]?.code;
-        if (!code) throw new Error('The server did not return a code.');
-        created.push(code);
-      }
-      setIssued(created);
-      toast.success(`${created.length} code${created.length === 1 ? '' : 's'} created`);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Code generation failed.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function revoke(id: string) {
-    if (!client) return;
-    setBusy(true);
-    try {
-      const { error: failure } = await client.rpc('msap_admin_revoke_code', { p_id: id });
-      if (failure) throw new Error(failure.message);
-      toast.info('Code revoked');
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not revoke the code.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function grantDays(userId: string, days: number) {
-    if (!client) return;
-    setBusy(true);
-    setError('');
-    try {
-      const { error: failure } = await client.rpc('msap_admin_grant_days', { p_user_id: userId, p_days: days });
-      if (failure) throw new Error(failure.message);
-      toast.success(`${days} days granted`);
-      await load();
-      await refreshLicense();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not update the subscription.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function grantByEmail() {
-    if (!client) return;
-    const days = Number(grantDaysInput);
-    if (!grantEmail.trim() || !Number.isFinite(days) || days < 1) {
-      setError('Enter an account email and a number of days.');
-      return;
-    }
-    setBusy(true);
-    setError('');
-    try {
-      const { error: failure } = await client.rpc('msap_admin_grant_email', {
-        p_email: grantEmail.trim(),
-        p_days: days,
-      });
-      if (failure) throw new Error(failure.message);
-      toast.success('Subscription granted', grantEmail.trim());
-      setGrantEmail('');
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not grant the subscription.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function saveExpiry() {
-    if (!client || !expiryUser) return;
-    const parsed = new Date(expiryValue);
-    if (!Number.isFinite(parsed.getTime())) {
-      setError('Choose a valid date and time.');
-      return;
-    }
-    setBusy(true);
-    try {
-      const { error: failure } = await client.rpc('msap_admin_set_expiry', {
-        p_user_id: expiryUser.user_id,
-        p_expires_at: parsed.toISOString(),
-      });
-      if (failure) throw new Error(failure.message);
-      toast.success('Expiry updated');
-      setExpiryUser(null);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not update the expiry.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function toggleBlocked(user: UserRow) {
-    if (!client) return;
-    setBusy(true);
-    try {
-      const { error: failure } = await client.rpc('msap_admin_set_blocked', {
-        p_user_id: user.user_id,
-        p_blocked: !user.is_blocked,
-      });
-      if (failure) throw new Error(failure.message);
-      toast.info(user.is_blocked ? 'Account unblocked' : 'Account blocked', user.email);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not change the account status.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function downloadCsv() {
-    const rows = [
-      ['code', 'plan', 'duration'],
-      ...issued.map((code) => [code, kind, durationId]),
-    ];
-    const csv = rows.map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `activation-codes-${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
-  const statCards = [
-    { label: 'Accounts', value: stats?.users_total ?? users.length, icon: 'group' as const, tone: 'text-brand' },
-    { label: 'Active plans', value: stats?.users_active ?? 0, icon: 'verified' as const, tone: 'text-ok' },
-    { label: 'Codes available', value: stats?.codes_available ?? 0, icon: 'confirmation_number' as const, tone: 'text-secondary' },
-    { label: 'Codes redeemed', value: stats?.codes_redeemed ?? 0, icon: 'redeem' as const, tone: 'text-ink-muted' },
-  ];
+  const pending = orders.filter((order) => order.status === 'submitted' || order.status === 'awaiting');
 
   return (
-    <div className="space-y-5">
+    <div className="mx-auto w-full max-w-6xl">
       <PageHeader
-        title="Admin Console"
-        description="Issue access codes, manage subscriptions and control accounts."
+        title="Admin console"
+        description="Plans, payments, credits and provider keys, all without touching the source."
         actions={
-          <>
-            <Button size="sm" variant="outline" icon={<GIcon name="refresh" size={18} />} onClick={() => void load()} loading={loading}>
-              Refresh
-            </Button>
-            <Button size="sm" variant="secondary" icon={<GIcon name="cloud_sync" size={18} />} onClick={() => { window.location.hash = '#/cloud'; }}>
-              Cloud
-            </Button>
-          </>
+          <Button variant="outline" size="sm" onClick={() => void load()} icon={<GIcon name="refresh" size={16} />}>
+            Refresh
+          </Button>
         }
       />
 
-      {error ? (
-        <div role="alert" className="flex items-start gap-2.5 rounded-[var(--r-control)] border border-danger/30 bg-danger-soft px-3.5 py-3 text-[0.8125rem] font-medium text-danger">
-          <GIcon name="cancel" size={18} className="mt-0.5" />
-          <span className="flex-1">{error}</span>
-          <button type="button" onClick={() => setError('')} aria-label="Dismiss error">
-            <GIcon name="close" size={17} />
-          </button>
-        </div>
-      ) : null}
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {statCards.map((card) => (
-          <div key={card.label} className="card px-4 py-3.5">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[0.8125rem] font-semibold text-ink-muted">{card.label}</span>
-              <span className={clsx('inline-flex size-8 items-center justify-center rounded-[var(--r-chip)] bg-surface-2', card.tone)}>
-                <GIcon name={card.icon} size={18} />
-              </span>
-            </div>
-            <div className="nums mt-2 text-[1.5rem] leading-none font-bold text-ink">{loading ? '·' : card.value}</div>
-          </div>
-        ))}
+      <div className="mt-4">
+        <Tabs<TabId>
+          value={tab}
+          onChange={setTab}
+          items={[
+            { id: 'overview', label: 'Overview' },
+            { id: 'orders', label: `Orders${pending.length ? ` (${pending.length})` : ''}` },
+            { id: 'users', label: 'Users' },
+            { id: 'plans', label: 'Plans' },
+            { id: 'providers', label: 'Providers' },
+            { id: 'settings', label: 'Settings' },
+          ]}
+        />
       </div>
 
-      <Tabs
-        value={tab}
-        onChange={setTab}
-        items={[
-          { id: 'codes', label: 'Access codes', icon: <GIcon name="confirmation_number" size={18} />, count: codes.length },
-          { id: 'users', label: 'Users', icon: <GIcon name="group" size={18} />, count: users.length },
-          { id: 'activity', label: 'Activity', icon: <GIcon name="history" size={18} /> },
-        ]}
-      />
+      {error && (
+        <div className="mt-3 rounded-[var(--r-control)] border border-danger/30 bg-danger-soft px-3 py-2 text-[0.8125rem] text-danger">{error}</div>
+      )}
 
-      {tab === 'codes' && (
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
-          <div className="space-y-4">
-            <Card>
-              <CardHeader title="Generate codes" icon={<GIcon name="key" size={18} />} />
-              <div className="space-y-3.5">
-                <Field label="Plan">
-                  <Select
-                    value={kind}
-                    onChange={(e) => setKind(e.target.value as 'premium' | 'trial')}
-                    options={[
-                      { value: 'premium', label: 'Premium' },
-                      { value: 'trial', label: 'Trial' },
-                    ]}
-                  />
-                </Field>
-                <div>
-                  <div className="mb-1.5 text-[0.8125rem] font-semibold text-ink-muted">Duration</div>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {DURATIONS.map((d) => (
-                      <button
-                        key={d.id}
-                        type="button"
-                        onClick={() => setDurationId(d.id)}
-                        className={clsx(
-                          'rounded-[var(--r-control)] border px-2 py-2 text-[0.75rem] font-semibold transition-colors',
-                          durationId === d.id
-                            ? 'border-brand bg-brand-soft text-brand'
-                            : 'border-line bg-surface text-ink-muted hover:border-line-strong hover:text-ink',
-                        )}
-                      >
-                        {d.label}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => setDurationId('custom')}
-                      className={clsx(
-                        'rounded-[var(--r-control)] border px-2 py-2 text-[0.75rem] font-semibold transition-colors',
-                        'col-span-3',
-                        durationId === 'custom'
-                          ? 'border-brand bg-brand-soft text-brand'
-                          : 'border-line bg-surface text-ink-muted hover:border-line-strong hover:text-ink',
-                      )}
-                    >
-                      Custom length
-                    </button>
-                  </div>
+      {loading && !stats ? (
+        <div className="flex justify-center py-16"><Spinner size={7} /></div>
+      ) : (
+        <div className="mt-4">
+          {tab === 'overview' && stats && <Overview stats={stats} audit={audit} />}
+          {tab === 'orders' && <Orders orders={orders} onChange={load} />}
+          {tab === 'users' && (
+            <Users
+              users={filteredUsers}
+              search={search}
+              onSearch={setSearch}
+              onChange={load}
+              onToast={(message) => toast.success(message)}
+            />
+          )}
+          {tab === 'plans' && <Plans onToast={(message) => toast.success(message)} />}
+          {tab === 'providers' && (
+            <Providers
+              providers={providers}
+              models={models}
+              onChange={load}
+              onToast={(message, detail) => toast.success(message, detail)}
+            />
+          )}
+          {tab === 'settings' && <Settings settings={settings} onChange={load} onToast={(message) => toast.success(message)} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------- overview */
+
+function Overview({ stats, audit }: { stats: AdminStats; audit: Array<{ id: number; action: string; target: string | null; created_at: string }> }) {
+  const fx = stats.api_cost_usd > 0 ? stats.api_cost_bdt / stats.api_cost_usd : 122;
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Kpi label="Revenue" value={`৳${stats.revenue_bdt.toLocaleString()}`} icon="storefront" />
+        <Kpi label="Provider cost" value={`৳${Math.round(stats.api_cost_bdt).toLocaleString()}`} icon="table_chart" />
+        <Kpi label="Margin" value={stats.margin_pct == null ? 'n/a' : `${stats.margin_pct}%`} icon="compare" tone={stats.margin_pct && stats.margin_pct > 40 ? 'ok' : 'default'} />
+        <Kpi label="Active plans" value={stats.active_subs.toLocaleString()} icon="workspace_premium" />
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <Card flush>
+          <CardHeader title="Spend by model" subtitle={`Last ${stats.window_days} days`} icon={<GIcon name="memory" size={18} />} />
+          <table className="w-full border-t border-line text-[0.8125rem]">
+            <thead className="bg-surface-2 text-2xs uppercase tracking-wide text-ink-muted">
+              <tr>
+                <th className="px-4 py-2 text-left font-semibold">Model</th>
+                <th className="px-4 py-2 text-right font-semibold">Calls</th>
+                <th className="px-4 py-2 text-right font-semibold">Tokens</th>
+                <th className="px-4 py-2 text-right font-semibold">Cost</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {stats.by_model.length === 0 && (
+                <tr><td colSpan={4} className="px-4 py-4 text-2xs text-ink-muted">No API calls yet.</td></tr>
+              )}
+              {stats.by_model.map((row) => (
+                <tr key={row.model_id ?? 'unknown'}>
+                  <td className="px-4 py-2 font-medium">{row.model_id ?? 'unknown'}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{row.calls}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-ink-muted">{row.tokens_in + row.tokens_out}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">৳{Math.round(row.cost_usd * fx).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+
+        <div className="space-y-3">
+          <Card>
+            <CardHeader title="Pending work" icon={<GIcon name="schedule" size={18} />} />
+            <div className="space-y-1.5 text-[0.8125rem]">
+              <Row label="Orders awaiting review" value={stats.orders_pending} />
+              <Row label="Approved in window" value={stats.orders_approved} />
+              <Row label="Generations" value={stats.generations} />
+              <Row label="Failed generations" value={stats.generations_failed} />
+              <Row label="Accounts" value={stats.users} />
+            </div>
+          </Card>
+
+          <Card flush>
+            <CardHeader title="Recent activity" icon={<GIcon name="checklist" size={18} />} />
+            <div className="max-h-48 divide-y divide-line overflow-y-auto border-t border-line">
+              {audit.length === 0 && <p className="px-4 py-3 text-2xs text-ink-muted">No actions recorded yet.</p>}
+              {audit.slice(0, 8).map((entry) => (
+                <div key={entry.id} className="flex items-center justify-between gap-2 px-4 py-2 text-2xs">
+                  <span className="font-medium">{entry.action}</span>
+                  <span className="text-ink-muted">{new Date(entry.created_at).toLocaleDateString()}</span>
                 </div>
-                {durationId === 'custom' && (
-                  <Field label="Custom days">
-                    <Input
-                      type="number"
-                      min={1}
-                      max={3650}
-                      value={customDays}
-                      onChange={(e) => setCustomDays(e.target.value)}
-                    />
-                  </Field>
+              ))}
+            </div>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-ink-muted">{label}</span>
+      <span className="font-semibold tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+/** Cost fields are typed in taka, saved in the provider's own unit. */
+function CostInput({ bdt, onCommit }: { bdt: number; onCommit: (bdt: number) => void }) {
+  const [text, setText] = useState(String(bdt));
+  useEffect(() => setText(String(bdt)), [bdt]);
+  return (
+    <Input
+      className="w-24"
+      value={text}
+      inputMode="decimal"
+      aria-label="Cost per million tokens in taka"
+      onChange={(event) => setText(event.target.value.replace(/[^0-9.]/g, ''))}
+      onBlur={() => {
+        const value = Number(text);
+        if (Number.isFinite(value) && value >= 0) onCommit(value);
+        else setText(String(bdt));
+      }}
+    />
+  );
+}
+
+/* ---------------------------------------------------------------- orders */
+
+function Orders({ orders, onChange }: { orders: AdminOrder[]; onChange: () => void }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState('');
+
+  const review = async (order: AdminOrder, approve: boolean) => {
+    setBusy(order.id);
+    const result = await adminReviewOrder(order.id, approve, note || undefined);
+    setBusy(null);
+    if (isFailure(result)) {
+      toast.error('Could not update order', result.error);
+      return;
+    }
+    toast.success(approve ? 'Order approved' : 'Order rejected', `${order.plan_slug} · ৳${order.amount_bdt}`);
+    setNote('');
+    onChange();
+  };
+
+  return (
+    <Card flush>
+      <CardHeader title="Payment orders" subtitle="Approve only after the money has arrived." icon={<GIcon name="description" size={18} />} />
+      <div className="border-t border-line">
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2.5">
+          <Field label="Review note" className="flex-1">
+            <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Verified in bKash statement" />
+          </Field>
+        </div>
+        <div className="divide-y divide-line border-t border-line">
+          {orders.length === 0 && <p className="px-4 py-6 text-2xs text-ink-muted">No orders yet.</p>}
+          {orders.map((order) => (
+            <div key={order.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-[0.8125rem] font-medium">
+                  {order.plan_slug} · {termLabel(order.months)} · ৳{order.amount_bdt}
+                </p>
+                <p className="text-2xs text-ink-muted">
+                  {order.method}
+                  {order.txn_ref ? ` · TrxID ${order.txn_ref}` : ''}
+                  {order.sender_hint ? ` · from ${order.sender_hint}` : ''}
+                  {' · '}
+                  {new Date(order.created_at).toLocaleString()}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge
+                  tone={order.status === 'approved' ? 'ok' : order.status === 'rejected' ? 'danger' : order.status === 'submitted' ? 'warn' : 'neutral'}
+                >
+                  {order.status}
+                </Badge>
+                {order.status !== 'approved' && order.status !== 'rejected' && (
+                  <>
+                    <Button size="sm" loading={busy === order.id} onClick={() => void review(order, true)} icon={<GIcon name="check" size={16} />}>
+                      Approve
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => void review(order, false)} icon={<GIcon name="close" size={16} />}>
+                      Reject
+                    </Button>
+                  </>
                 )}
-                <Field label="Quantity" hint="Up to 25 per batch.">
-                  <Input type="number" min={1} max={25} value={quantity} onChange={(e) => setQuantity(e.target.value)} />
-                </Field>
-                <Button block loading={busy} onClick={() => void generate()} icon={<GIcon name="confirmation_number" size={18} />}>
-                  Generate
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/* ----------------------------------------------------------------- users */
+
+function Users({
+  users,
+  search,
+  onSearch,
+  onChange,
+  onToast,
+}: {
+  users: AdminUser[];
+  search: string;
+  onSearch: (value: string) => void;
+  onChange: () => void;
+  onToast: (message: string) => void;
+}) {
+  const toast = useToast();
+  const [editing, setEditing] = useState<AdminUser | null>(null);
+  const [credits, setCredits] = useState('100');
+  const [plan, setPlan] = useState('standard');
+  const [months, setMonths] = useState('1');
+
+  const apply = async () => {
+    if (!editing) return;
+    const grant = await adminGrant(editing.user_id, plan, Number(months), 'admin console');
+    if (isFailure(grant)) {
+      toast.error('Could not grant plan', grant.error);
+      return;
+    }
+    const delta = Number(credits);
+    if (Number.isFinite(delta) && delta !== 0) {
+      const adjusted = await adminAdjustCredits(editing.user_id, delta, 'admin console');
+      if (isFailure(adjusted)) {
+        toast.error('Could not adjust credits', adjusted.error);
+        return;
+      }
+    }
+    onToast(`${editing.email ?? 'Account'} updated`);
+    setEditing(null);
+    onChange();
+  };
+
+  return (
+    <Card flush>
+      <CardHeader
+        title="Accounts"
+        subtitle={`${users.length} shown`}
+        icon={<GIcon name="person" size={18} />}
+        action={
+          <Field label="">
+            <Input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Search email or name" />
+          </Field>
+        }
+      />
+      <div className="overflow-x-auto border-t border-line">
+        <table className="w-full min-w-[720px] text-[0.8125rem]">
+          <thead className="bg-surface-2 text-2xs uppercase tracking-wide text-ink-muted">
+            <tr>
+              <th className="px-4 py-2 text-left font-semibold">Account</th>
+              <th className="px-4 py-2 text-left font-semibold">Plan</th>
+              <th className="px-4 py-2 text-right font-semibold">Credits</th>
+              <th className="px-4 py-2 text-right font-semibold">Spent</th>
+              <th className="px-4 py-2 text-right font-semibold">Jobs</th>
+              <th className="px-4 py-2 text-right font-semibold" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {users.map((entry) => (
+              <tr key={entry.user_id}>
+                <td className="px-4 py-2">
+                  <p className="font-medium">{entry.display_name ?? entry.email}</p>
+                  <p className="text-2xs text-ink-muted">{entry.email}</p>
+                </td>
+                <td className="px-4 py-2">
+                  {entry.plan ? (
+                    <Badge tone="brand">
+                      {entry.plan}
+                      {entry.expires_at ? ` · ${new Date(entry.expires_at).toLocaleDateString()}` : ''}
+                    </Badge>
+                  ) : (
+                    <span className="text-2xs text-ink-muted">free</span>
+                  )}
+                </td>
+                <td className="px-4 py-2 text-right tabular-nums">{entry.credits}</td>
+                <td className="px-4 py-2 text-right tabular-nums">৳{entry.spent_bdt}</td>
+                <td className="px-4 py-2 text-right tabular-nums">{entry.generations}</td>
+                <td className="px-4 py-2 text-right">
+                  <Button size="sm" variant="outline" onClick={() => setEditing(entry)}>
+                    Manage
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {editing && (
+        <Modal open onClose={() => setEditing(null)} title={editing.email ?? 'Account'} description="Grant a plan or adjust credits. Changes are audited." size="sm">
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Plan">
+                <Input value={plan} onChange={(event) => setPlan(event.target.value)} />
+              </Field>
+              <Field label="Months">
+                <Input value={months} onChange={(event) => setMonths(event.target.value)} inputMode="numeric" />
+              </Field>
+            </div>
+            <Field label="Credit adjustment" hint="negative removes credits">
+              <Input value={credits} onChange={(event) => setCredits(event.target.value)} inputMode="numeric" />
+            </Field>
+            <Button className="w-full" onClick={() => void apply()} icon={<GIcon name="save" size={18} />}>
+              Apply
+            </Button>
+          </div>
+        </Modal>
+      )}
+    </Card>
+  );
+}
+
+/* ----------------------------------------------------------------- plans */
+
+function Plans({ onToast }: { onToast: (message: string) => void }) {
+  const toast = useToast();
+  const [rows, setRows] = useState<Array<{ plan_slug: string; months: number; price_bdt: number; credits: number; active: boolean }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    void (async () => {
+      const { loadCatalog } = await import('@/lib/pro/api');
+      const catalog = await loadCatalog();
+      setRows(catalog.prices.map((price) => ({
+        plan_slug: price.plan_slug,
+        months: price.months,
+        price_bdt: price.price_bdt,
+        credits: price.credits,
+        active: price.active,
+      })));
+      setLoading(false);
+    })();
+  }, []);
+
+  const save = async (row: (typeof rows)[number]) => {
+    const result = await updatePrice(row.plan_slug, row.months, { price_bdt: row.price_bdt, credits: row.credits, active: row.active });
+    if (isFailure(result)) {
+      toast.error('Could not save', result.error);
+      return;
+    }
+    onToast(`Saved ${row.plan_slug} ${termLabel(row.months)}`);
+  };
+
+  if (loading) return <div className="flex justify-center py-10"><Spinner size={6} /></div>;
+
+  return (
+    <Card flush>
+      <CardHeader title="Plans and prices" subtitle="Every term is editable here and takes effect immediately." icon={<GIcon name="sell" size={18} />} />
+      <div className="overflow-x-auto border-t border-line">
+        <table className="w-full min-w-[640px] text-[0.8125rem]">
+          <thead className="bg-surface-2 text-2xs uppercase tracking-wide text-ink-muted">
+            <tr>
+              <th className="px-4 py-2 text-left font-semibold">Plan</th>
+              <th className="px-4 py-2 text-left font-semibold">Term</th>
+              <th className="px-4 py-2 text-left font-semibold">Price (BDT)</th>
+              <th className="px-4 py-2 text-left font-semibold">Credits</th>
+              <th className="px-4 py-2 text-left font-semibold">Active</th>
+              <th className="px-4 py-2 text-right font-semibold" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {rows.map((row, index) => (
+              <tr key={`${row.plan_slug}-${row.months}`}>
+                <td className="px-4 py-2 font-medium capitalize">{row.plan_slug}</td>
+                <td className="px-4 py-2 text-ink-muted">{termLabel(row.months)}</td>
+                <td className="px-4 py-2">
+                  <Input
+                    className="w-28"
+                    value={String(row.price_bdt)}
+                    inputMode="numeric"
+                    onChange={(event) => setRows((current) => current.map((entry, i) => (i === index ? { ...entry, price_bdt: Number(event.target.value) || 0 } : entry)))}
+                  />
+                </td>
+                <td className="px-4 py-2">
+                  <Input
+                    className="w-24"
+                    value={String(row.credits)}
+                    inputMode="numeric"
+                    onChange={(event) => setRows((current) => current.map((entry, i) => (i === index ? { ...entry, credits: Number(event.target.value) || 0 } : entry)))}
+                  />
+                </td>
+                <td className="px-4 py-2">
+                  <Switch
+                    checked={row.active}
+                    onChange={(checked) => setRows((current) => current.map((entry, i) => (i === index ? { ...entry, active: checked } : entry)))}
+                  />
+                </td>
+                <td className="px-4 py-2 text-right">
+                  <Button size="sm" variant="outline" onClick={() => void save(row)}>Save</Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+/* ------------------------------------------------------------- providers */
+
+function Providers({
+  providers,
+  models,
+  onChange,
+  onToast,
+}: {
+  providers: AiProvider[];
+  models: AiModel[];
+  onChange: () => void;
+  onToast: (message: string, detail?: string) => void;
+}) {
+  const toast = useToast();
+  const [keyFor, setKeyFor] = useState<AiProvider | null>(null);
+  const [secret, setSecret] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const saveKey = async () => {
+    if (!keyFor) return;
+    setBusy(true);
+    const result = await setProviderKey(keyFor.id, secret.trim());
+    setBusy(false);
+    if (isFailure(result)) {
+      toast.error('Could not save key', result.error);
+      return;
+    }
+    onToast('Key stored', `Only a hint is shown: ${result.key_hint}`);
+    setSecret('');
+    setKeyFor(null);
+    onChange();
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card flush>
+        <CardHeader title="Providers" subtitle="Keys are stored server side and never returned to the browser." icon={<GIcon name="key" size={18} />} />
+        <div className="divide-y divide-line border-t border-line">
+          {providers.map((provider) => (
+            <div key={provider.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+              <div>
+                <p className="text-[0.8125rem] font-medium">{provider.label}</p>
+                <p className="text-2xs text-ink-muted">
+                  {provider.base_url} · {provider.key_hint ? `key ${provider.key_hint}` : 'no key yet'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={provider.enabled}
+                  onChange={(checked) => {
+                    void updateProvider(provider.id, { enabled: checked }).then(() => {
+                      onToast(`${provider.label} ${checked ? 'enabled' : 'disabled'}`);
+                      onChange();
+                    });
+                  }}
+                />
+                <Button size="sm" variant="outline" onClick={() => setKeyFor(provider)} icon={<GIcon name="key" size={16} />}>
+                  Set key
                 </Button>
               </div>
-            </Card>
-
-            {issued.length > 0 && (
-              <Card className="border-ok/40">
-                <CardHeader
-                  title="New codes"
-                  subtitle="Copy now. Codes are stored hashed and cannot be shown again."
-                  icon={<GIcon name="check_circle" size={18} />}
-                  action={
-                    <div className="flex gap-1.5">
-                      <Button size="xs" variant="secondary" onClick={async () => { if (await copyText(issued.join('\n'))) toast.success('Codes copied'); }}>
-                        Copy all
-                      </Button>
-                      <Button size="xs" variant="outline" onClick={downloadCsv} icon={<GIcon name="download" size={15} />}>
-                        CSV
-                      </Button>
-                    </div>
-                  }
-                />
-                <ul className="space-y-1.5">
-                  {issued.map((code) => (
-                    <li key={code} className="flex items-center gap-2 rounded-[var(--r-chip)] border border-line bg-surface-2 px-2.5 py-1.5">
-                      <code className="min-w-0 flex-1 truncate font-mono text-[0.75rem] tracking-[0.05em] text-ink">{code}</code>
-                      <button
-                        type="button"
-                        aria-label="Copy code"
-                        onClick={async () => { if (await copyText(code)) toast.success('Code copied'); }}
-                        className="text-ink-muted hover:text-brand"
-                      >
-                        <GIcon name="content_copy" size={17} />
-                      </button>
-                      <a
-                        aria-label="Share by email"
-                        href={`mailto:?subject=Your%20Micro%20Stocker%20activation%20code&body=Activation%20code%3A%20${code}`}
-                        className="text-ink-muted hover:text-brand"
-                      >
-                        <GIcon name="mail" size={17} />
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </Card>
-            )}
-          </div>
-
-          <Card>
-            <CardHeader
-              title="Issued codes"
-              icon={<GIcon name="receipt_long" size={18} />}
-              action={
-                <div className="flex flex-wrap items-center gap-2">
-                  <Input
-                    value={codeQuery}
-                    onChange={(e) => setCodeQuery(e.target.value)}
-                    placeholder="Search"
-                    className="w-40"
-                    size="sm"
-                  />
-                  <Select
-                    value={codeFilter}
-                    onChange={(e) => setCodeFilter(e.target.value)}
-                    aria-label="Filter codes"
-                    size="sm"
-                    options={[
-                      { value: 'all', label: 'All' },
-                      { value: 'available', label: 'Available' },
-                      { value: 'used', label: 'Used' },
-                      { value: 'revoked', label: 'Revoked' },
-                    ]}
-                  />
-                </div>
-              }
-            />
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[38rem] text-left text-[0.8125rem]">
-                <thead className="text-[0.75rem] font-semibold tracking-wide text-ink-faint uppercase">
-                  <tr>
-                    <th className="py-2 pr-3">Created</th>
-                    <th className="py-2 pr-3">Plan</th>
-                    <th className="py-2 pr-3">Length</th>
-                    <th className="py-2 pr-3">Status</th>
-                    <th className="py-2 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredCodes.map((row) => {
-                    const status = codeStatus(row);
-                    return (
-                      <tr key={row.id} className="border-t border-line">
-                        <td className="py-2.5 pr-3 whitespace-nowrap text-ink-muted">{date(row.created_at)}</td>
-                        <td className="py-2.5 pr-3 capitalize text-ink">{row.kind}</td>
-                        <td className="py-2.5 pr-3 text-ink-muted">{humanDuration(row.duration_seconds)}</td>
-                        <td className="py-2.5 pr-3">
-                          <Badge tone={status.tone}>{status.label}</Badge>
-                        </td>
-                        <td className="py-2.5 text-right">
-                          {!row.redeemed_at && !row.revoked_at ? (
-                            <Button size="xs" variant="ghost" onClick={() => void revoke(row.id)}>
-                              Revoke
-                            </Button>
-                          ) : (
-                            <span className="text-[0.75rem] text-ink-faint">
-                              {row.redeemed_at ? date(row.redeemed_at) : ''}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {filteredCodes.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="py-6 text-center text-[0.8125rem] text-ink-muted">
-                        {loading ? 'Loading…' : 'No codes match this filter.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
             </div>
-          </Card>
+          ))}
         </div>
-      )}
+      </Card>
 
-      {tab === 'users' && (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader title="Grant by email" icon={<GIcon name="workspace_premium" size={18} />} />
-            <div className="flex flex-wrap items-end gap-2.5">
-              <div className="min-w-56 flex-1">
-                <Field label="Account email">
-                  <Input
-                    type="email"
-                    value={grantEmail}
-                    onChange={(e) => setGrantEmail(e.target.value)}
-                    placeholder="user@example.com"
-                    leading={<GIcon name="mail" size={18} />}
-                  />
-                </Field>
-              </div>
-              <div className="w-28">
-                <Field label="Days">
-                  <Input
-                    type="number"
-                    min={1}
-                    max={3650}
-                    value={grantDaysInput}
-                    onChange={(e) => setGrantDaysInput(e.target.value)}
-                  />
-                </Field>
-              </div>
-              <Button loading={busy} onClick={() => void grantByEmail()} icon={<GIcon name="add_circle" size={18} />}>
-                Grant
-              </Button>
-            </div>
-          </Card>
-
-          <Card>
-            <CardHeader
-              title="Accounts"
-              icon={<GIcon name="group" size={18} />}
-              action={
-                <Input
-                  value={userQuery}
-                  onChange={(e) => setUserQuery(e.target.value)}
-                  placeholder="Search email"
-                  className="w-56"
-                  size="sm"
-                  leading={<GIcon name="search" size={17} />}
-                />
-              }
-            />
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[46rem] text-left text-[0.8125rem]">
-                <thead className="text-[0.75rem] font-semibold tracking-wide text-ink-faint uppercase">
-                  <tr>
-                    <th className="py-2 pr-3">Account</th>
-                    <th className="py-2 pr-3">Joined</th>
-                    <th className="py-2 pr-3">Plan</th>
-                    <th className="py-2 pr-3">Status</th>
-                    <th className="py-2 text-right">Manage</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredUsers.map((row) => {
-                    const state = planState(row);
-                    return (
-                      <tr key={row.user_id} className="border-t border-line align-middle">
-                        <td className="py-2.5 pr-3">
-                          <div className="max-w-[16rem] truncate font-medium text-ink">{row.email || 'Not set'}</div>
-                          <div className="font-mono text-2xs text-ink-faint">{row.user_id.slice(0, 8)}</div>
-                        </td>
-                        <td className="py-2.5 pr-3 whitespace-nowrap text-ink-muted">{date(row.created_at)}</td>
-                        <td className="py-2.5 pr-3 whitespace-nowrap text-ink-muted">
-                          {row.expires_at ? dateTime(row.expires_at) : 'Not set'}
-                        </td>
-                        <td className="py-2.5 pr-3">
-                          <Badge tone={state.tone}>{state.label}</Badge>
-                        </td>
-                        <td className="py-2.5">
-                          <div className="flex flex-wrap justify-end gap-1">
-                            <Button size="xs" variant="secondary" onClick={() => void grantDays(row.user_id, 30)}>
-                              +30d
-                            </Button>
-                            <Button
-                              size="xs"
-                              variant="outline"
-                              onClick={() => {
-                                setExpiryUser(row);
-                                setExpiryValue(
-                                  row.expires_at
-                                    ? new Date(row.expires_at).toISOString().slice(0, 16)
-                                    : new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 16),
-                                );
-                              }}
-                            >
-                              Expiry
-                            </Button>
-                            <Button
-                              size="xs"
-                              variant={row.is_blocked ? 'success' : 'ghost'}
-                              onClick={() => void toggleBlocked(row)}
-                            >
-                              {row.is_blocked ? 'Unblock' : 'Block'}
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {filteredUsers.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="py-6 text-center text-[0.8125rem] text-ink-muted">
-                        {loading ? 'Loading…' : 'No accounts found.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {tab === 'activity' && (
-        <Card>
-          <CardHeader title="Recent activity" icon={<GIcon name="history" size={18} />} />
-          {audit.length === 0 ? (
-            <p className="py-6 text-center text-[0.8125rem] text-ink-muted">No administrator actions recorded yet.</p>
-          ) : (
-            <ul className="divide-y divide-line">
-              {audit.map((row) => (
-                <li key={row.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
-                  <Badge tone="brand">{row.action.replace(/_/g, ' ')}</Badge>
-                  <span className="text-[0.8125rem] text-ink">{row.target_email || 'account'}</span>
-                  {typeof row.detail?.days === 'number' && (
-                    <span className="text-[0.75rem] text-ink-muted">+{String(row.detail.days)} days</span>
-                  )}
-                  <span className="ml-auto text-[0.75rem] text-ink-faint">{dateTime(row.created_at)}</span>
-                </li>
+      <Card flush>
+        <CardHeader title="Models" subtitle="Enable, price and retire models without a release." icon={<GIcon name="memory" size={18} />} />
+        <div className="overflow-x-auto border-t border-line">
+          <table className="w-full min-w-[720px] text-[0.8125rem]">
+            <thead className="bg-surface-2 text-2xs uppercase tracking-wide text-ink-muted">
+              <tr>
+                <th className="px-4 py-2 text-left font-semibold">Model</th>
+                <th className="px-4 py-2 text-left font-semibold">Kind</th>
+                <th className="px-4 py-2 text-left font-semibold">৳ / 1M in</th>
+                <th className="px-4 py-2 text-left font-semibold">৳ / 1M out</th>
+                <th className="px-4 py-2 text-left font-semibold">Enabled</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {models.map((model) => (
+                <tr key={model.id}>
+                  <td className="px-4 py-2">
+                    <p className="font-medium">{model.label}</p>
+                    <p className="text-2xs text-ink-muted">{model.upstream_id}</p>
+                  </td>
+                  <td className="px-4 py-2 text-ink-muted">{model.kind}</td>
+                  <td className="px-4 py-2">
+                    <CostInput bdt={Math.round(model.cost_in_per_mtok * FX_BDT_USD)} onCommit={(bdt) => void updateModel(model.id, { cost_in_per_mtok: bdt / FX_BDT_USD })} />
+                  </td>
+                  <td className="px-4 py-2">
+                    <CostInput bdt={Math.round(model.cost_out_per_mtok * FX_BDT_USD)} onCommit={(bdt) => void updateModel(model.id, { cost_out_per_mtok: bdt / FX_BDT_USD })} />
+                  </td>
+                  <td className="px-4 py-2">
+                    <Switch
+                      checked={model.enabled}
+                      onChange={(checked) => {
+                        void updateModel(model.id, { enabled: checked }).then(() => {
+                          onToast(`${model.label} ${checked ? 'enabled' : 'disabled'}`);
+                          onChange();
+                        });
+                      }}
+                    />
+                  </td>
+                </tr>
               ))}
-            </ul>
-          )}
-        </Card>
-      )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
-      <Modal
-        open={Boolean(expiryUser)}
-        onClose={() => setExpiryUser(null)}
-        title="Set plan expiry"
-        description={expiryUser?.email}
-        size="sm"
-        footer={
-          <div className="flex w-full justify-end gap-2">
-            <Button variant="outline" onClick={() => setExpiryUser(null)}>
-              Cancel
+      {keyFor && (
+        <Modal open onClose={() => setKeyFor(null)} title={`${keyFor.label} key`} description="The value is written on the server and never returned." size="sm">
+          <div className="space-y-3">
+            <Field label="API key">
+              <Input value={secret} onChange={(event) => setSecret(event.target.value)} placeholder="sk-..." />
+            </Field>
+            <Button className="w-full" loading={busy} onClick={() => void saveKey()} icon={<GIcon name="save" size={18} />}>
+              Store key
             </Button>
-            <Button loading={busy} onClick={() => void saveExpiry()}>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------- settings */
+
+function Settings({
+  settings,
+  onChange,
+  onToast,
+}: {
+  settings: Setting[];
+  onChange: () => void;
+  onToast: (message: string) => void;
+}) {
+  const toast = useToast();
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const next: Record<string, string> = {};
+    for (const setting of settings) next[setting.key] = JSON.stringify(setting.value, null, 2);
+    setDrafts(next);
+  }, [settings]);
+
+  const save = async (key: string) => {
+    try {
+      const parsed = JSON.parse(drafts[key]);
+      const result = await updateSetting(key, parsed);
+      if (isFailure(result)) {
+        toast.error('Could not save', result.error);
+        return;
+      }
+      onToast(`${key} updated`);
+      onChange();
+    } catch {
+      toast.error('Invalid JSON', 'Fix the syntax before saving.');
+    }
+  };
+
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      {settings.map((setting) => (
+        <Card key={setting.key} className="flex flex-col">
+          <CardHeader title={setting.label || setting.key} subtitle={setting.key} icon={<GIcon name="tune" size={18} />} />
+          <textarea
+            value={drafts[setting.key] ?? ''}
+            onChange={(event) => setDrafts((current) => ({ ...current, [setting.key]: event.target.value }))}
+            spellCheck={false}
+            rows={5}
+            className="w-full flex-1 rounded-[var(--r-control)] border border-line bg-surface-2 px-3 py-2 font-mono text-[0.75rem] text-ink outline-none focus:border-brand"
+          />
+          <div className="mt-3 flex justify-end">
+            <Button size="sm" variant="outline" onClick={() => void save(setting.key)} icon={<GIcon name="save" size={16} />}>
               Save
             </Button>
           </div>
-        }
-      >
-        <Field label="Expires at" hint="Use a past date to remove premium access.">
-          <Input type="datetime-local" value={expiryValue} onChange={(e) => setExpiryValue(e.target.value)} />
-        </Field>
-      </Modal>
+        </Card>
+      ))}
     </div>
   );
 }

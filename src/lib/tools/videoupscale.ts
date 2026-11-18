@@ -550,6 +550,14 @@ export const VIDEO_TARGETS: VideoTarget[] = [
   { id: 'getty_4k', label: 'Getty 4K', badge: '3840p 30fps', platformId: 'getty', group: 'platform', longEdge: 3840, defaultFps: 30 },
 ];
 
+/**
+ * Free renders stop at 2K QHD. The 4K and 8K masters and the 60 fps stock
+ * presets need an active Pro plan, because they are the ones contributors sell.
+ */
+export function isPremiumVideoTarget(target: Pick<VideoTarget, 'longEdge' | 'defaultFps'>): boolean {
+  return target.longEdge > 2560 || (target.defaultFps ?? 0) >= 60;
+}
+
 export const VIDEO_OUTPUT_FORMATS: Array<{ id: 'mp4' | 'webm'; label: string }> = [
   { id: 'mp4', label: 'MP4' },
   { id: 'webm', label: 'WebM' },

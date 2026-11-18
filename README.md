@@ -23,7 +23,7 @@ upscaling to 8K, validation, submission tracking and earnings analytics for
 
 Downloads for published versions are available on the [Releases page](https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro/releases). Windows installers are unsigned unless the release notes say otherwise.
 
-The current development branch requires an account and a configured licensing backend. It is not ready for distribution until the backend has been deployed and verified. See [licensing setup](docs/licensing-setup.md). The Windows NSIS installer allows users to select the installation directory.
+The studio opens straight into the free tools; no account is needed. A subscription adds the EPS, SVG, AI and JPG generators, the top tier upscale models and 4K video masters, and it needs the payment backend described in [Pro platform](docs/PRO_PLATFORM.md). The Windows NSIS installer allows users to select the installation directory.
 
 **Security notice:** older cloud setup instructions exposed account hashes and workspace data to anonymous clients. See [legacy project remediation](docs/licensing-setup.md#urgent-legacy-projects). Legacy cloud sync is disabled pending a secure replacement.
 

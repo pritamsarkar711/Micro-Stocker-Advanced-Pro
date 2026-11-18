@@ -7,6 +7,7 @@
  * `import.meta.env.DEV` to `false`, so a real server is always required.
  */
 import type { SupabaseClient, User } from '@supabase/supabase-js';
+import { proRpcHandlers, proTables, type DemoCaller } from './demoPro';
 
 export const demoMode = import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === '1';
 
@@ -538,14 +539,108 @@ const rpcHandlers: Record<string, (params: Record<string, unknown>) => unknown> 
   },
 };
 
+/**
+ * Minimal PostgREST-shaped query builder over the preview tables: select, eq,
+ * order, limit and single/maybeSingle, which is all the Pro screens use.
+ */
+function demoTables() {
+  const chain = (rows: Record<string, unknown>[]) => {
+    let result = [...rows];
+    const api = {
+      select: () => api,
+      eq(column: string, value: unknown) {
+        result = result.filter((row) => row[column] === value);
+        return api;
+      },
+      order(column: string, options?: { ascending?: boolean }) {
+        const ascending = options?.ascending !== false;
+        result = [...result].sort((a, b) => {
+          const left = a[column] as string | number;
+          const right = b[column] as string | number;
+          return ascending ? (left > right ? 1 : left < right ? -1 : 0) : left < right ? 1 : left > right ? -1 : 0;
+        });
+        return api;
+      },
+      limit(count: number) {
+        result = result.slice(0, count);
+        return api;
+      },
+      async maybeSingle() {
+        return { data: result[0] ?? null, error: null };
+      },
+      async single() {
+        return { data: result[0] ?? null, error: result[0] ? null : { message: 'No rows found' } };
+      },
+      then(resolve: (value: { data: Record<string, unknown>[]; error: null }) => unknown) {
+        return Promise.resolve({ data: result, error: null as null }).then(resolve);
+      },
+    };
+    return api;
+  };
+
+  return {
+    from(table: string) {
+      const rows = (proTables[table] ?? []) as Record<string, unknown>[];
+      return {
+        select: () => chain(rows),
+        update(values: Record<string, unknown>) {
+          return {
+            async eq(column: string, value: unknown) {
+              const target = rows.find((row) => row[column] === value);
+              if (target) Object.assign(target, values);
+              return { data: target ?? null, error: target ? null : { message: 'No rows found' } };
+            },
+            async match(query: Record<string, unknown>) {
+              const target = rows.find((row) => Object.entries(query).every(([key, expected]) => row[key] === expected));
+              if (target) Object.assign(target, values);
+              return { data: target ?? null, error: target ? null : { message: 'No rows found' } };
+            },
+          };
+        },
+      };
+    },
+  };
+}
+
 /** In-memory Supabase-shaped client (development preview only). */
 function buildDemoClient(): SupabaseClient {
+  const caller = (): DemoCaller | null => {
+    const user = me();
+    if (!user) return null;
+    return { id: user.id, admin: user.admin, blocked: user.blocked, email: user.email };
+  };
   return {
     auth: demoAuth,
+    ...demoTables(),
+    functions: {
+      async invoke(name: string, options: { body?: Record<string, unknown> } = {}) {
+        if (name === 'crypto-verify') {
+          const status = String(options.body?.tx_hash ?? '');
+          if (!status) return { data: { status: 'pending', message: 'waiting for a transaction hash' }, error: null };
+          return { data: { status: 'seen', confirmations: 3, required: 19, network: 'TRC20' }, error: null };
+        }
+        if (name === 'admin-config') {
+          if (!me()?.admin) return { data: null, error: { message: 'not allowed' } };
+          const provider = proTables.ai_providers.find((row) => row.id === options.body?.provider_id);
+          if (provider) {
+            provider.key_hint = `${String(options.body?.secret).slice(0, 4)}...${String(options.body?.secret).slice(-4)}`;
+            provider.key_updated_at = new Date().toISOString();
+          }
+          return { data: { ok: true, key_hint: provider?.key_hint }, error: null };
+        }
+        const local = (import.meta.env.VITE_GENERATE_LOCAL as string | undefined) === '1';
+        if (name === 'ai-generate' && !local) {
+          return { data: null, error: { message: 'provider key not configured' } };
+        }
+        return { data: null, error: { message: `Unknown function ${name}` } };
+      },
+    },
     async rpc(name: string, params: Record<string, unknown> = {}) {
       const handler = rpcHandlers[name];
-      if (!handler) return { data: null, error: { message: `Unknown RPC ${name}` } };
-      return handler(params);
+      if (handler) return handler(params);
+      const pro = proRpcHandlers[name];
+      if (pro) return pro(params, caller());
+      return { data: null, error: { message: `Unknown RPC ${name}` } };
     },
   } as unknown as SupabaseClient;
 }
