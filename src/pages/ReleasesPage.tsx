@@ -51,6 +51,8 @@ export function ReleasesPage() {
             variant="primary"
             icon={<GIcon name="add" size={16} />}
             onClick={() => setOpen(true)}
+            // The empty state carries the same call to action; one is enough.
+            className={releases.length === 0 ? 'max-sm:hidden' : undefined}
           >
             Add release
           </Button>

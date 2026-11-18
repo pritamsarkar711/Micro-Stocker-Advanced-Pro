@@ -36,6 +36,9 @@ export function MobileHeader({ onOpenNav }: { onOpenNav: () => void }) {
       return `${kind} generator`;
     }
     if (pathname.startsWith('/admin')) return 'Admin console';
+    // Destinations that live outside the rail still need a name up top.
+    if (pathname.startsWith('/report')) return 'Report issue';
+    if (pathname.startsWith('/404')) return 'Page not found';
     return 'Micro Stocker';
   }, [pathname, isAdmin]);
 
