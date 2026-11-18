@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -25,6 +25,7 @@ import {
   termLabel,
   verifyCrypto,
   type CryptoAsset,
+  type CryptoCheck,
   type CryptoInvoice,
   type Invoice,
   type Order,
@@ -58,7 +59,24 @@ const STATUS_LABEL: Record<string, string> = {
   confirmed: 'Confirmed',
   seen: 'Seen on chain',
   pending: 'Waiting for the network',
-  mismatch: 'Wrong amount',
+  mismatch: 'Needs review',
+};
+
+/** Why a chain check refused an invoice, in the customer's words. */
+const CREDIT_ROWS: Partial<Record<string, { label: string }>> = {
+  vector: { label: 'EPS, SVG and AI Illustrator render' },
+  jpg: { label: 'JPG studio render' },
+  premium_upscale: { label: 'Premium upscale model' },
+  video_premium: { label: 'Premium video upscale' },
+  background: { label: 'Background remover' },
+};
+
+const REASON_LABEL: Record<string, string> = {
+  'tx reused': 'That transaction was already used for another order.',
+  'tx older than invoice': 'That transaction was sent before this invoice was created.',
+  'amount short': 'The amount received is below the invoice amount. Send the difference and check again.',
+  'wrong destination': 'That transaction did not reach our wallet.',
+  'wrong network': 'That transaction was sent on a different network.',
 };
 
 const STATUS_TONE: Record<string, 'ok' | 'warn' | 'danger' | 'neutral' | 'brand'> = {
@@ -87,6 +105,7 @@ export function SubscriptionPage() {
   const [checkout, setCheckout] = useState<{ plan: Plan; price: PlanPrice } | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [checkingOrder, setCheckingOrder] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const catalog = await loadCatalog();
@@ -124,6 +143,34 @@ export function SubscriptionPage() {
     : null;
   const daysLeft = expiresAt ? Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 86_400_000)) : null;
 
+  // A row can be re-checked on demand; the chain reader is the only authority.
+  const checkInvoice = async (invoice: Invoice) => {
+    setCheckingOrder(invoice.order_id);
+    const result = await verifyCrypto(invoice.invoice_id);
+    setCheckingOrder(null);
+    if ('error' in result && result.error) {
+      toast.error('Check failed', String(result.error));
+      return;
+    }
+    const check = result as CryptoCheck;
+    if (check.status === 'confirmed') {
+      toast.success('Payment confirmed', 'Your plan is active.');
+      restart();
+      return;
+    }
+    if (check.status === 'mismatch') {
+      toast.error('Payment needs review', REASON_LABEL[check.reason ?? ''] ?? 'The transfer did not match this invoice.');
+      void load();
+      return;
+    }
+    if (check.status === 'expired') {
+      toast.info('Invoice expired', 'Create a new order to continue.');
+      void load();
+      return;
+    }
+    toast.info('Not seen yet', check.message ?? 'Waiting for the transfer to reach the network.');
+  };
+
   // Refreshes the plan, credit and order lists without dismissing the sheet,
   // so the invoice or receipt stays on screen until the customer is done.
   const restart = () => {
@@ -132,7 +179,7 @@ export function SubscriptionPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div>
       <PageHeader
         title="Subscription"
         description="The studio is free. A plan unlocks the premium generators and the top upscale models."
@@ -232,21 +279,34 @@ export function SubscriptionPage() {
                 </p>
               )}
 
-              <ul className="mt-4 space-y-1.5 border-t border-line pt-3 text-[0.8125rem]">
-                {FEATURE_ROWS.map((row) => {
-                  const included = Boolean(plan.features[row.key]);
-                  return (
-                    <li key={row.key} className={clsx('flex items-center gap-2', !included && 'text-ink-muted line-through decoration-1')}>
-                      <GIcon name={included ? 'check_circle' : 'close'} size={16} className={included ? 'text-ok' : 'opacity-50'} />
+              <div className="mt-4 border-t border-line pt-3">
+                <p className="text-2xs font-semibold uppercase tracking-wide text-ink-muted">Included</p>
+                <ul className="mt-1.5 space-y-1 text-[0.8125rem]">
+                  {FEATURE_ROWS.filter((row) => plan.features[row.key]).map((row) => (
+                    <li key={row.key} className="flex items-center gap-2">
+                      <GIcon name="check_circle" size={16} className="text-ok" />
                       {row.label}
                     </li>
-                  );
-                })}
-                <li className="flex items-center gap-2 text-ink-muted">
-                  <GIcon name="photo_size_select_large" size={16} className="opacity-60" />
-                  Up to {plan.features.max_export_px?.toLocaleString() ?? 4000} px exports
-                </li>
-              </ul>
+                  ))}
+                  <li className="flex items-center gap-2">
+                    <GIcon name="photo_size_select_large" size={16} className="text-ok" />
+                    Up to {(plan.features.max_export_px ?? 4000).toLocaleString()} px exports
+                  </li>
+                </ul>
+                {FEATURE_ROWS.some((row) => !plan.features[row.key]) && (
+                  <>
+                    <p className="mt-3 text-2xs font-semibold uppercase tracking-wide text-ink-muted">Not included</p>
+                    <ul className="mt-1.5 space-y-1 text-[0.8125rem] text-ink-muted">
+                      {FEATURE_ROWS.filter((row) => !plan.features[row.key]).map((row) => (
+                        <li key={row.key} className="flex items-center gap-2">
+                          <GIcon name="close" size={16} className="opacity-50" />
+                          {row.label}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
 
               <div className="mt-4 pt-1">
                 <Button
@@ -297,23 +357,32 @@ export function SubscriptionPage() {
             <div className="divide-y divide-line border-t border-line">
               {orders.slice(0, 5).map((order) => {
                 const invoice = invoices.find((entry) => entry.order_id === order.id);
+                const pendingInvoice = invoice && (invoice.status === 'pending' || invoice.status === 'seen');
+                const status = invoice && order.status !== 'approved' ? invoice.status : order.status;
                 return (
-                  <div key={order.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                    <div>
-                      <p className="text-[0.8125rem] font-medium">
+                  <div key={order.id} className="flex items-center gap-3 px-4 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[0.8125rem] font-medium">
                         {order.plan_slug} · {termLabel(order.months)}
                       </p>
-                      <p className="text-2xs text-ink-muted">
+                      <p className="truncate text-2xs text-ink-muted">
                         {bdt(order.amount_bdt)} · {order.method}
                         {order.txn_ref ? ` · ${order.txn_ref}` : ''}
+                        {invoice ? ` · ${invoice.symbol} ${invoice.network}` : ''}
                       </p>
-                      {invoice && (
-                        <p className="mt-0.5 text-2xs text-ink-muted">
-                          {invoice.symbol} {invoice.network} · {invoice.confirmations}/{invoice.required_confirmations} confirmations
-                        </p>
-                      )}
                     </div>
-                    <Badge tone={STATUS_TONE[order.status] ?? 'neutral'}>{STATUS_LABEL[order.status] ?? order.status}</Badge>
+                    {pendingInvoice && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        loading={checkingOrder === order.id}
+                        onClick={() => void checkInvoice(invoice)}
+                        icon={<GIcon name="refresh" size={15} />}
+                      >
+                        Check
+                      </Button>
+                    )}
+                    <Badge tone={STATUS_TONE[status] ?? 'neutral'}>{STATUS_LABEL[status] ?? status}</Badge>
                   </div>
                 );
               })}
@@ -323,37 +392,36 @@ export function SubscriptionPage() {
       </div>
 
       <Card className="mt-4">
-        <CardHeader title="How credits work" icon={<GIcon name="savings" size={18} />} />
-        <div className="grid gap-3 sm:grid-cols-2">
+        <CardHeader title="Credits" icon={<GIcon name="savings" size={18} />} />
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5 text-[0.8125rem]">
-            {[
-              { key: 'vector', label: 'Vector, EPS, SVG and AI generations' },
-              { key: 'jpg', label: 'JPG studio render' },
-              { key: 'premium_upscale', label: 'Premium upscale, per image' },
-              { key: 'video_premium', label: 'Premium video upscale, per clip' },
-            ].map((row) => (
-              <div key={row.key} className="flex items-center justify-between gap-3">
-                <span className="min-w-0 text-ink-muted">{row.label}</span>
-                <Badge tone="neutral">{costs[row.key] ?? 0} credits</Badge>
-              </div>
-            ))}
+            {(Object.keys(costs) as Array<keyof typeof costs>)
+              .filter((key) => CREDIT_ROWS[key])
+              .map((key) => (
+                <div key={key} className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 text-ink-muted">{CREDIT_ROWS[key]!.label}</span>
+                  <Badge tone="neutral">
+                    {costs[key] ? `${costs[key]} credits` : 'No credits'}
+                  </Badge>
+                </div>
+              ))}
           </div>
           <ul className="space-y-1.5 text-2xs leading-relaxed text-ink-muted">
             <li className="flex gap-1.5">
               <GIcon name="check_circle" size={15} className="mt-0.5 shrink-0 text-ok" />
-              Credits are only spent when a job starts, and a failed job is refunded automatically.
+              Credits are spent only when one of the four generators or another credit tool starts.
             </li>
             <li className="flex gap-1.5">
               <GIcon name="check_circle" size={15} className="mt-0.5 shrink-0 text-ok" />
-              Leftovers stay in your wallet after a plan ends; they are used again the next time a plan is active.
+              A failed job is refunded automatically.
             </li>
             <li className="flex gap-1.5">
               <GIcon name="check_circle" size={15} className="mt-0.5 shrink-0 text-ok" />
-              Every plan adds its full credit amount, and renewing early adds the new months after the current expiry.
+              Leftover credits stay after a plan ends and are used again with the next plan.
             </li>
             <li className="flex gap-1.5">
               <GIcon name="check_circle" size={15} className="mt-0.5 shrink-0 text-ok" />
-              The free tools never touch credits: convert, optimise, remove backgrounds and standard upscales are free.
+              Background remover and standard upscales never use credits.
             </li>
           </ul>
         </div>
@@ -402,8 +470,7 @@ function CheckoutSheet({
   const [placed, setPlaced] = useState<{ orderId: string; status: string } | null>(null);
   const [invoice, setInvoice] = useState<CryptoInvoice | null>(null);
   const [assetId, setAssetId] = useState(assets[0]?.id ?? '');
-  const [checking, setChecking] = useState(false);
-  const [cryptoState, setCryptoState] = useState<{ status: string; message?: string; confirmations?: number; required?: number } | null>(null);
+  const [txHash, setTxHash] = useState('');
 
   const selected = methods.find((entry) => entry.id === method) ?? methods[0];
   const isCrypto = method === 'crypto';
@@ -425,10 +492,7 @@ function CheckoutSheet({
       return;
     }
     setPlaced({ orderId: result.order_id, status: result.status });
-    toast.success(
-      'Order created',
-      isCrypto ? 'Pay the invoice amount and the network confirms it automatically.' : `Send ${bdt(result.amount_bdt)} and an administrator will confirm it.`,
-    );
+    toast.success('Order created', isCrypto ? 'Send the amount shown below.' : 'Send the amount, then wait for approval.');
     if (isCrypto && asset) {
       const created = await createCryptoInvoice(result.order_id, asset.id);
       if (isFailure(created)) setError(created.error);
@@ -437,30 +501,13 @@ function CheckoutSheet({
     onDone();
   };
 
-  const check = async () => {
-    if (!invoice) return;
-    setChecking(true);
-    const result = await verifyCrypto(invoice.invoice_id);
-    setChecking(false);
-    if ('error' in result && result.error) {
-      setError(String(result.error));
-      return;
-    }
-    setCryptoState(result as { status: string; message?: string; confirmations?: number; required?: number });
-    if ((result as { status: string }).status === 'confirmed') {
-      toast.success('Payment confirmed', 'Your plan is active.');
-      onDone();
-      onClose();
-    }
-  };
-
   return (
     <Modal
       open
       onClose={onClose}
       size="md"
       title={`${plan.name} · ${termLabel(price.months)}`}
-      description={`${bdt(price.price_bdt)} · ${price.credits.toLocaleString('en-US')} credits · access starts the moment payment is confirmed`}
+      description={`${bdt(price.price_bdt)} · ${price.credits.toLocaleString('en-US')} credits`}
     >
       {!placed ? (
         <div className="space-y-4">
@@ -478,12 +525,12 @@ function CheckoutSheet({
                   )}
                 >
                   {entry.id === 'crypto' ? (
-                    <span className="flex items-center gap-1">
+                    <span className="flex h-7 items-center gap-1">
                       <CoinMark asset="usdt" size={20} />
                       <CoinMark asset="btc" size={20} />
                     </span>
                   ) : (
-                    <PaymentMark method={entry.id} size={20} />
+                    <PaymentMark method={entry.id} size={28} />
                   )}
                   <span className="text-2xs font-semibold">{entry.label}</span>
                 </button>
@@ -494,11 +541,16 @@ function CheckoutSheet({
           {!isCrypto && selected && (
             <div className="space-y-3">
               <div className="rounded-[var(--r-control)] border border-line bg-surface-2 p-3">
-                <p className="text-2xs text-ink-muted">Send exactly</p>
-                <p className="text-[1.125rem] font-bold">{bdt(price.price_bdt)}</p>
-                <div className="mt-2 space-y-1">
+                <div className="flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-2xs text-ink-muted">Send exactly</p>
+                    <p className="text-[1.125rem] font-bold">{bdt(price.price_bdt)}</p>
+                  </div>
+                  <PaymentMark method={selected.id as 'bkash' | 'nagad'} size={26} />
+                </div>
+                <div className="mt-2 divide-y divide-line">
                   {(selected.config.numbers ?? []).map((number) => (
-                    <div key={number} className="flex items-center justify-between gap-2">
+                    <div key={number} className="flex items-center justify-between gap-2 py-1.5 first:pt-0 last:pb-0">
                       <span className="font-mono text-[0.8125rem]">{number}</span>
                       <button
                         type="button"
@@ -510,23 +562,24 @@ function CheckoutSheet({
                     </div>
                   ))}
                 </div>
-                <p className="mt-2 text-2xs text-ink-muted">{selected.config.instructions}</p>
+                {selected.config.instructions && (
+                  <p className="mt-2 text-2xs text-ink-muted">{selected.config.instructions}</p>
+                )}
               </div>
 
-              <Field label="Transaction ID" hint="required">
+              <Field label="Transaction ID">
                 <Input value={txn} onChange={(event) => setTxn(event.target.value.toUpperCase())} placeholder="8N7A2K9XQ1" />
               </Field>
               <Field label="Sender number" hint="optional">
                 <Input value={sender} onChange={(event) => setSender(event.target.value)} placeholder="01XXXXXXXXX" />
               </Field>
-              <p className="text-2xs text-ink-muted">A TrxID can only be claimed once. Orders are reviewed by hand.</p>
             </div>
           )}
 
           {isCrypto && (
             <div className="space-y-3">
               <Field label="Coin and network">
-                <Select value={assetId} onChange={(event) => { setAssetId(event.target.value); setInvoice(null); setCryptoState(null); }}>
+                <Select value={assetId} onChange={(event) => { setAssetId(event.target.value); setInvoice(null); }}>
                   {assets.map((entry) => (
                     <option key={entry.id} value={entry.id}>
                       {entry.symbol} · {entry.network}
@@ -534,16 +587,29 @@ function CheckoutSheet({
                   ))}
                 </Select>
               </Field>
-              <div className="flex items-center gap-2 rounded-[var(--r-control)] border border-line bg-surface-2 p-2.5">
-                {asset && <CoinMark asset={asset.symbol.toLowerCase()} size={26} />}
-                <div className="min-w-0">
-                  <p className="text-[0.8125rem] font-semibold">{asset?.symbol} on {asset?.network}</p>
-                  <p className="truncate text-2xs text-ink-muted">{asset?.address}</p>
+              <Field label="Transaction hash" hint="optional">
+                <Input
+                  value={txHash}
+                  onChange={(event) => setTxHash(event.target.value.trim())}
+                  placeholder="0x… or the signature"
+                />
+              </Field>
+              {asset && (
+                <div className="flex items-center gap-2.5 rounded-[var(--r-control)] border border-line bg-surface-2 p-2.5">
+                  <CoinMark asset={asset.symbol.toLowerCase()} size={26} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[0.8125rem] font-semibold">{asset.symbol} on {asset.network}</p>
+                    <p className="truncate font-mono text-2xs text-ink-muted">{asset.address}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="shrink-0 text-2xs font-semibold text-brand-fg"
+                    onClick={() => void copyText(asset.address).then(() => toast.success('Address copied'))}
+                  >
+                    Copy
+                  </button>
                 </div>
-              </div>
-              <p className="text-2xs text-ink-muted">
-                The invoice is created after you continue and shows the exact amount. Payment is detected automatically once the network confirms it.
-              </p>
+              )}
             </div>
           )}
 
@@ -555,67 +621,164 @@ function CheckoutSheet({
             {isCrypto ? 'Create invoice' : 'Submit payment'}
           </Button>
         </div>
+      ) : invoice ? (
+        <InvoicePanel invoice={invoice} hash={txHash} onPaid={onDone} onClose={onClose} />
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <div className="flex items-center gap-2 rounded-[var(--r-control)] border border-ok/30 bg-ok-soft px-3 py-2.5 text-[0.8125rem] text-ok">
             <GIcon name="check_circle" size={18} />
-            Order placed · {placed.status}
+            Payment submitted
           </div>
-
-          {invoice ? (
-            <div className="space-y-2">
-              <div className="rounded-[var(--r-control)] border border-line p-3">
-                <p className="text-2xs text-ink-muted">Send exactly</p>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="font-mono text-[0.9375rem] font-semibold">{cryptoAmount(invoice.amount)} {invoice.symbol}</p>
-                  <button
-                    type="button"
-                    className="text-2xs font-semibold text-brand-fg"
-                    onClick={() => void copyText(String(invoice.amount)).then(() => toast.success('Amount copied'))}
-                  >
-                    Copy
-                  </button>
-                </div>
-                <p className="mt-2 text-2xs text-ink-muted">{invoice.network} address</p>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="break-all font-mono text-[0.75rem]">{invoice.address}</p>
-                  <button
-                    type="button"
-                    className="shrink-0 text-2xs font-semibold text-brand-fg"
-                    onClick={() => void copyText(invoice.address).then(() => toast.success('Address copied'))}
-                  >
-                    Copy
-                  </button>
-                </div>
-                <p className="mt-2 text-2xs text-ink-muted">
-                  Needs {invoice.confirmations_required} confirmations. The invoice expires {new Date(invoice.expires_at).toLocaleTimeString()}.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" loading={checking} onClick={() => void check()} icon={<GIcon name="refresh" size={16} />}>
-                  Check payment
-                </Button>
-                {cryptoState && (
-                  <Badge tone={STATUS_TONE[cryptoState.status] ?? 'neutral'}>
-                    {cryptoState.status}
-                    {typeof cryptoState.confirmations === 'number' ? ` · ${cryptoState.confirmations}/${cryptoState.required}` : ''}
-                  </Badge>
-                )}
-              </div>
-              {cryptoState?.message && <p className="text-2xs text-ink-muted">{cryptoState.message}</p>}
-            </div>
-          ) : (
-            <p className="text-[0.8125rem] text-ink-muted">
-              An administrator reviews the payment. Access starts as soon as it is approved.
-            </p>
-          )}
-
+          <p className="text-2xs text-ink-muted">
+            Access starts as soon as an administrator approves it. This page shows the change.
+          </p>
           <Button className="w-full" variant="outline" onClick={onClose}>
             Done
           </Button>
         </div>
       )}
     </Modal>
+  );
+}
+
+/* ------------------------------------------------------- crypto invoice */
+
+/**
+ * Live view of one crypto invoice.
+ *
+ * The panel asks the chain reader every fifteen seconds until the invoice
+ * reaches a final state, so a customer who pays and watches this screen sees
+ * their plan switch on without pressing anything. The manual button exists for
+ * the first seconds, before the transfer reaches a block.
+ */
+function InvoicePanel({
+  invoice,
+  hash,
+  onPaid,
+  onClose,
+}: {
+  invoice: CryptoInvoice;
+  hash?: string;
+  onPaid: () => void;
+  onClose: () => void;
+}) {
+  const toast = useToast();
+  const [check, setCheck] = useState<CryptoCheck | null>(null);
+  const [busy, setBusy] = useState(false);
+  const paid = useRef(onPaid);
+  paid.current = onPaid;
+  // The pasted hash is offered once; afterwards the invoice remembers it.
+  const firstHash = useRef(hash ?? '');
+
+  const status = check?.status ?? 'pending';
+  const settled = status === 'confirmed' || status === 'expired' || status === 'mismatch';
+  const settledRef = useRef(settled);
+  settledRef.current = settled;
+
+  const poll = useCallback(async (silent: boolean) => {
+    if (!silent) setBusy(true);
+    const hint = firstHash.current;
+    firstHash.current = '';
+    const result = await verifyCrypto(invoice.invoice_id, hint || undefined);
+    if (!silent) setBusy(false);
+    if ('error' in result && result.error) {
+      if (!silent) toast.error('Check failed', String(result.error));
+      return;
+    }
+    const next = result as CryptoCheck;
+    setCheck(next);
+    if (next.status === 'confirmed') {
+      paid.current();
+      toast.success('Payment confirmed', 'Your plan is active.');
+    }
+  }, [invoice.invoice_id, toast]);
+
+  useEffect(() => {
+    void poll(true);
+    const id = window.setInterval(() => {
+      if (settledRef.current) {
+        window.clearInterval(id);
+        return;
+      }
+      void poll(true);
+    }, 15_000);
+    return () => window.clearInterval(id);
+  }, [poll]);
+
+  const copy = (value: string, label: string) => void copyText(value).then(() => toast.success(`${label} copied`));
+  const reason = check?.reason ? REASON_LABEL[check.reason] ?? check.reason : null;
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-[var(--r-control)] border border-line p-3">
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-2xs text-ink-muted">Send exactly</p>
+            <p className="font-mono text-[1.0625rem] font-semibold">
+              {cryptoAmount(invoice.amount)} {invoice.symbol}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <CoinMark asset={invoice.symbol.toLowerCase()} size={24} />
+            <button type="button" className="text-2xs font-semibold text-brand-fg" onClick={() => copy(String(invoice.amount), 'Amount')}>
+              Copy
+            </button>
+          </div>
+        </div>
+
+        <p className="mt-3 text-2xs text-ink-muted">{invoice.network} address</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="break-all font-mono text-[0.75rem] leading-snug">{invoice.address}</p>
+          <button
+            type="button"
+            className="shrink-0 text-2xs font-semibold text-brand-fg"
+            onClick={() => copy(invoice.address, 'Address')}
+          >
+            Copy
+          </button>
+        </div>
+
+        {check?.tx_hash && (
+          <div className="mt-3 border-t border-line pt-2">
+            <p className="text-2xs text-ink-muted">Transaction</p>
+            <p className="break-all font-mono text-[0.6875rem] leading-snug">{check.tx_hash}</p>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone={STATUS_TONE[status] ?? 'neutral'} icon={status === 'confirmed' ? <GIcon name="check_circle" size={14} /> : undefined}>
+          {STATUS_LABEL[status] ?? status}
+          {typeof check?.confirmations === 'number' && status !== 'confirmed' ? ` · ${check.confirmations}/${check.required ?? invoice.confirmations_required}` : ''}
+        </Badge>
+        {!settled && (
+          <Button variant="outline" size="sm" loading={busy} onClick={() => void poll(false)} icon={<GIcon name="refresh" size={16} />}>
+            Check now
+          </Button>
+        )}
+        {!settled && <span className="text-2xs text-ink-muted">Checking automatically</span>}
+      </div>
+
+      {reason && <p className="text-2xs text-danger">{reason}</p>}
+      {!reason && status === 'pending' && (
+        <p className="text-2xs text-ink-muted">{check?.message ?? `Waiting for the transfer. Confirmations needed: ${invoice.confirmations_required}.`}</p>
+      )}
+      {status === 'confirmed' && (
+        <div className="flex items-center gap-2 rounded-[var(--r-control)] border border-ok/30 bg-ok-soft px-3 py-2.5 text-[0.8125rem] text-ok">
+          <GIcon name="check_circle" size={18} />
+          Paid. Your plan and credits are active.
+        </div>
+      )}
+      {status === 'expired' && (
+        <div className="flex items-center gap-2 rounded-[var(--r-control)] border border-line bg-surface-2 px-3 py-2.5 text-[0.8125rem] text-ink-muted">
+          <GIcon name="schedule" size={18} />
+          This invoice expired. Start a new order.
+        </div>
+      )}
+
+      <Button className="w-full" variant={status === 'confirmed' ? 'primary' : 'outline'} onClick={onClose}>
+        {status === 'confirmed' ? 'Done' : 'Close'}
+      </Button>
+    </div>
   );
 }

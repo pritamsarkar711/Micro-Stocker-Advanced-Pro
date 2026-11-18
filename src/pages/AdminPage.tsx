@@ -13,6 +13,8 @@ import { AdminSecurity } from '@/components/pro/AdminSecurity';
 import { bdt, bdtUnit } from '@/lib/format';
 import { useToast } from '@/state/ToastState';
 import {
+  adminAssets,
+  adminUpdateAsset,
   adminAdjustCredits,
   FX_BDT_USD,
   adminAudit,
@@ -36,11 +38,12 @@ import {
   type AdminUser,
   type AiModel,
   type AiProvider,
+  type CryptoAsset,
   type Order,
   type Setting,
 } from '@/lib/pro/api';
 
-type TabId = 'overview' | 'orders' | 'users' | 'plans' | 'providers' | 'settings' | 'security';
+type TabId = 'overview' | 'orders' | 'users' | 'plans' | 'payments' | 'providers' | 'settings' | 'security';
 
 interface AdminOrder extends Order {
   user_id: string;
@@ -97,7 +100,7 @@ export function AdminPage() {
   const pending = orders.filter((order) => order.status === 'submitted' || order.status === 'awaiting');
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div>
       <PageHeader
         title="Admin console"
         description="Plans, payments, credits and provider keys, all without touching the source."
@@ -117,6 +120,7 @@ export function AdminPage() {
             { id: 'orders', label: `Orders${pending.length ? ` (${pending.length})` : ''}` },
             { id: 'users', label: 'Users' },
             { id: 'plans', label: 'Plans' },
+            { id: 'payments', label: 'Payments' },
             { id: 'providers', label: 'Providers' },
             { id: 'security', label: 'Security' },
             { id: 'settings', label: 'Settings' },
@@ -144,6 +148,7 @@ export function AdminPage() {
             />
           )}
           {tab === 'plans' && <Plans onToast={(message) => toast.success(message)} />}
+          {tab === 'payments' && <Payments onToast={(message) => toast.success(message)} />}
           {tab === 'providers' && (
             <Providers
               providers={providers}
@@ -824,6 +829,126 @@ function Providers({
 }
 
 /* -------------------------------------------------------------- settings */
+
+/* --------------------------------------------------------------- payments */
+
+/**
+ * Wallet editor and the manual side of the money flow.
+ *
+ * Every address here is read by the chain verifier the moment it is saved, so a
+ * typo shows up as a failing check rather than a lost payment. The seed ships
+ * with placeholder wallets: replace each one with a wallet you control before
+ * taking crypto payments.
+ */
+function Payments({ onToast }: { onToast: (message: string) => void }) {
+  const toast = useToast();
+  const [assets, setAssets] = useState<CryptoAsset[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, Partial<CryptoAsset>>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    const result = await adminAssets();
+    setAssets(isFailure(result) ? [] : result);
+    setDrafts({});
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const patch = (id: string, change: Partial<CryptoAsset>) =>
+    setDrafts((current) => ({ ...current, [id]: { ...current[id], ...change } }));
+
+  const save = async (asset: CryptoAsset) => {
+    const change = drafts[asset.id] ?? {};
+    if (!Object.keys(change).length) return;
+    setSaving(asset.id);
+    const result = await adminUpdateAsset(asset.id, change);
+    setSaving(null);
+    if (isFailure(result)) {
+      toast.error('Could not save', result.error);
+      return;
+    }
+    onToast(`${asset.symbol} ${asset.network} updated`);
+    void load();
+  };
+
+  if (loading) return <div className="flex justify-center py-16"><Spinner size={7} /></div>;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start gap-2 rounded-[var(--r-control)] border border-warn/30 bg-warn-soft px-3 py-2.5 text-[0.8125rem] text-warn">
+        <GIcon name="info" size={18} className="mt-0.5" />
+        <p>Use wallets you control. Crypto payments are checked on chain every five minutes.</p>
+      </div>
+
+      <div className="grid gap-3 xl:grid-cols-2">
+        {assets.map((asset) => {
+          const draft = drafts[asset.id] ?? {};
+          const value = (key: keyof CryptoAsset) => String(draft[key] ?? asset[key] ?? '');
+          return (
+            <Card key={asset.id} className="space-y-3">
+              <CardHeader
+                title={`${asset.symbol} · ${asset.network}`}
+                subtitle={asset.wallet_label || asset.id}
+                icon={<GIcon name="wallet" size={18} />}
+                action={
+                  <Switch
+                    checked={draft.enabled ?? asset.enabled}
+                    onChange={(checked) => patch(asset.id, { enabled: checked })}
+                    label="Enabled"
+                  />
+                }
+              />
+
+              <Field label="Wallet address">
+                <Input
+                  value={value('address')}
+                  onChange={(event) => patch(asset.id, { address: event.target.value.trim() })}
+                  className="font-mono text-[0.8125rem]"
+                />
+              </Field>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Token contract" hint={asset.contract ? undefined : 'native coin'}>
+                  <Input
+                    value={value('contract')}
+                    onChange={(event) => patch(asset.id, { contract: event.target.value.trim() })}
+                    placeholder="none"
+                    className="font-mono text-[0.75rem]"
+                  />
+                </Field>
+                <Field label="Confirmations">
+                  <Input
+                    type="number"
+                    value={value('confirmations')}
+                    onChange={(event) => patch(asset.id, { confirmations: Number(event.target.value) })}
+                  />
+                </Field>
+              </div>
+
+              <div className="flex items-center justify-between gap-2">
+                <Badge tone={asset.contract ? 'brand' : 'neutral'}>{asset.contract ? 'Token' : 'Native'}</Badge>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  loading={saving === asset.id}
+                  disabled={!Object.keys(draft).length}
+                  onClick={() => void save(asset)}
+                  icon={<GIcon name="save" size={16} />}
+                >
+                  Save
+                </Button>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function Settings({
   settings,

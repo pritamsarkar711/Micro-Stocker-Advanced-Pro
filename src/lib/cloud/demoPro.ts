@@ -52,17 +52,17 @@ export const paymentMethods: DemoRow[] = [
 ];
 
 export const cryptoAssets: DemoRow[] = [
-  { id: 'usdc-bsc', symbol: 'USDC', name: 'USD Coin', network: 'BEP20', address: '0x22f65aab136a15e8307ac8c6ff1af5a692c92e2c', decimals: 18, usd_rate: 1, min_usd: 5, confirmations: 15, explorer: 'https://bscscan.com', enabled: true, sort: 1 },
-  { id: 'usdc-sol', symbol: 'USDC', name: 'USD Coin', network: 'Solana', address: 'CMcLrsGRQxMnUHGihi3aMZkfgSjfPyHhn2AoE9hGeb3Z', decimals: 6, usd_rate: 1, min_usd: 5, confirmations: 1, explorer: 'https://solscan.io', enabled: true, sort: 2 },
-  { id: 'usdc-polygon', symbol: 'USDC', name: 'USD Coin', network: 'Polygon', address: '0x22f65aab136a15e8307ac8c6ff1af5a692c92e2c', decimals: 6, usd_rate: 1, min_usd: 5, confirmations: 128, explorer: 'https://polygonscan.com', enabled: true, sort: 3 },
-  { id: 'usdt-bep20', symbol: 'USDT', name: 'Tether', network: 'BEP20', address: '0x22f65aab136a15e8307ac8c6ff1af5a692c92e2c', decimals: 18, usd_rate: 1, min_usd: 5, confirmations: 15, explorer: 'https://bscscan.com', enabled: true, sort: 4 },
+  { id: 'usdc-bsc', symbol: 'USDC', name: 'USD Coin', network: 'BEP20', address: '0x22f65aab136a15e8307ac8c6ff1af5a692c92e2c', contract: '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d', decimals: 18, usd_rate: 1, min_usd: 5, confirmations: 15, explorer: 'https://bscscan.com', enabled: true, sort: 1 },
+  { id: 'usdc-sol', symbol: 'USDC', name: 'USD Coin', network: 'Solana', address: 'CMcLrsGRQxMnUHGihi3aMZkfgSjfPyHhn2AoE9hGeb3Z', contract: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', decimals: 6, usd_rate: 1, min_usd: 5, confirmations: 1, explorer: 'https://solscan.io', enabled: true, sort: 2 },
+  { id: 'usdc-polygon', symbol: 'USDC', name: 'USD Coin', network: 'Polygon', address: '0x22f65aab136a15e8307ac8c6ff1af5a692c92e2c', contract: '0xc2132d05d31c914a87c6611c10748aeb04b58e8f', decimals: 6, usd_rate: 1, min_usd: 5, confirmations: 128, explorer: 'https://polygonscan.com', enabled: true, sort: 3 },
+  { id: 'usdt-bep20', symbol: 'USDT', name: 'Tether', network: 'BEP20', address: '0x22f65aab136a15e8307ac8c6ff1af5a692c92e2c', contract: '0x55d398326f99059fF775485246999027B3197955', decimals: 18, usd_rate: 1, min_usd: 5, confirmations: 15, explorer: 'https://bscscan.com', enabled: true, sort: 4 },
   { id: 'usdt-trc20', symbol: 'USDT', name: 'Tether', network: 'TRC20', address: 'TCkDdhqFKrThJ5xmZEZZ2QKAmCfLkHGZES', decimals: 6, usd_rate: 1, min_usd: 5, confirmations: 19, explorer: 'https://tronscan.org', enabled: true, sort: 5 },
-  { id: 'usdt-sol', symbol: 'USDT', name: 'Tether', network: 'Solana', address: 'CMcLrsGRQxMnUHGihi3aMZkfgSjfPyHhn2AoE9hGeb3Z', decimals: 6, usd_rate: 1, min_usd: 5, confirmations: 1, explorer: 'https://solscan.io', enabled: true, sort: 6 },
+  { id: 'usdt-sol', symbol: 'USDT', name: 'Tether', network: 'Solana', address: 'CMcLrsGRQxMnUHGihi3aMZkfgSjfPyHhn2AoE9hGeb3Z', contract: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', decimals: 6, usd_rate: 1, min_usd: 5, confirmations: 1, explorer: 'https://solscan.io', enabled: true, sort: 6 },
   { id: 'bnb-bep20', symbol: 'BNB', name: 'BNB', network: 'BEP20', address: '0x22f65aab136a15e8307ac8c6ff1af5a692c92e2c', decimals: 18, usd_rate: 620, min_usd: 10, confirmations: 15, explorer: 'https://bscscan.com', enabled: true, sort: 7 },
   { id: 'sol-solana', symbol: 'SOL', name: 'Solana', network: 'Solana', address: 'CMcLrsGRQxMnUHGihi3aMZkfgSjfPyHhn2AoE9hGeb3Z', decimals: 9, usd_rate: 165, min_usd: 10, confirmations: 1, explorer: 'https://solscan.io', enabled: true, sort: 8 },
-  { id: 'ltc-litecoin', symbol: 'LTC', name: 'Litecoin', network: 'Litecoin', address: 'LPBySh9zb4667sGA63M1krTHyoC7uXJ2iw', decimals: 8, usd_rate: 95, min_usd: 10, confirmations: 6, explorer: 'https://blockchair.com/litecoin', enabled: true, sort: 9 },
-  { id: 'dai-bep20', symbol: 'DAI', name: 'Dai', network: 'BEP20', address: '0x22f65aab136a15e8307ac8c6ff1af5a692c92e2c', decimals: 18, usd_rate: 1, min_usd: 5, confirmations: 15, explorer: 'https://bscscan.com', enabled: true, sort: 10 },
-  { id: 'usdt-binance-pay', symbol: 'USDT', name: 'Binance Pay', network: 'Binance UID', address: '1047103616', decimals: 2, usd_rate: 1, min_usd: 5, confirmations: 1, explorer: 'https://www.binance.com', enabled: true, sort: 11 },
+  { id: 'ltc-litecoin', symbol: 'LTC', name: 'Litecoin', network: 'Litecoin', address: 'LPBySh9zb4667sGA63M1krTHyoC7uXJ2iw', decimals: 8, usd_rate: 95, min_usd: 10, confirmations: 6, explorer: 'https://blockchair.com/litecoin', enabled: false, sort: 9 },
+  { id: 'dai-bep20', symbol: 'DAI', name: 'Dai', network: 'BEP20', address: '0x22f65aab136a15e8307ac8c6ff1af5a692c92e2c', contract: '0xe9e7cea3dedca5984780bafc599bd69add087d56', decimals: 18, usd_rate: 1, min_usd: 5, confirmations: 15, explorer: 'https://bscscan.com', enabled: true, sort: 10 },
+  { id: 'usdt-binance-pay', symbol: 'USDT', name: 'Binance Pay', network: 'Binance UID', address: '1047103616', decimals: 2, usd_rate: 1, min_usd: 5, confirmations: 1, explorer: 'https://www.binance.com', enabled: false, sort: 11 },
 ];
 
 export const aiProviders: DemoRow[] = [
@@ -124,7 +124,7 @@ function price(plan: string, months: number) {
 
 function entitlementFor(caller: DemoCaller | null) {
   if (!caller) {
-    return { active: false, authenticated: false, blocked: false, is_admin: false, credits: 0, plan: null, plan_name: null, tier: 0, expires_at: null, days_left: null, features: { vector: false, jpg: false, premium_upscale: false, video_premium: false, max_export_px: 2000 }, credit_costs: { vector: 2, jpg: 8, premium_upscale: 2, video_premium: 6 }, limits: { daily_generations: 60, rate_gen_per_minute: 6, max_prompt_chars: 600 }, server_time: now() };
+    return { active: false, authenticated: false, blocked: false, is_admin: false, credits: 0, plan: null, plan_name: null, tier: 0, expires_at: null, days_left: null, features: { vector: false, jpg: false, premium_upscale: false, video_premium: false, max_export_px: 2000 }, credit_costs: { vector: 2, jpg: 8, premium_upscale: 0, video_premium: 0, background: 0 }, limits: { daily_generations: 60, rate_gen_per_minute: 6, max_prompt_chars: 600 }, server_time: now() };
   }
   const sub = subscriptions.find((row) => row.user_id === caller.id && new Date(row.expires_at as string).getTime() > Date.now());
   const plan = sub ? plans.find((row) => row.slug === sub.plan_slug) : null;
@@ -142,7 +142,7 @@ function entitlementFor(caller: DemoCaller | null) {
     features: caller.admin
       ? { vector: true, jpg: true, premium_upscale: true, video_premium: true, max_export_px: 10000 }
       : (plan?.features as Json) ?? { vector: false, jpg: false, premium_upscale: false, video_premium: false },
-    credit_costs: { vector: 2, jpg: 8, premium_upscale: 2, video_premium: 6 },
+    credit_costs: { vector: 2, jpg: 8, premium_upscale: 0, video_premium: 0, background: 0 },
     limits: { daily_generations: 60, rate_gen_per_minute: 6, max_prompt_chars: 600 },
     server_time: now(),
   };
@@ -239,6 +239,19 @@ export const proRpcHandlers: Record<string, (params: Json, caller: DemoCaller | 
           };
         }),
     );
+  },
+  pro_admin_assets(_params, caller) {
+    if (!caller || !caller.admin) return fail('not allowed');
+    return ok(cryptoAssets);
+  },
+  pro_admin_update_asset(params, caller) {
+    if (!caller || !caller.admin) return fail('not allowed');
+    const asset = cryptoAssets.find((entry) => entry.id === params.p_id);
+    if (!asset) return fail('asset not found');
+    const patch = (params.p_patch ?? {}) as Record<string, unknown>;
+    Object.assign(asset as unknown as Record<string, unknown>, patch);
+    record('crypto.asset.update', caller, asset.id, patch);
+    return ok(asset);
   },
   pro_create_crypto_invoice(params, caller) {
     if (!caller) return fail('not authenticated');

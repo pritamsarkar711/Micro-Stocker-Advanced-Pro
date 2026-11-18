@@ -35,3 +35,6 @@ Thumbs.db
 
 # Local app data (desktop KV store) used while testing
 *.local.json
+
+# Temporary image search downloads
+image-search/

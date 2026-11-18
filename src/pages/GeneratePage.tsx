@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import clsx from 'clsx';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { CreditIcon } from '@/components/ui/CreditIcon';
 import { Field, Input, Select, Textarea } from '@/components/ui/Field';
 import { GIcon } from '@/components/ui/GoogleIcon';
 import { Spinner } from '@/components/ui/Misc';
@@ -21,40 +21,41 @@ import {
 } from '@/lib/generate/engine';
 import { IMAGE_ASPECTS, IMAGE_KINDS, IMAGE_LIGHTING, IMAGE_MOODS, DEFAULT_OPTIONS, type GeneratorOptions, type ImageKind } from '@/lib/generate/brief';
 import { estimateMs, generateArtwork, generateImage, GenerationError, type GeneratedArtifact, type GeneratorKind, type ProgressEvent } from '@/lib/generate/run';
-import { seasonalIdeas } from '@/lib/generate/trends';
+import { composePrompt, presetsFor } from '@/lib/generate/presets';
+import { useRenderModels } from '@/lib/pro/models';
 
-const COPY: Record<GeneratorKind, { title: string; tagline: string; icon: 'file_download' | 'draw' | 'image' }> = {
-  eps: { title: 'EPS generator', tagline: 'Editable vector paths for Illustrator and print', icon: 'file_download' },
-  svg: { title: 'SVG generator', tagline: 'Clean web-ready vector with named groups', icon: 'draw' },
-  ai: { title: 'AI file generator', tagline: 'Native Illustrator document, fully editable', icon: 'draw' },
-  jpg: { title: 'JPG generator', tagline: 'Premium photography and commercial imagery', icon: 'image' },
+const COPY: Record<GeneratorKind, { title: string; tagline: string; icon: 'file_download' | 'draw' | 'image'; idea: string }> = {
+  eps: { title: 'AI EPS Generator', tagline: 'Editable vector for Illustrator and print', icon: 'file_download', idea: 'Alpine sunrise for a travel brand' },
+  svg: { title: 'AI SVG Generator', tagline: 'Clean web ready vector', icon: 'draw', idea: 'Line art snowflake' },
+  ai: { title: 'AI Illustrator File', tagline: 'Native .ai document', icon: 'draw', idea: 'Luxury award badge' },
+  jpg: { title: 'JPG Generator', tagline: 'Premium photography', icon: 'image', idea: 'Ceramic mug on a linen table' },
 };
 
-const EXAMPLES: Record<GeneratorKind, string[]> = {
-  eps: ['Alpine sunrise for a travel brand', 'Minimal coffee badge for a cafe', 'Christmas tree poster with the word WINTER'],
-  svg: ['Line art snowflake pattern', 'Isometric data centre icon', 'Bauhaus poster for a design studio'],
-  ai: ['Luxury award badge with laurel', 'City skyline panorama in flat style', 'Diwali diya emblem with warm palette'],
-  jpg: ['Ceramic mug on a linen table in morning light', 'Founder working alone in a bright studio', 'Fresh croissants on a marble counter'],
-};
-
-const FORMAT_LABEL: Record<GeneratorKind, string> = { eps: '.eps', svg: '.svg', ai: '.ai', jpg: '.png' };
+const FORMAT_LABEL: Record<GeneratorKind, string> = { eps: '.eps', svg: '.svg', ai: '.ai', jpg: '.jpg' };
 
 function formatEta(ms: number): string {
   if (ms <= 0) return 'almost done';
   const seconds = Math.ceil(ms / 1000);
-  return seconds > 1 ? `about ${seconds}s left` : 'about a second left';
+  return seconds > 1 ? `${seconds}s left` : 'a second left';
+}
+
+function readModelChoice(kind: GeneratorKind): string {
+  if (typeof localStorage === 'undefined') return '';
+  return localStorage.getItem(`msap.generate.model.${kind}`) ?? '';
 }
 
 export function GeneratePage({ kind }: { kind: GeneratorKind }) {
   const toast = useToast();
   const { credits, planName, costs } = useLicense();
   const [prompt, setPrompt] = useState('');
+  const [presetId, setPresetId] = useState('');
   const [options, setOptions] = useState<GeneratorOptions>({ ...DEFAULT_OPTIONS, fileKind: kind === 'jpg' ? 'jpg' : kind });
   const [imageKind, setImageKind] = useState<ImageKind>('photo');
   const [imageAspect, setImageAspect] = useState('square');
   const [lighting, setLighting] = useState<string>(IMAGE_LIGHTING[0]);
   const [mood, setMood] = useState<string>(IMAGE_MOODS[0]);
   const [word, setWord] = useState('');
+  const [model, setModel] = useState(() => readModelChoice(kind));
   const [artifact, setArtifact] = useState<GeneratedArtifact | null>(null);
   const [progress, setProgress] = useState<ProgressEvent | null>(null);
   const [busy, setBusy] = useState(false);
@@ -64,15 +65,25 @@ export function GeneratePage({ kind }: { kind: GeneratorKind }) {
   const [eta, setEta] = useState('');
 
   const copy = COPY[kind];
-  const ideas = useMemo(() => seasonalIdeas(new Date(), 5, 'generator'), []);
   const isImage = kind === 'jpg';
+  const presets = useMemo(() => presetsFor(kind), [kind]);
+  const preset = useMemo(() => presets.find((entry) => entry.id === presetId) ?? null, [presetId, presets]);
+  const models = useRenderModels(isImage ? 'image' : 'vector');
+  const unitCost = isImage ? costs.jpg : costs.vector;
 
   useEffect(() => {
     setOptions((current) => ({ ...current, fileKind: kind === 'jpg' ? 'jpg' : kind }));
     setArtifact(null);
     setError(null);
     setPrompt('');
+    setPresetId('');
+    setModel(readModelChoice(kind));
   }, [kind]);
+
+  useEffect(() => {
+    if (!model) return;
+    localStorage.setItem(`msap.generate.model.${kind}`, model);
+  }, [kind, model]);
 
   useEffect(() => {
     if (!artifact?.previewSvg) {
@@ -100,25 +111,27 @@ export function GeneratePage({ kind }: { kind: GeneratorKind }) {
   const run = useCallback(async () => {
     const text = prompt.trim();
     if (text.length < 3) {
-      toast.warning('Add a prompt', 'Describe what should be drawn.');
+      toast.warning('Add an idea', 'A few words is enough.');
       return;
     }
+    const composed = composePrompt(text, preset);
     setBusy(true);
     setError(null);
     setArtifact(null);
     startedAt.current = Date.now();
     try {
+      const chosen = model || undefined;
       const result = isImage
         ? await generateImage(
-            { kind, prompt: text, options, imageBrief: { kind: imageKind, aspect: imageAspect, lighting, mood, prompt: text } },
+            { kind, prompt: composed, model: chosen, options, imageBrief: { kind: imageKind, aspect: imageAspect, lighting, mood, prompt: text } },
             setProgress,
           )
         : await generateArtwork(
-            { kind, prompt: text, options: { ...options, word: word.trim() ? word.trim() : undefined }, trending: ideas[0]?.title },
+            { kind, prompt: composed, model: chosen, options: { ...options, word: word.trim() ? word.trim() : undefined } },
             setProgress,
           );
       setArtifact(result);
-      toast.success('File ready', result.quality ? `Quality score ${result.quality.score} of 100.` : 'Download it below.');
+      toast.success('File ready', result.quality ? `Quality ${result.quality.score} of 100` : undefined);
     } catch (cause) {
       const failure = cause instanceof GenerationError ? cause : null;
       setError({
@@ -129,7 +142,7 @@ export function GeneratePage({ kind }: { kind: GeneratorKind }) {
       setBusy(false);
       setProgress(null);
     }
-  }, [ideas, imageAspect, imageKind, isImage, kind, lighting, mood, options, prompt, toast, word]);
+  }, [imageAspect, imageKind, isImage, kind, lighting, model, mood, options, preset, prompt, toast, word]);
 
   const download = useCallback(() => {
     if (!artifact?.file) return;
@@ -141,42 +154,56 @@ export function GeneratePage({ kind }: { kind: GeneratorKind }) {
   const progressPct = progress ? Math.round(progress.progress * 100) : 0;
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div>
       <PageHeader
-        eyebrow="Pro"
         title={copy.title}
         description={copy.tagline}
         actions={
-          <Badge tone="brand" icon={<GIcon name="workspace_premium" size={14} />}>
-            {planName ?? 'Pro'} · {credits} credits
-          </Badge>
+          <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-[0.8125rem] font-semibold">
+            <CreditIcon size={15} />
+            {credits}
+            <span className="text-ink-muted">{planName ?? 'Pro'}</span>
+          </span>
         }
       />
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
-        <Card className="space-y-4">
-          <Field label="Prompt" hint={`${prompt.length}/600`}>
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.18fr)]">
+        <Card className="space-y-3.5">
+          <Field label="Idea" hint={`${prompt.length}/600`}>
             <Textarea
               value={prompt}
               maxLength={600}
               rows={3}
-              placeholder={EXAMPLES[kind][0]}
+              placeholder={copy.idea}
               onChange={(event) => setPrompt(event.target.value)}
             />
           </Field>
 
-          <div className="flex flex-wrap gap-1.5">
-            {ideas.slice(0, 4).map((idea) => (
-              <button
-                key={idea.id}
-                type="button"
-                onClick={() => setPrompt(idea.title)}
-                className="rounded-full border border-line bg-surface px-2.5 py-1 text-2xs text-ink-muted transition hover:border-accent/40 hover:text-ink"
-              >
-                {idea.title}
-              </button>
-            ))}
-          </div>
+          {presets.length > 0 && (
+            <Field label="Prompt style" hint={preset?.hint}>
+              <Select value={presetId} onChange={(event) => setPresetId(event.target.value)}>
+                <option value="">Studio default</option>
+                {presets.map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {entry.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
+
+          {models.length > 1 && (
+            <Field label="Model">
+              <Select value={model || models[0].id} onChange={(event) => setModel(event.target.value)}>
+                {models.map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {entry.label}
+                    {entry.providerLabel ? ` · ${entry.providerLabel}` : ''}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
 
           {isImage ? (
             <div className="grid gap-3 sm:grid-cols-2">
@@ -219,7 +246,7 @@ export function GeneratePage({ kind }: { kind: GeneratorKind }) {
                       )
                     }
                   >
-                    <option value="auto">Let the art director choose</option>
+                    <option value="auto">Auto</option>
                     {STYLE_OPTIONS.map((option) => (
                       <option key={option.id} value={option.id}>{option.label}</option>
                     ))}
@@ -256,7 +283,7 @@ export function GeneratePage({ kind }: { kind: GeneratorKind }) {
                       )
                     }
                   >
-                    <option value="auto">Match the subject</option>
+                    <option value="auto">Auto</option>
                     {PALETTE_OPTIONS.map((option) => (
                       <option key={option.id} value={option.id}>{option.label}</option>
                     ))}
@@ -274,12 +301,15 @@ export function GeneratePage({ kind }: { kind: GeneratorKind }) {
             </>
           )}
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-line pt-4">
+          <div className="flex flex-wrap items-center gap-3 border-t border-line pt-3.5">
             <Button onClick={() => void run()} loading={busy} icon={<GIcon name="draw" size={18} />}>
               {busy ? 'Generating' : 'Generate'}
             </Button>
-            <span className="text-2xs text-ink-muted">
-              {`${FORMAT_LABEL[kind]} · ${isImage ? costs.jpg : costs.vector} credits`}
+            <span className="inline-flex items-center gap-1.5 text-[0.75rem] font-medium text-ink-muted">
+              <CreditIcon size={13} />
+              {unitCost} per file
+              <span className="text-ink-faint">·</span>
+              {FORMAT_LABEL[kind]}
             </span>
           </div>
 
@@ -307,72 +337,68 @@ export function GeneratePage({ kind }: { kind: GeneratorKind }) {
         </Card>
 
         <Card flush className="overflow-hidden">
-          <CardHeader title="Output" subtitle={artifact ? `${artifact.file?.filename ?? ''}` : 'Nothing yet'} icon={<GIcon name="image" size={18} />} />
-          <div className="flex min-h-[300px] items-center justify-center border-y border-line bg-surface-2 p-4">
+          <CardHeader
+            title="Output"
+            subtitle={artifact ? artifact.file?.filename ?? 'File ready' : undefined}
+            icon={<GIcon name="image" size={18} />}
+            action={
+              artifact && (
+                <Button size="sm" onClick={download} icon={<GIcon name="file_download" size={16} />}>
+                  Download
+                </Button>
+              )
+            }
+          />
+          <div className="flex min-h-[320px] items-center justify-center border-t border-line bg-surface-2 p-4">
             {busy ? (
               <div className="flex flex-col items-center gap-2 text-ink-muted">
                 <Spinner size={6} />
                 <span className="text-2xs">{progress?.message ?? 'Working'}</span>
               </div>
             ) : previewUrl ? (
-              <img src={previewUrl} alt="Generated vector preview" className="max-h-[340px] w-auto rounded-[var(--r-control)] bg-white shadow-[var(--elev-1)]" />
+              <img src={previewUrl} alt="Generated vector preview" className="max-h-[420px] w-auto rounded-[var(--r-control)] bg-white shadow-[var(--elev-1)]" />
             ) : artifact?.imageUrl ? (
-              <img src={artifact.imageUrl} alt="Generated image" className="max-h-[340px] w-auto rounded-[var(--r-control)] object-contain" />
+              <img src={artifact.imageUrl} alt="Generated image" className="max-h-[420px] w-auto rounded-[var(--r-control)] object-contain" />
             ) : (
               <div className="text-center text-ink-muted">
-                <GIcon name={copy.icon} size={30} className="mx-auto opacity-60" />
-                <p className="mt-2 text-2xs">Your file appears here</p>
+                <GIcon name={copy.icon} size={28} className="mx-auto opacity-50" />
+                <p className="mt-2 text-2xs">Nothing yet</p>
               </div>
             )}
           </div>
 
           {artifact && (
-            <div className="space-y-4 p-4">
-              {artifact.quality && (
-                <div className="flex items-center gap-2">
-                  <Badge tone={artifact.quality.pass ? 'ok' : 'warn'} icon={<GIcon name="verified" size={14} />}>
+            <div className="space-y-3 p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                {artifact.quality && (
+                  <Badge tone={artifact.quality.pass ? 'ok' : 'warn'} icon={<GIcon name="verified" size={13} />}>
                     Quality {artifact.quality.score}/100
                   </Badge>
-                  <span className="text-2xs text-ink-muted">
-                    {artifact.quality.checks.filter((check) => check.status === 'pass').length} of {artifact.quality.checks.length} checks passed
-                  </span>
-                </div>
-              )}
-
-              <div className="space-y-2 text-[0.8125rem]">
-                <p className="font-semibold leading-snug">{artifact.metadata.title}</p>
-                <p className="text-ink-muted leading-relaxed">{artifact.metadata.description}</p>
-                <p className="text-2xs text-ink-muted">{artifact.metadata.keywords.join(', ')}</p>
+                )}
+                <Badge tone="neutral">{FORMAT_LABEL[kind]}</Badge>
               </div>
-
+              <div className="space-y-1.5">
+                <p className="text-[0.875rem] font-semibold leading-snug">{artifact.metadata.title}</p>
+                <p className="line-clamp-3 text-[0.75rem] leading-relaxed text-ink-muted">{artifact.metadata.description}</p>
+                <p className="line-clamp-2 text-2xs text-ink-muted">{artifact.metadata.keywords.join(', ')}</p>
+              </div>
               <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
-                <Button onClick={download} icon={<GIcon name="file_download" size={18} />}>
-                  Download {FORMAT_LABEL[kind]}
-                </Button>
                 <Button
-                  variant="outline"
+                  size="sm"
+                  variant="secondary"
                   onClick={() => {
                     const text = `${artifact.metadata.title}\n\n${artifact.metadata.description}\n\n${artifact.metadata.keywords.join(', ')}`;
                     void navigator.clipboard.writeText(text).then(() => toast.success('Metadata copied'));
                   }}
-                  icon={<GIcon name="content_copy" size={18} />}
+                  icon={<GIcon name="content_copy" size={16} />}
                 >
                   Copy metadata
                 </Button>
-                {typeof artifact.quality?.score === 'number' && (
-                  <span className={clsx('text-2xs', artifact.quality.pass ? 'text-ok' : 'text-warn')}>
-                    {artifact.attempts > 1 ? `${artifact.attempts} passes to clear the gate` : 'Passed first time'}
-                  </span>
-                )}
               </div>
             </div>
           )}
         </Card>
       </div>
-
-      <p className="mt-4 text-2xs text-ink-muted">
-        Every file is built from real paths and passes an automated structural check. Marketplace acceptance rules are outside our control.
-      </p>
     </div>
   );
 }

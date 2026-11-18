@@ -50,6 +50,9 @@ export interface CryptoAsset {
   name: string;
   network: string;
   address: string;
+  /** Token contract; null for a chain's native coin. */
+  contract?: string | null;
+  wallet_label?: string | null;
   decimals: number;
   min_usd: number;
   confirmations: number;
@@ -280,18 +283,35 @@ export const myInvoices = () => rpc<Invoice[]>('pro_my_invoices');
 export const createCryptoInvoice = (orderId: string, asset: string) =>
   rpc<CryptoInvoice>('pro_create_crypto_invoice', { p_order: orderId, p_asset: asset });
 
+export interface CryptoCheck {
+  status: string;
+  confirmed?: boolean;
+  message?: string;
+  reason?: string;
+  /** Raw failure text from the chain reader, when the network answered badly. */
+  error?: string;
+  confirmations?: number;
+  required?: number;
+  amount?: number;
+  network?: string;
+  tx_hash?: string;
+}
+
 export async function verifyCrypto(invoiceId: string, txHash?: string) {
   const client = licensingClient();
   if (!client) return { error: 'Cloud project is not connected' } as Failure;
   const { data, error } = await client.functions.invoke('crypto-verify', { body: { invoice_id: invoiceId, tx_hash: txHash } });
   if (error) return { error: messageOf(error) } as Failure;
-  return data as { status: string; confirmed?: boolean; message?: string; reason?: string; confirmations?: number; required?: number };
+  return data as CryptoCheck;
 }
 
 /* ------------------------------------------------------------------- admin */
 
 export const adminStats = (days = 30) => rpc<AdminStats>('pro_admin_stats', { p_days: days });
 export const adminUsers = (search?: string) => rpc<AdminUser[]>('pro_admin_users', { p_search: search ?? null });
+export const adminAssets = () => rpc<CryptoAsset[]>('pro_admin_assets');
+export const adminUpdateAsset = (id: string, patch: Partial<CryptoAsset>) =>
+  rpc<CryptoAsset>('pro_admin_update_asset', { p_id: id, p_patch: patch });
 export const adminReviewOrder = (orderId: string, approve: boolean, note?: string) =>
   rpc<{ order: string; status: string; subscription: string | null }>('pro_admin_review_order', { p_order: orderId, p_approve: approve, p_note: note ?? null });
 export const adminGrant = (userId: string, plan: string, months: number, note?: string) =>
