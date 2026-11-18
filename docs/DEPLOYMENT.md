@@ -12,6 +12,26 @@ is built by `.github/workflows/release.yml` on a version tag.
 Work through the phases in order. Phase 1 has to exist before phase 2 can name a
 redirect URL, and phase 3 has to exist before a paid generation can succeed.
 
+## Where things stand
+
+| Item | State |
+| --- | --- |
+| Vercel project | `micro-stocker-studio` (`prj_YNLMtNwTa2f72vkLyKf3kZmRMDmb`) in team `team_C38SFrCJLympE3xaFSlgU7TM` |
+| Production URL | https://micro-stocker-studio.vercel.app |
+| Build settings | Vite, `npm ci --ignore-scripts`, `npx vite build`, output `dist`, from `vercel.json` |
+| Environment variables | `VITE_LICENSE_SUPABASE_URL`, `VITE_LICENSE_SUPABASE_ANON_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_APP_ENV` |
+| Supabase auth | Site URL set to the production URL, redirect list covers the production and preview hosts plus `localhost:5173` |
+| Deployment protection | **On**, so the `.vercel.app` URL asks for a Vercel login. Turn it off for production (step 0) |
+| Provider keys | **Missing**, so paid generation answers `provider key not configured` |
+
+### Step 0: make the site public
+
+Project -> **Settings -> Deployment Protection** -> Vercel Authentication ->
+**Standard Protection** off for Production, or set the whole feature to
+**Disabled**. `all_except_custom_domains` (the current mode) keeps the
+`.vercel.app` host behind a Vercel login and only lets custom domains through, so
+either disable it or attach your own domain in phase 6.
+
 ---
 
 ## Phase 1: the web studio on Vercel
