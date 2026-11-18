@@ -61,7 +61,19 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          set -o pipefail
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../gradle.log
+
+      # If Gradle fails, its own log is the only useful diagnostic and the run
+      # log is awkward to read on a phone, so the reason is surfaced as an
+      # annotation on the run itself.
+      - name: Report the Gradle failure
+        if: failure()
+        run: |
+          log=gradle.log
+          reason=$(awk '/What went wrong:/{flag=1} flag' "$log" | head -12 | tr '\n' '|' | cut -c1-1200)
+          [ -n "$reason" ] || reason=$(tail -12 "$log" | tr '\n' '|' | cut -c1-1200)
+          echo "::error title=Gradle failure::${reason}"
 
       - name: Name the artifact with the version
         run: |
