@@ -6,9 +6,11 @@ import { MobileTabBar } from './MobileTabBar';
 import { AuthModal } from '@/components/auth/AuthModal';
 import { SecurityBanner } from '@/components/auth/SecurityBanner';
 import { desktop } from '@/lib/desktop';
+import { useToast } from '@/state/ToastState';
 
 export function AppShell({ children }: { children?: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -17,6 +19,16 @@ export function AppShell({ children }: { children?: ReactNode }) {
       if (path) navigate(path);
     });
   }, [navigate]);
+
+  // The Android shell reports a saved file instead of a download.
+  useEffect(() => {
+    const onSaved = (event: Event) => {
+      const name = (event as CustomEvent<{ filename?: string }>).detail?.filename;
+      toast.success('Saved to Documents', name);
+    };
+    window.addEventListener('msap:file-saved', onSaved);
+    return () => window.removeEventListener('msap:file-saved', onSaved);
+  }, [toast]);
 
   // Route changes should always start at the top of the workspace canvas.
   useEffect(() => {

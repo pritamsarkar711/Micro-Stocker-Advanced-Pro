@@ -12,6 +12,8 @@ export interface ModelTileProps {
   selected: boolean;
   builtin?: boolean;
   installed?: boolean;
+  /** Premium tier: visible to everyone, selectable only with a plan. */
+  locked?: boolean;
   desktopOnly?: boolean;
   isDesktop?: boolean;
   progress?: ModelProgressEvent;
@@ -34,6 +36,7 @@ export function ModelTile({
   selected,
   builtin = false,
   installed = false,
+  locked = false,
   desktopOnly = false,
   isDesktop = false,
   progress,
@@ -55,9 +58,11 @@ export function ModelTile({
         selected
           ? 'border-accent bg-accent-soft/75'
           : 'border-line bg-surface hover:border-line-strong hover:bg-surface-2/60',
+        locked && !selected && 'opacity-75',
       )}
     >
       <div className="flex items-center gap-2.5">
+        {locked && <GIcon name="lock" size={13} className="shrink-0 text-ink-muted" />}
         <button
           type="button"
           onClick={onSelect}

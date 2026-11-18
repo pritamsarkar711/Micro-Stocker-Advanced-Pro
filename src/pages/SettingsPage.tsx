@@ -9,28 +9,24 @@ import { Field, Switch } from '@/components/ui/Field';
 import { RichSelect, type RichSelectOption } from '@/components/ui/RichSelect';
 import { ThemeSwitch } from '@/components/ui/ThemeSwitch';
 import { CircleFlag } from '@/components/ui/CircleFlag';
+import { Badge } from '@/components/ui/Badge';
 import { GIcon } from '@/components/ui/GoogleIcon';
 import { AiPanel } from '@/components/settings/AiPanel';
 import { SecurityPanel } from '@/components/auth/SecurityPanel';
 import { useApp } from '@/state/AppState';
 import { useAuth } from '@/state/AuthState';
 import { useLibrary } from '@/state/library';
+import { useWorkspaceSync } from '@/state/WorkspaceSync';
 import { useToast } from '@/state/ToastState';
 import { bdtUnit, CURRENCIES, type CurrencyCode } from '@/lib/format';
 import { sanitizeBackup } from '@/lib/stock/backup';
 import { desktop } from '@/lib/desktop';
 
 export function SettingsPage() {
-  const {
-    settings,
-    updateSettings,
-    resetSettings,
-    zoom,
-    setZoom,
-    nudgeZoom,
-  } = useApp();
+  const { settings, updateSettings, resetSettings, zoom, setZoom, nudgeZoom } = useApp();
   const { user, openAuth, logout } = useAuth();
   const { items, replaceAll, clearLibrary } = useLibrary();
+  const { status } = useWorkspaceSync();
   const toast = useToast();
 
   const currencyOptions = useMemo<RichSelectOption[]>(
@@ -46,11 +42,7 @@ export function SettingsPage() {
   );
 
   async function backupLibrary() {
-    const payload = JSON.stringify(
-      { version: 2, exportedAt: new Date().toISOString(), items },
-      null,
-      2,
-    );
+    const payload = JSON.stringify({ version: 2, exportedAt: new Date().toISOString(), items }, null, 2);
     await desktop.fs.exportText({
       defaultName: `microstocker_backup_${new Date().toISOString().slice(0, 10)}.json`,
       text: payload,
@@ -76,7 +68,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
         title="Settings"
         actions={
@@ -94,22 +86,19 @@ export function SettingsPage() {
         }
       />
 
-      {/* AI providers */}
       <Card>
-        <CardHeader title="AI Metadata Providers" icon={<GIcon name="smart_toy" size={17} />} />
+        <CardHeader title="AI metadata providers" icon={<GIcon name="smart_toy" size={18} />} />
         <AiPanel />
       </Card>
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        {/* Appearance & Region */}
+      <div className="grid items-start gap-4 xl:grid-cols-2">
         <Card>
-          <CardHeader title="Appearance & Currency" icon={<GIcon name="palette" size={17} />} />
-          <div className="space-y-4">
+          <CardHeader title="Appearance" icon={<GIcon name="palette" size={18} />} />
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-xs font-medium text-ink">Theme</span>
+              <span className="text-[0.8125rem] font-medium">Theme</span>
               <ThemeSwitch />
             </div>
-
             <Field label="Currency">
               <RichSelect
                 value={settings.currency}
@@ -117,9 +106,8 @@ export function SettingsPage() {
                 onChange={(code) => updateSettings({ currency: code as CurrencyCode })}
               />
             </Field>
-
             <div className="flex items-center justify-between gap-3">
-              <span className="text-xs font-medium text-ink">Density</span>
+              <span className="text-[0.8125rem] font-medium">Density</span>
               <div className="grid grid-cols-2 gap-1 rounded-[var(--r-control)] border border-line bg-surface-2 p-0.5">
                 {(['comfortable', 'compact'] as const).map((d) => (
                   <button
@@ -128,9 +116,7 @@ export function SettingsPage() {
                     onClick={() => updateSettings({ density: d })}
                     className={clsx(
                       'h-7 rounded-[5px] px-3 text-xs font-medium capitalize',
-                      settings.density === d
-                        ? 'bg-accent text-on-brand'
-                        : 'text-ink-muted hover:text-ink',
+                      settings.density === d ? 'bg-accent text-on-brand' : 'text-ink-muted hover:text-ink',
                     )}
                   >
                     {d}
@@ -138,11 +124,8 @@ export function SettingsPage() {
                 ))}
               </div>
             </div>
-
             <div className="flex items-center justify-between gap-3">
-              <span className="text-xs font-medium text-ink">
-                Scale ({Math.round(zoom * 100)}%)
-              </span>
+              <span className="text-[0.8125rem] font-medium">Scale ({Math.round(zoom * 100)}%)</span>
               <div className="flex items-center gap-1">
                 <Button size="xs" variant="secondary" onClick={() => nudgeZoom(-0.1)} aria-label="Zoom out">
                   <GIcon name="zoom_out" size={15} />
@@ -155,25 +138,23 @@ export function SettingsPage() {
                 </Button>
               </div>
             </div>
-
-            <Switch
-              checked={settings.reduceMotion}
-              onChange={(reduceMotion) => updateSettings({ reduceMotion })}
-              label="Reduce motion"
-            />
+            <Switch checked={settings.reduceMotion} onChange={(reduceMotion) => updateSettings({ reduceMotion })} label="Reduce motion" />
           </div>
         </Card>
 
-        {/* Workflow defaults */}
         <Card>
-          <CardHeader title="Workflow defaults" icon={<GIcon name="tune" size={17} />} />
-          <div className="space-y-4">
-            <Switch
-              checked={settings.confirmRemove}
-              onChange={(confirmRemove) => updateSettings({ confirmRemove })}
-              label="Confirm before removing assets"
-            />
-
+          <CardHeader
+            title="Workflow"
+            icon={<GIcon name="tune" size={18} />}
+            action={
+              <Switch
+                checked={settings.confirmRemove}
+                onChange={(confirmRemove) => updateSettings({ confirmRemove })}
+                label="Confirm deletes"
+              />
+            }
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Optimizer output">
               <div className="grid grid-cols-5 gap-1 rounded-[var(--r-control)] border border-line bg-surface-2 p-0.5">
                 {(['keep', 'jpg', 'webp', 'avif', 'png'] as const).map((value) => (
@@ -183,9 +164,7 @@ export function SettingsPage() {
                     onClick={() => updateSettings({ optimizeFormat: value })}
                     className={clsx(
                       'h-7 rounded-[5px] text-2xs font-semibold uppercase',
-                      settings.optimizeFormat === value
-                        ? 'bg-accent text-on-brand'
-                        : 'text-ink-muted hover:text-ink',
+                      settings.optimizeFormat === value ? 'bg-accent text-on-brand' : 'text-ink-muted hover:text-ink',
                     )}
                   >
                     {value === 'keep' ? 'Keep' : value}
@@ -193,7 +172,6 @@ export function SettingsPage() {
                 ))}
               </div>
             </Field>
-
             <Field label="Upscaler output">
               <div className="grid grid-cols-3 gap-1 rounded-[var(--r-control)] border border-line bg-surface-2 p-0.5">
                 {(['jpg', 'webp', 'png'] as const).map((value) => (
@@ -203,9 +181,7 @@ export function SettingsPage() {
                     onClick={() => updateSettings({ upscaleFormat: value })}
                     className={clsx(
                       'h-7 rounded-[5px] text-2xs font-semibold uppercase',
-                      settings.upscaleFormat === value
-                        ? 'bg-accent text-on-brand'
-                        : 'text-ink-muted hover:text-ink',
+                      settings.upscaleFormat === value ? 'bg-accent text-on-brand' : 'text-ink-muted hover:text-ink',
                     )}
                   >
                     {value}
@@ -215,117 +191,102 @@ export function SettingsPage() {
             </Field>
           </div>
         </Card>
+      </div>
 
-        {/* Account & Workspace Backup */}
-        <div className="space-y-5">
-          <Card>
-            <CardHeader title="Account" icon={<GIcon name="account_circle" size={17} />} />
-            {user ? (
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-ink">{user.displayName}</div>
-                  <div className="truncate text-xs text-ink-muted">{user.email}</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    icon={<GIcon name="person" size={15} />}
-                    onClick={() => openAuth('account')}
-                  >
-                    Manage
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    icon={<GIcon name="logout" size={15} />}
-                    onClick={() => void logout()}
-                  >
-                    Sign out
-                  </Button>
-                </div>
+      <Card>
+        <CardHeader
+          title="Security"
+          icon={<GIcon name="lock" size={18} />}
+          subtitle="Password and two step verification"
+        />
+        <SecurityPanel />
+      </Card>
+
+      <div className="grid items-start gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader
+            title="Account"
+            icon={<GIcon name="account_circle" size={18} />}
+            action={
+              user ? (
+                <Badge tone={status === 'idle' ? 'ok' : 'neutral'} icon={<GIcon name="cloud_sync" size={13} />}>
+                  {status === 'idle' ? 'Synced' : 'Local'}
+                </Badge>
+              ) : undefined
+            }
+          />
+          {user ? (
+            <div className="space-y-3">
+              <div className="min-w-0">
+                <div className="truncate text-[0.875rem] font-semibold">{user.displayName}</div>
+                <div className="truncate text-[0.75rem] text-ink-muted">{user.email}</div>
               </div>
-            ) : (
               <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="primary"
-                  icon={<GIcon name="person_add" size={15} />}
-                  onClick={() => openAuth('register')}
-                >
-                  Create account
+                <Button size="sm" variant="secondary" icon={<GIcon name="person" size={15} />} onClick={() => openAuth('account')}>
+                  Manage
                 </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  icon={<GIcon name="login" size={15} />}
-                  onClick={() => openAuth('login')}
+                <Link
+                  to="/cloud"
+                  className="inline-flex items-center gap-1.5 rounded-[var(--r-control)] border border-line px-3 py-2 text-[0.8125rem] font-semibold hover:border-line-strong hover:bg-surface-2"
                 >
-                  Sign in
+                  <GIcon name="cloud_sync" size={15} />
+                  Sync &amp; devices
+                </Link>
+                <Button size="sm" variant="ghost" icon={<GIcon name="logout" size={15} />} onClick={() => void logout()}>
+                  Sign out
                 </Button>
               </div>
-            )}
-          </Card>
-
-          {/* Security needs the full row: it holds a password form and a QR code. */}
-          <Card className="lg:col-span-2">
-            <CardHeader title="Security" icon={<GIcon name="lock" size={17} />} />
-            <SecurityPanel />
-          </Card>
-
-          <Card>
-            <CardHeader title="Workspace Data" icon={<GIcon name="storage" size={17} />} />
+            </div>
+          ) : (
             <div className="flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={<GIcon name="download" size={15} />}
-                onClick={() => void backupLibrary()}
-              >
-                Export JSON
+              <Button size="sm" variant="primary" icon={<GIcon name="person_add" size={15} />} onClick={() => openAuth('register')}>
+                Create account
               </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={<GIcon name="upload" size={15} />}
-                onClick={() => void restoreLibrary()}
-              >
-                Import JSON
+              <Button size="sm" variant="secondary" icon={<GIcon name="login" size={15} />} onClick={() => openAuth('login')}>
+                Sign in
               </Button>
-              {items.length > 0 && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-danger hover:text-danger"
-                  icon={<GIcon name="delete" size={15} />}
-                  onClick={() => {
-                    clearLibrary();
-                    toast.info('Library cleared');
-                  }}
-                >
-                  Clear library
-                </Button>
-              )}
             </div>
-          </Card>
+          )}
+        </Card>
 
-          <Card>
-            <CardHeader title="More" icon={<GIcon name="apps" size={17} />} />
-            <div className="grid gap-1.5 sm:grid-cols-2">
-              {SECONDARY_NAV.map((entry) => (
-                <Link
-                  key={entry.to}
-                  to={entry.to}
-                  className="flex items-center gap-2.5 rounded-[var(--r-control)] border border-line px-2.5 py-2 text-[0.8125rem] font-medium text-ink-muted transition-colors hover:border-brand hover:text-ink"
-                >
-                  <GIcon name={entry.icon} size={17} className="text-ink-faint" />
-                  <span className="flex-1 truncate">{entry.label}</span>
-                  <GIcon name="chevron_right" size={16} className="text-ink-faint" />
-                </Link>
-              ))}
-            </div>
-          </Card>
-        </div>
+        <Card>
+          <CardHeader title="Workspace data" icon={<GIcon name="storage" size={18} />} subtitle={`${items.length} files on this device`} />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="secondary" icon={<GIcon name="download" size={15} />} onClick={() => void backupLibrary()}>
+              Export JSON
+            </Button>
+            <Button size="sm" variant="secondary" icon={<GIcon name="upload" size={15} />} onClick={() => void restoreLibrary()}>
+              Import JSON
+            </Button>
+            {items.length > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-danger hover:text-danger"
+                icon={<GIcon name="delete" size={15} />}
+                onClick={() => {
+                  clearLibrary();
+                  toast.info('Library cleared');
+                }}
+              >
+                Clear library
+              </Button>
+            )}
+          </div>
+          <div className="mt-4 grid gap-1.5 sm:grid-cols-2">
+            {SECONDARY_NAV.map((entry) => (
+              <Link
+                key={entry.to}
+                to={entry.to}
+                className="flex items-center gap-2.5 rounded-[var(--r-control)] border border-line px-2.5 py-2 text-[0.8125rem] font-medium text-ink-muted transition-colors hover:border-brand hover:text-ink"
+              >
+                <GIcon name={entry.icon} size={16} className="text-ink-faint" />
+                <span className="flex-1 truncate">{entry.label}</span>
+                <GIcon name="chevron_right" size={15} className="text-ink-faint" />
+              </Link>
+            ))}
+          </div>
+        </Card>
       </div>
     </div>
   );

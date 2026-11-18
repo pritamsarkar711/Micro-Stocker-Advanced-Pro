@@ -21,6 +21,7 @@ export function Card({ padding = 'md', interactive, className, title, descriptio
     <div
       className={clsx(
         'card',
+        flush && 'card--flush',
         PAD[flush ? 'none' : padding],
         interactive && 'card-hover cursor-pointer',
         className,
@@ -43,7 +44,7 @@ export interface CardHeaderProps {
 
 export function CardHeader({ title, subtitle, icon, action, className }: CardHeaderProps) {
   return (
-    <div className={clsx('mb-4 flex flex-wrap items-start justify-between gap-2.5', className)}>
+    <div className={clsx('card-head mb-4 flex flex-wrap items-start justify-between gap-2.5', className)}>
       <div className="flex min-w-0 items-center gap-2.5">
         {icon && (
           <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-[var(--r-control)] bg-brand-soft text-brand">

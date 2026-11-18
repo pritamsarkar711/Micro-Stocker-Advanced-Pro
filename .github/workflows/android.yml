@@ -1,0 +1,96 @@
+name: Android
+
+# Builds the phone build from the same web bundle the desktop uses. The debug APK
+# needs no signing key, so it is produced on every tag and on demand, which makes
+# it installable straight from the run page. A release APK appears when the four
+# signing secrets below are configured.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          # Gradle 8.2.1 and AGP 8.2.1 (the versions Capacitor 6 generates) top
+          # out at Java 17; newer JDKs fail with an unsupported class file.
+          java-version: '17'
+
+      # The runner image already ships the Android SDK and accepted licences, so
+      # Gradle only needs to be pointed at it. Downloading a second copy with a
+      # third-party action was the slowest and most fragile step of this job.
+      - name: Use the preinstalled Android SDK
+        run: |
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          if [ ! -d "$sdk/platforms" ]; then
+            echo "No Android SDK found at $sdk" >&2
+            exit 1
+          fi
+          echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$sdk" >> "$GITHUB_ENV"
+          ls "$sdk/platforms" | tail -2
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build the web bundle and sync it into the Android project
+        env:
+          VITE_LICENSE_SUPABASE_URL: ${{ vars.MSAP_LICENSE_SUPABASE_URL }}
+          VITE_LICENSE_SUPABASE_ANON_KEY: ${{ vars.MSAP_LICENSE_SUPABASE_ANON_KEY }}
+        run: |
+          npm run build:web
+          npx cap sync android
+
+      - name: Assemble the debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          set -o pipefail
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../gradle.log
+
+      # If Gradle fails, its own log is the only useful diagnostic and the run
+      # log is awkward to read on a phone, so the reason is surfaced as an
+      # annotation on the run itself.
+      - name: Report the Gradle failure
+        if: failure()
+        run: |
+          log=gradle.log
+          reason=$(awk '/What went wrong:/{flag=1} flag' "$log" | head -12 | tr '\n' '|' | cut -c1-1200)
+          [ -n "$reason" ] || reason=$(tail -12 "$log" | tr '\n' '|' | cut -c1-1200)
+          echo "::error title=Gradle failure::${reason}"
+
+      - name: Name the artifact with the version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          mkdir -p out
+          cp android/app/build/outputs/apk/debug/app-debug.apk "out/micro-stocker-pro-${version}-debug.apk"
+          echo "version=${version}" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: micro-stocker-pro-android-${{ env.version }}
+          path: out/*.apk
+          retention-days: 90
+
+      - name: Attach the APK to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*.apk
+          fail_on_unmatched_files: false

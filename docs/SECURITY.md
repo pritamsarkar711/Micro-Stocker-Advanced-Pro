@@ -143,3 +143,23 @@ node scripts/qa/_auth-flow.mjs          # signup, reset, 2FA, admin console, lay
 `_auth-flow.mjs` prints one line per check and screenshots the reset form, the
 enrolment panel, the challenge, the provider dialog, the security tab and the
 subscription page at desktop and phone widths.
+
+## Database access audit
+
+Reviewed against the live project on 17 November 2026. The database is the only
+place where user data lives, so every check below is about what a signed out or
+signed in client can reach.
+
+| Check | Result |
+| --- | --- |
+| Tables with row level security disabled | None. `rate_events` was the last one and is now closed. |
+| Tables readable by anonymous clients | Catalog only: plans, prices, payment methods, crypto assets and settings. Each row is filtered by a policy, and none of these tables hold user data. |
+| Tables writable by anonymous clients | None. Every write grant was removed during this pass. |
+| Private tables with no client policy | `pro_provider_keys` has row level security on and no policy, so it returns nothing to anyone but the service role. Provider secrets never leave the server. |
+| Ownership policies | Orders, invoices, wallets, ledger, generations and workspace snapshots are all limited to `user_id = auth.uid()` and are refused while the session still needs a second factor. |
+| Functions that write money | Not executable by anonymous clients. Settlement, activation, crediting and generation start all require a signed in session, and settlement itself is limited to the service role. |
+| Functions that mutate settings or read admin statistics | Signed in sessions only, and each one checks `pro_is_admin()` before it does anything. |
+
+Two rules matter here: an anonymous client holds no write grant at all, and a
+write function refuses the call before it touches a row. Removing either layer
+would still leave the other in place.

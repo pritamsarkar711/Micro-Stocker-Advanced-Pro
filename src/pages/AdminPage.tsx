@@ -3,7 +3,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Field, Input, Switch } from '@/components/ui/Field';
+import { Field, Input, Select, Switch } from '@/components/ui/Field';
 import { Modal } from '@/components/ui/Modal';
 import { Tabs } from '@/components/ui/Tabs';
 import { GIcon } from '@/components/ui/GoogleIcon';
@@ -13,6 +13,10 @@ import { AdminSecurity } from '@/components/pro/AdminSecurity';
 import { bdt, bdtUnit } from '@/lib/format';
 import { useToast } from '@/state/ToastState';
 import {
+  adminAssets,
+  adminUpdateAsset,
+  adminUpsertModel,
+  adminUpsertProvider,
   adminAdjustCredits,
   FX_BDT_USD,
   adminAudit,
@@ -36,11 +40,12 @@ import {
   type AdminUser,
   type AiModel,
   type AiProvider,
+  type CryptoAsset,
   type Order,
   type Setting,
 } from '@/lib/pro/api';
 
-type TabId = 'overview' | 'orders' | 'users' | 'plans' | 'providers' | 'settings' | 'security';
+type TabId = 'overview' | 'orders' | 'users' | 'plans' | 'payments' | 'providers' | 'settings' | 'security';
 
 interface AdminOrder extends Order {
   user_id: string;
@@ -97,7 +102,7 @@ export function AdminPage() {
   const pending = orders.filter((order) => order.status === 'submitted' || order.status === 'awaiting');
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div>
       <PageHeader
         title="Admin console"
         description="Plans, payments, credits and provider keys, all without touching the source."
@@ -117,6 +122,7 @@ export function AdminPage() {
             { id: 'orders', label: `Orders${pending.length ? ` (${pending.length})` : ''}` },
             { id: 'users', label: 'Users' },
             { id: 'plans', label: 'Plans' },
+            { id: 'payments', label: 'Payments' },
             { id: 'providers', label: 'Providers' },
             { id: 'security', label: 'Security' },
             { id: 'settings', label: 'Settings' },
@@ -144,6 +150,7 @@ export function AdminPage() {
             />
           )}
           {tab === 'plans' && <Plans onToast={(message) => toast.success(message)} />}
+          {tab === 'payments' && <Payments onToast={(message) => toast.success(message)} />}
           {tab === 'providers' && (
             <Providers
               providers={providers}
@@ -546,6 +553,16 @@ function Plans({ onToast }: { onToast: (message: string) => void }) {
  * provider dashboard before: one link, three steps, the shape of the key.
  */
 const PROVIDER_HELP: Record<string, { keysUrl: string; blurb: string; steps: string[]; placeholder: string }> = {
+  tokensbd: {
+    keysUrl: 'https://tokens.bd/dashboard',
+    blurb: 'The primary supply. One key reaches every model, paid in BDT.',
+    steps: [
+      'Sign in to tokens.bd and open the dashboard.',
+      'Create an API key and copy the value that starts with tok_live_.',
+      'Paste it here. Model ids are the namespaced names from the dashboard, such as deepseek/deepseek-v4.1-flash.',
+    ],
+    placeholder: 'tok_live_...',
+  },
   moonshot: {
     keysUrl: 'https://platform.moonshot.ai/console/api-keys',
     blurb: 'Used by the vector and AI generators (Kimi K2.5).',
@@ -606,6 +623,21 @@ function Providers({
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [keyError, setKeyError] = useState('');
+  const [addingModel, setAddingModel] = useState(false);
+  const [modelDraft, setModelDraft] = useState({
+    id: '',
+    provider_id: providers[0]?.id ?? 'tokensbd',
+    upstream_id: '',
+    label: '',
+    kind: 'vector' as AiModel['kind'],
+    enabled: true,
+    cost_in_per_mtok: 0.1,
+    cost_out_per_mtok: 0.3,
+  });
+  const [savingModel, setSavingModel] = useState(false);
+  const [addingProvider, setAddingProvider] = useState(false);
+  const [providerDraft, setProviderDraft] = useState({ id: '', label: '', base_url: 'https://' });
+  const [savingProvider, setSavingProvider] = useState(false);
 
   const help = keyFor ? PROVIDER_HELP[keyFor.id] : undefined;
 
@@ -649,6 +681,11 @@ function Providers({
           title="Provider keys"
           subtitle={`${ready} of ${providers.length} providers ready · keys live in the server, never in the browser`}
           icon={<GIcon name="key" size={18} />}
+          action={
+            <Button size="sm" variant="outline" onClick={() => setAddingProvider(true)} icon={<GIcon name="add" size={16} />}>
+              Add provider
+            </Button>
+          }
         />
         <div className="divide-y divide-line border-t border-line">
           {providers.map((provider) => (
@@ -697,7 +734,16 @@ function Providers({
       </Card>
 
       <Card flush>
-        <CardHeader title="Models" subtitle="Enable, price and retire models without a release." icon={<GIcon name="memory" size={18} />} />
+        <CardHeader
+          title="Models"
+          subtitle="Enable, price, add and retire models without a release."
+          icon={<GIcon name="memory" size={18} />}
+          action={
+            <Button size="sm" variant="outline" onClick={() => setAddingModel(true)} icon={<GIcon name="add" size={16} />}>
+              Add model
+            </Button>
+          }
+        />
         <div className="overflow-x-auto border-t border-line">
           <table className="w-full min-w-[720px] text-[0.8125rem]">
             <thead className="bg-surface-2 text-2xs uppercase tracking-wide text-ink-muted">
@@ -740,6 +786,164 @@ function Providers({
           </table>
         </div>
       </Card>
+
+      {addingProvider && (
+        <Modal
+          open
+          onClose={() => setAddingProvider(false)}
+          title="Add a provider"
+          size="sm"
+          description="Any OpenAI-compatible endpoint works. Add its key on this page afterwards."
+        >
+          <div className="space-y-3">
+            <Field label="Provider id" hint="lowercase, used by model rows">
+              <Input
+                value={providerDraft.id}
+                onChange={(event) =>
+                  setProviderDraft((draft) => ({ ...draft, id: event.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') }))
+                }
+                placeholder="tokensbd"
+              />
+            </Field>
+            <Field label="Display name">
+              <Input
+                value={providerDraft.label}
+                onChange={(event) => setProviderDraft((draft) => ({ ...draft, label: event.target.value }))}
+                placeholder="Tokens.bd"
+              />
+            </Field>
+            <Field label="Base URL" hint="the /v1 root of the API">
+              <Input
+                value={providerDraft.base_url}
+                onChange={(event) => setProviderDraft((draft) => ({ ...draft, base_url: event.target.value.trim() }))}
+                placeholder="https://tokens.bd/v1"
+              />
+            </Field>
+            <Button
+              className="w-full"
+              loading={savingProvider}
+              onClick={() => {
+                setSavingProvider(true);
+                void adminUpsertProvider({
+                  id: providerDraft.id,
+                  label: providerDraft.label || providerDraft.id,
+                  base_url: providerDraft.base_url,
+                  enabled: true,
+                } as Partial<AiProvider> & { id: string; base_url: string }).then((result) => {
+                  setSavingProvider(false);
+                  if (isFailure(result)) {
+                    toast.error('Could not save the provider', result.error);
+                    return;
+                  }
+                  onToast(`${providerDraft.label || providerDraft.id} added`, 'Store its key before enabling models on it.');
+                  setAddingProvider(false);
+                  setProviderDraft({ id: '', label: '', base_url: 'https://' });
+                  onChange();
+                });
+              }}
+              icon={<GIcon name="save" size={16} />}
+            >
+              Save provider
+            </Button>
+          </div>
+        </Modal>
+      )}
+
+      {addingModel && (
+        <Modal open onClose={() => setAddingModel(false)} title="Add a model" size="sm" description="Use the exact model id from the provider dashboard.">
+          <div className="space-y-3">
+            <Field label="Model id" hint="short name used by the app">
+              <Input
+                value={modelDraft.id}
+                onChange={(event) => setModelDraft((draft) => ({ ...draft, id: event.target.value.trim() }))}
+                placeholder="tb-gemini-flash"
+              />
+            </Field>
+            <Field label="Provider">
+              <Select
+                value={modelDraft.provider_id}
+                onChange={(event) => setModelDraft((draft) => ({ ...draft, provider_id: event.target.value }))}
+              >
+                {providers.map((provider) => (
+                  <option key={provider.id} value={provider.id}>
+                    {provider.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Upstream id" hint="what the provider calls it">
+              <Input
+                value={modelDraft.upstream_id}
+                onChange={(event) => setModelDraft((draft) => ({ ...draft, upstream_id: event.target.value.trim() }))}
+                placeholder="google/gemini-5.3-flash"
+              />
+            </Field>
+            <Field label="Display name">
+              <Input
+                value={modelDraft.label}
+                onChange={(event) => setModelDraft((draft) => ({ ...draft, label: event.target.value }))}
+                placeholder="Gemini 5.3 Flash"
+              />
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Kind">
+                <Select
+                  value={modelDraft.kind}
+                  onChange={(event) => setModelDraft((draft) => ({ ...draft, kind: event.target.value as AiModel['kind'] }))}
+                >
+                  <option value="vector">Vector and chat</option>
+                  <option value="image">Image</option>
+                </Select>
+              </Field>
+              <Field label={`${bdtUnit()} per 1M in`}>
+                <Input
+                  type="number"
+                  value={Math.round(modelDraft.cost_in_per_mtok * FX_BDT_USD)}
+                  onChange={(event) =>
+                    setModelDraft((draft) => ({ ...draft, cost_in_per_mtok: Number(event.target.value) / FX_BDT_USD }))
+                  }
+                />
+              </Field>
+            </div>
+            <label className="flex items-center justify-between gap-3 rounded-[var(--r-control)] border border-line px-3 py-2 text-[0.8125rem]">
+              Enabled for customers
+              <Switch
+                checked={modelDraft.enabled}
+                onChange={(checked) => setModelDraft((draft) => ({ ...draft, enabled: checked }))}
+              />
+            </label>
+            <Button
+              className="w-full"
+              loading={savingModel}
+              onClick={() => {
+                setSavingModel(true);
+                void adminUpsertModel({
+                  id: modelDraft.id,
+                  provider_id: modelDraft.provider_id,
+                  upstream_id: modelDraft.upstream_id || modelDraft.id,
+                  label: modelDraft.label || modelDraft.id,
+                  kind: modelDraft.kind,
+                  enabled: modelDraft.enabled,
+                  cost_in_per_mtok: modelDraft.cost_in_per_mtok,
+                  cost_out_per_mtok: modelDraft.cost_out_per_mtok,
+                } as Partial<AiModel> & { id: string }).then((result) => {
+                  setSavingModel(false);
+                  if (isFailure(result)) {
+                    toast.error('Could not save the model', result.error);
+                    return;
+                  }
+                  onToast(`${modelDraft.label || modelDraft.id} saved`);
+                  setAddingModel(false);
+                  onChange();
+                });
+              }}
+              icon={<GIcon name="save" size={16} />}
+            >
+              Save model
+            </Button>
+          </div>
+        </Modal>
+      )}
 
       {keyFor && (
         <Modal
@@ -824,6 +1028,126 @@ function Providers({
 }
 
 /* -------------------------------------------------------------- settings */
+
+/* --------------------------------------------------------------- payments */
+
+/**
+ * Wallet editor and the manual side of the money flow.
+ *
+ * Every address here is read by the chain verifier the moment it is saved, so a
+ * typo shows up as a failing check rather than a lost payment. The seed ships
+ * with placeholder wallets: replace each one with a wallet you control before
+ * taking crypto payments.
+ */
+function Payments({ onToast }: { onToast: (message: string) => void }) {
+  const toast = useToast();
+  const [assets, setAssets] = useState<CryptoAsset[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, Partial<CryptoAsset>>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    const result = await adminAssets();
+    setAssets(isFailure(result) ? [] : result);
+    setDrafts({});
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const patch = (id: string, change: Partial<CryptoAsset>) =>
+    setDrafts((current) => ({ ...current, [id]: { ...current[id], ...change } }));
+
+  const save = async (asset: CryptoAsset) => {
+    const change = drafts[asset.id] ?? {};
+    if (!Object.keys(change).length) return;
+    setSaving(asset.id);
+    const result = await adminUpdateAsset(asset.id, change);
+    setSaving(null);
+    if (isFailure(result)) {
+      toast.error('Could not save', result.error);
+      return;
+    }
+    onToast(`${asset.symbol} ${asset.network} updated`);
+    void load();
+  };
+
+  if (loading) return <div className="flex justify-center py-16"><Spinner size={7} /></div>;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start gap-2 rounded-[var(--r-control)] border border-warn/30 bg-warn-soft px-3 py-2.5 text-[0.8125rem] text-warn">
+        <GIcon name="info" size={18} className="mt-0.5" />
+        <p>Use wallets you control. Crypto payments are checked on chain every five minutes.</p>
+      </div>
+
+      <div className="grid gap-3 xl:grid-cols-2">
+        {assets.map((asset) => {
+          const draft = drafts[asset.id] ?? {};
+          const value = (key: keyof CryptoAsset) => String(draft[key] ?? asset[key] ?? '');
+          return (
+            <Card key={asset.id} className="space-y-3">
+              <CardHeader
+                title={`${asset.symbol} · ${asset.network}`}
+                subtitle={asset.wallet_label || asset.id}
+                icon={<GIcon name="wallet" size={18} />}
+                action={
+                  <Switch
+                    checked={draft.enabled ?? asset.enabled}
+                    onChange={(checked) => patch(asset.id, { enabled: checked })}
+                    label="Enabled"
+                  />
+                }
+              />
+
+              <Field label="Wallet address">
+                <Input
+                  value={value('address')}
+                  onChange={(event) => patch(asset.id, { address: event.target.value.trim() })}
+                  className="font-mono text-[0.8125rem]"
+                />
+              </Field>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Token contract" hint={asset.contract ? undefined : 'native coin'}>
+                  <Input
+                    value={value('contract')}
+                    onChange={(event) => patch(asset.id, { contract: event.target.value.trim() })}
+                    placeholder="none"
+                    className="font-mono text-[0.75rem]"
+                  />
+                </Field>
+                <Field label="Confirmations">
+                  <Input
+                    type="number"
+                    value={value('confirmations')}
+                    onChange={(event) => patch(asset.id, { confirmations: Number(event.target.value) })}
+                  />
+                </Field>
+              </div>
+
+              <div className="flex items-center justify-between gap-2">
+                <Badge tone={asset.contract ? 'brand' : 'neutral'}>{asset.contract ? 'Token' : 'Native'}</Badge>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  loading={saving === asset.id}
+                  disabled={!Object.keys(draft).length}
+                  onClick={() => void save(asset)}
+                  icon={<GIcon name="save" size={16} />}
+                >
+                  Save
+                </Button>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function Settings({
   settings,

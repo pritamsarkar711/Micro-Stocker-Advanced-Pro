@@ -569,7 +569,16 @@ export function UpscalePage() {
                   </div>
                 )}
                 {autoNote.evidence.length > 0 && (
-                  <p className="text-2xs text-ink-faint">{autoNote.evidence.join('. ')}.</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {autoNote.evidence.map((line) => (
+                      <span
+                        key={line}
+                        className="rounded-full border border-line px-2 py-0.5 text-2xs text-ink-faint"
+                      >
+                        {line}
+                      </span>
+                    ))}
+                  </div>
                 )}
                 {(manualPick || modelId !== autoNote.modelId || targetId !== autoNote.targetId) && (
                   <Button

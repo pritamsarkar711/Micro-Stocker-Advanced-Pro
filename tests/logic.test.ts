@@ -5,7 +5,7 @@ import { setStatus, statusOf, countByStatus } from '@/lib/stock/submissions';
  *
  * Run with `npm test` (bundled by esbuild with the `@/` alias and executed on Node).
  */
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { generateCsv, generateUniversalCsv, keywordsFor } from '@/lib/stock/csv';
@@ -143,7 +143,6 @@ import {
   decodeIcon,
 } from '@/lib/tools/imageCodecs';
 import { CURRENCIES, currencyMeta, money } from '@/lib/format';
-import { SCHEMA_SQL } from '@/lib/cloud/schema';
 import { sizeCapOptions } from '@/lib/stock/sizecaps';
 import { APP_NAME, APP_VERSION } from '@/lib/version';
 import { recommendUpscale } from '@/lib/stock/upscale/recommend';
@@ -954,10 +953,16 @@ test('all 9 currencies have official symbols and ISO country flags', () => {
   }
 });
 
-test('legacy cloud schema removes anonymous access to sensitive tables', () => {
-  includes(SCHEMA_SQL, 'kv_store');
-  includes(SCHEMA_SQL, 'user_accounts');
-  includes(SCHEMA_SQL, 'issue_reports');
+test('migrations keep the database closed to anonymous writers', () => {
+  const dir = path.join(FIXTURE_DIR, '..', '..', 'supabase', 'migrations');
+  const sql = readdirSync(dir)
+    .filter((name) => name.endsWith('.sql'))
+    .map((name) => readFileSync(path.join(dir, name), 'utf8'))
+    .join('\n');
+  includes(sql, 'alter table public.rate_events enable row level security');
+  includes(sql, 'from anon');
+  includes(sql, 'grant execute on function public.pro_settle_crypto');
+  includes(sql, 'workspace_snapshots');
 });
 
 test('APP_VERSION matches package.json', () => {

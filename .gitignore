@@ -35,3 +35,17 @@ Thumbs.db
 
 # Local app data (desktop KV store) used while testing
 *.local.json
+
+# Temporary image search downloads
+image-search/
+
+# Android build output and generated Capacitor assets
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/capacitor-cordova-android-plugins/
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json

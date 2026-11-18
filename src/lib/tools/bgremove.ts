@@ -32,6 +32,8 @@ export interface BgModel {
   purposes: Array<Exclude<BgPurpose, 'all'>>;
   icon: GoogleIconName;
   license: string;
+  /** The heavy models are a plan feature: no credits, subscription required. */
+  premium?: boolean;
   inputSize: number;
   sizeMB: number;
   fileName?: string;
@@ -108,6 +110,7 @@ export const BG_MODELS: BgModel[] = [
   },
   {
     id: 'isnet-general-use',
+    premium: true,
     name: 'ISNet General DIS',
     kind: 'onnx',
     purpose: 'product',
@@ -122,6 +125,7 @@ export const BG_MODELS: BgModel[] = [
   },
   {
     id: 'isnet-anime',
+    premium: true,
     name: 'ISNet Anime & Character',
     kind: 'onnx',
     purpose: 'anime',
@@ -150,6 +154,7 @@ export const BG_MODELS: BgModel[] = [
   },
   {
     id: 'u2net-portrait-matting',
+    premium: true,
     name: 'U2Net Hair Matting',
     kind: 'onnx',
     purpose: 'portrait',
@@ -164,6 +169,7 @@ export const BG_MODELS: BgModel[] = [
   },
   {
     id: 'u2net-cloth-seg',
+    premium: true,
     name: 'U2Net Apparel & Cloth',
     kind: 'onnx',
     purpose: 'product',
@@ -178,6 +184,7 @@ export const BG_MODELS: BgModel[] = [
   },
   {
     id: 'birefnet-tiny',
+    premium: true,
     name: 'BiRefNet Swin Tiny',
     kind: 'onnx',
     purpose: 'precision',
@@ -192,6 +199,7 @@ export const BG_MODELS: BgModel[] = [
   },
   {
     id: 'birefnet-general',
+    premium: true,
     name: 'BiRefNet General',
     kind: 'onnx',
     purpose: 'precision',
@@ -206,6 +214,7 @@ export const BG_MODELS: BgModel[] = [
   },
   {
     id: 'birefnet-portrait',
+    premium: true,
     name: 'BiRefNet Portrait',
     kind: 'onnx',
     purpose: 'portrait',
@@ -220,6 +229,7 @@ export const BG_MODELS: BgModel[] = [
   },
   {
     id: 'birefnet-dis',
+    premium: true,
     name: 'BiRefNet Fine Detail DIS',
     kind: 'onnx',
     purpose: 'precision',
@@ -234,6 +244,7 @@ export const BG_MODELS: BgModel[] = [
   },
   {
     id: 'birefnet-hr',
+    premium: true,
     name: 'BiRefNet HR 2K',
     kind: 'onnx',
     purpose: 'precision',
@@ -248,6 +259,7 @@ export const BG_MODELS: BgModel[] = [
   },
   {
     id: 'birefnet-hr-matting',
+    premium: true,
     name: 'BiRefNet HR Alpha Matting',
     kind: 'onnx',
     purpose: 'precision',

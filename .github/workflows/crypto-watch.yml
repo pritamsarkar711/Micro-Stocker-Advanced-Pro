@@ -1,0 +1,44 @@
+name: crypto-watch
+
+# The chain never calls us, so this job asks the verifier to look. Every five
+# minutes it scans open invoices and settles any transfer that already has
+# enough confirmations. A customer who pays sees the plan switch on within a few
+# minutes even if they close the checkout tab. Set the repository secret
+# WATCH_SECRET to the same value stored in Supabase function secrets.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crypto-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Scan open invoices
+        env:
+          WATCH_SECRET: ${{ secrets.WATCH_SECRET }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://djlmbsaltjqsqpwqdvsg.supabase.co' }}
+        run: |
+          if [ -z "$WATCH_SECRET" ]; then
+            echo "WATCH_SECRET is not set; skipping."
+            exit 0
+          fi
+          code=$(curl -sS -o response.json -w '%{http_code}' \
+            -X POST "$SUPABASE_URL/functions/v1/crypto-verify" \
+            -H 'content-type: application/json' \
+            -H 'Authorization: Bearer watch' \
+            -d "{\"action\":\"watch\",\"secret\":\"$WATCH_SECRET\"}")
+          cat response.json
+          if [ "$code" -ge 400 ]; then
+            echo "verifier answered $code"
+            exit 1
+          fi

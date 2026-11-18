@@ -11,14 +11,6 @@ import { desktop } from '@/lib/desktop';
 import { kv, STORAGE_KEYS } from '@/lib/kv';
 import { APP_VERSION } from '@/lib/version';
 import type { CurrencyCode } from '@/lib/format';
-import {
-  EMPTY_CLOUD_CONFIG,
-  isConfigured,
-  mergeEnvConfig,
-  testCloudConnection,
-  type CloudConfig,
-  type ConnectionReport,
-} from '@/lib/cloud/config';
 
 export type ThemeSetting = 'light' | 'dark' | 'system';
 export type AccentSetting = 'pink';
@@ -59,12 +51,6 @@ interface AppState {
   updateSettings: (patch: Partial<Settings>) => void;
   resetSettings: () => void;
 
-  cloud: CloudConfig;
-  saveCloud: (config: CloudConfig) => Promise<boolean>;
-  clearCloud: () => Promise<void>;
-  connection: ConnectionReport;
-  recheckConnection: () => Promise<void>;
-
   zoom: number;
   setZoom: (factor: number) => void;
   nudgeZoom: (delta: number) => void;
@@ -83,13 +69,6 @@ interface AppState {
 }
 
 const AppContext = createContext<AppState | null>(null);
-
-const INITIAL_REPORT: ConnectionReport = {
-  state: 'local',
-  message: 'Local workspace ready',
-  latencyMs: null,
-  checkedAt: null,
-};
 
 function systemPrefersDark(): boolean {
   return (
@@ -150,8 +129,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   });
   const [osDark, setOsDark] = useState<boolean>(() => systemPrefersDark());
-  const [cloud, setCloud] = useState<CloudConfig>(EMPTY_CLOUD_CONFIG);
-  const [connection, setConnection] = useState<ConnectionReport>(INITIAL_REPORT);
   const [zoom, setZoomState] = useState(1);
   const [runtime, setRuntime] = useState<AppState['runtime']>({
     platform: desktop.platform,
@@ -166,9 +143,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [storedSettings, storedCloud, info, storedZoom] = await Promise.all([
+      const [storedSettings, info, storedZoom] = await Promise.all([
         kv.get<Partial<Settings>>(STORAGE_KEYS.settings, {}),
-        kv.get<CloudConfig>(STORAGE_KEYS.cloud, EMPTY_CLOUD_CONFIG),
         desktop.app.info(),
         desktop.view.getZoom().catch(() => 1),
       ]);
@@ -180,11 +156,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         accent: normalizeAccent(storedSettings.accent),
         theme: storedSettings.theme ?? (systemPrefersDark() ? 'dark' : 'light'),
       };
-      const mergedCloud = mergeEnvConfig(storedCloud);
-
       setSettings(mergedSettings);
       paintThemeDom(resolveDark(mergedSettings.theme), mergedSettings.accent, mergedSettings.theme);
-      setCloud(mergedCloud);
       setZoomState(storedZoom || 1);
       setRuntime({
         platform: info.platform,
@@ -198,19 +171,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         userDataPath: info.userDataPath,
       });
       setReady(true);
-
-      if (isConfigured(mergedCloud)) {
-        setConnection({ state: 'connecting', message: 'Connecting to cloud', latencyMs: null, checkedAt: null });
-        const report = await testCloudConnection(mergedCloud);
-        if (!cancelled) setConnection(report);
-      } else {
-        setConnection({
-          state: 'local',
-          message: 'Stored on this device',
-          latencyMs: null,
-          checkedAt: new Date().toISOString(),
-        });
-      }
     })();
     return () => {
       cancelled = true;
@@ -283,42 +243,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setZoom(1);
   }, [setZoom]);
 
-  const recheckConnection = useCallback(async () => {
-    if (!isConfigured(cloud)) {
-      setConnection({
-        state: 'local',
-        message: 'Stored on this device',
-        latencyMs: null,
-        checkedAt: new Date().toISOString(),
-      });
-      return;
-    }
-    setConnection({ state: 'connecting', message: 'Connecting to cloud', latencyMs: null, checkedAt: null });
-    const report = await testCloudConnection(cloud);
-    setConnection(report);
-  }, [cloud]);
-
-  const saveCloud = useCallback(async (config: CloudConfig) => {
-    const next: CloudConfig = { ...config, savedAt: new Date().toISOString() };
-    const ok = await kv.set(STORAGE_KEYS.cloud, next);
-    setCloud(next);
-    setConnection({ state: 'connecting', message: 'Connecting to cloud', latencyMs: null, checkedAt: null });
-    const report = await testCloudConnection(next);
-    setConnection(report);
-    return ok && report.state !== 'error';
-  }, []);
-
-  const clearCloud = useCallback(async () => {
-    await kv.del(STORAGE_KEYS.cloud);
-    setCloud(EMPTY_CLOUD_CONFIG);
-    setConnection({
-      state: 'local',
-      message: 'Stored on this device',
-      latencyMs: null,
-      checkedAt: new Date().toISOString(),
-    });
-  }, []);
-
   const value = useMemo<AppState>(
     () => ({
       ready,
@@ -328,11 +252,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAccentInstant,
       updateSettings,
       resetSettings,
-      cloud,
-      saveCloud,
-      clearCloud,
-      connection,
-      recheckConnection,
       zoom,
       setZoom,
       nudgeZoom,
@@ -346,11 +265,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAccentInstant,
       updateSettings,
       resetSettings,
-      cloud,
-      saveCloud,
-      clearCloud,
-      connection,
-      recheckConnection,
       zoom,
       setZoom,
       nudgeZoom,

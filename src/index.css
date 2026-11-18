@@ -439,6 +439,11 @@ html.theme-switching *::after {
     box-shadow: var(--elev-1);
   }
 
+  /* A flush card keeps its body edge to edge, but the header still needs air. */
+  .card--flush > .card-head {
+    padding: 1rem 1rem 0;
+  }
+
   .card-hover {
     transition:
       border-color var(--dur-base) var(--ease-standard),

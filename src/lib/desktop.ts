@@ -385,6 +385,14 @@ export async function httpRequest(payload: NetRequestPayload): Promise<NetRespon
 
 /** Save any binary blob cleanly and release its object URL after download. */
 export function triggerBlobDownload(blob: Blob, filename: string) {
+  // On the phone there is no download folder to write to from a WebView, so the
+  // same call writes through the Filesystem plugin and opens the share sheet.
+  if ((window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()) {
+    void import('@/lib/native/fileExport')
+      .then((module) => module.saveBlobNative(blob, filename))
+      .catch((error: unknown) => console.warn('could not save the file', error));
+    return;
+  }
   const href = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = href;

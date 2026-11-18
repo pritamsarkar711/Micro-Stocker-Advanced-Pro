@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { GIcon } from '@/components/ui/GoogleIcon';
 import { useAuth } from '@/state/AuthState';
 
@@ -9,6 +10,9 @@ import { useAuth } from '@/state/AuthState';
  */
 export function SecurityBanner() {
   const { recovery, recoveryError, mfaRequired, openAuth, clearRecoveryError } = useAuth();
+  // The close button hides the banner for the current message only; a new state
+  // brings it back, so dismissing one note never hides a different one.
+  const [dismissed, setDismissed] = useState<string | null>(null);
 
   if (!recovery && !mfaRequired && !recoveryError) return null;
 
@@ -19,6 +23,7 @@ export function SecurityBanner() {
       ? 'Two step verification is on for this account. Enter the 6 digit code to continue.'
       : recoveryError;
   const action = recovery ? 'Set new password' : mfaRequired ? 'Enter code' : 'Try again';
+  if (dismissed === message) return null;
 
   return (
     <div
@@ -40,6 +45,14 @@ export function SecurityBanner() {
         className="shrink-0 rounded-[var(--r-chip)] bg-surface px-2.5 py-1 text-2xs font-semibold text-ink shadow-[var(--elev-1)] hover:bg-surface-2"
       >
         {action}
+      </button>
+      <button
+        type="button"
+        aria-label="Dismiss"
+        onClick={() => setDismissed(message)}
+        className="shrink-0 rounded-[var(--r-chip)] p-1 text-ink-muted transition hover:bg-surface hover:text-ink"
+      >
+        <GIcon name="close" size={16} />
       </button>
     </div>
   );
