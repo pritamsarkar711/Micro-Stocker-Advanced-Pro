@@ -3,6 +3,19 @@
 All notable changes to Micro Stocker Advanced Pro are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.3.1] - 2026-11-17
+
+### Fixed
+- **A failed generation no longer looks like a dead button.** The explanation sits
+  under a long form, so a phone showed nothing after the tap. The generator now
+  raises a toast with the reason, scrolls the inline alert into view and marks it
+  as an alert; a successful run scrolls to the output card.
+- **Toasts sit under the app bar on phones** instead of covering the tab bar and
+  the page action bar.
+- **The report and 404 pages name themselves in the app bar** instead of falling
+  back to the product name, and the empty releases page no longer repeats its own
+  call to action.
+
 ## [2.3.0] - 2026-11-17
 
 ### Added
