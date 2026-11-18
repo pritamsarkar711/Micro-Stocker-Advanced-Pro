@@ -4,7 +4,7 @@
 
 # Micro Stocker Advanced Pro
 
-**A complete microstock workspace for Windows, the browser and Android.**
+**A complete microstock workspace for Windows and the browser.**
 
 Metadata, keywording, exact CSV for 14 marketplaces, IPTC and XMP embedding, local AI upscaling up to 8K, validation, submission tracking, earnings analytics and four AI art generators, all in one window.
 
@@ -54,7 +54,7 @@ large library does not depend on an internet connection.
 | Releases | Model and property release registry with expiry tracking, linked per file. |
 | Earnings | Import each portal sales CSV with automatic column detection and get one ledger, a monthly trend and best sellers. |
 | Admin console | Plans, prices, orders, users, provider keys, crypto wallets and audit log, all without touching the source. |
-| Sync | Accounts, subscriptions, credits, settings and workspace data follow you across desktop, web and Android. Pixels stay on the device that made them. |
+| Sync | Accounts, subscriptions, credits, settings and workspace data follow you between devices. Pixels stay on the device that made them. |
 
 ## Supported marketplaces
 
@@ -126,9 +126,9 @@ every five minutes.
 ## Download and install
 
 Grab the installer from the [Releases page](https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro/releases).
-Windows builds are unsigned unless the release notes say otherwise. Android is
-published as an APK on the same page and shares accounts, subscriptions and
-credits with the desktop and the web app.
+Windows builds are unsigned unless the release notes say otherwise. Every build
+talks to the same backend, so one account, one subscription and one credit
+balance cover the desktop app and the web app.
 
 ## Build from source
 
