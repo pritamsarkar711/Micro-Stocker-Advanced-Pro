@@ -55,7 +55,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
           <button
             type="button"
             onClick={onCloseMobile}
-            className="inline-flex size-9 items-center justify-center rounded-[var(--r-control)] text-nav-fg-muted transition-colors hover:bg-white/10 hover:text-white"
+            className="inline-flex size-11 items-center justify-center rounded-[var(--r-control)] text-nav-fg-muted transition-colors hover:bg-white/10 hover:text-white"
             aria-label="Close navigation"
           >
             <GIcon name="close" size={20} />
@@ -93,7 +93,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
                     title={collapsed ? item.label : undefined}
                     className={({ isActive }) =>
                       clsx(
-                        'group relative flex items-center gap-3 rounded-[var(--r-control)] px-2.5 py-[0.34rem] text-[0.8125rem] font-medium transition-colors duration-150',
+                        'group relative flex items-center gap-3 rounded-[var(--r-control)] px-2.5 py-[0.34rem] text-[0.8125rem] font-medium transition-colors duration-150 max-lg:min-h-11 max-lg:gap-3 max-lg:py-2 max-lg:text-[0.875rem]',
                         collapsed && 'justify-center px-0 py-2',
                         isActive
                           ? 'font-semibold text-white shadow-[0_6px_16px_-8px_rgb(0_0_0/0.8)]'
@@ -183,9 +183,11 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
 
   if (mobileOpen) {
     return (
-      <div className="fixed inset-0 z-50 flex lg:hidden">
+      <div className="fixed inset-0 z-50 flex lg:hidden" role="dialog" aria-modal="true" aria-label="Main navigation">
         <div className="fixed inset-0 bg-black/55 backdrop-blur-[2px]" onClick={onCloseMobile} aria-hidden="true" />
-        <div className="relative z-10 h-full animate-in-fast shadow-[var(--elev-4)]">{content}</div>
+        <div className="relative z-10 h-full animate-in-fast pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)] shadow-[var(--elev-4)]">
+          {content}
+        </div>
       </div>
     );
   }

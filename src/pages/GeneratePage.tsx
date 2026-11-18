@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
+import { ActionBar } from '@/components/layout/ActionBar';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { CreditIcon } from '@/components/ui/CreditIcon';
@@ -171,7 +172,7 @@ export function GeneratePage({ kind }: { kind: GeneratorKind }) {
       />
 
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.18fr)]">
-        <Card className="space-y-3.5">
+        <Card className="space-y-3.5 max-md:pb-24">
           <Field label="Idea" hint={`${prompt.length}/600`}>
             <Textarea
               value={prompt}
@@ -304,17 +305,22 @@ export function GeneratePage({ kind }: { kind: GeneratorKind }) {
             </>
           )}
 
-          <div className="flex flex-wrap items-center gap-3 border-t border-line pt-3.5">
-            <Button onClick={() => void run()} loading={busy} icon={<GIcon name="draw" size={18} />}>
+          <ActionBar>
+            <Button
+              onClick={() => void run()}
+              loading={busy}
+              className="flex-1 sm:w-auto sm:flex-none"
+              icon={<GIcon name="draw" size={18} />}
+            >
               {busy ? 'Generating' : 'Generate'}
             </Button>
-            <span className="inline-flex items-center gap-1.5 text-[0.75rem] font-medium text-ink-muted">
+            <span className="inline-flex shrink-0 items-center gap-1 text-2xs font-medium text-ink-muted sm:text-[0.75rem]">
               <CreditIcon size={13} />
               {unitCost} per file
-              <span className="text-ink-faint">·</span>
-              {FORMAT_LABEL[kind]}
+              <span className="hidden text-ink-faint sm:inline">·</span>
+              <span className="hidden sm:inline">{FORMAT_LABEL[kind]}</span>
             </span>
-          </div>
+          </ActionBar>
 
           {busy && (
             <div className="space-y-1.5">

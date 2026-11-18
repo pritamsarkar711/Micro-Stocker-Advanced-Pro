@@ -19,6 +19,7 @@ import { desktop } from '@/lib/desktop';
 import { DEFAULT_AI, loadAiSettings, PROVIDERS, type AiSettings } from '@/lib/stock/ai';
 import { formatMetadataForClipboard, parseKeywordInput } from '@/lib/stock/metadata';
 import { formatBytes } from '@/lib/modelStore';
+import { useMediaQuery } from '@/hooks/useViewport';
 
 /** Row preview that loads its blob only when the row actually renders. */
 function PreviewThumb({
@@ -64,6 +65,9 @@ export function LibraryPage() {
   const [searchParams] = useSearchParams();
 
   const [activeId, setActiveId] = useState<string | null>(null);
+  // Below the wide layout the editor is a sheet, so it only opens on a tap.
+  const [editorOpen, setEditorOpen] = useState(false);
+  const wideEnoughForSidePanel = useMediaQuery('(min-width: 1280px)');
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'untagged' | 'ready' | 'embedded'>('all');
   const [aiSettings, setAiSettings] = useState<AiSettings>(DEFAULT_AI);
@@ -263,44 +267,50 @@ export function LibraryPage() {
       {/* Batch post generation actions bar */}
       {items.length > 0 && (
         <Card padding="sm" className="flex flex-wrap items-center justify-between gap-2.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Filter files or tags"
-              leading={<GIcon name="search" size={15} />}
-              className="h-8 w-48 sm:w-56"
-            />
-            <Select
-              value={filter}
-              onChange={(e) => setFilter(e.target.value as typeof filter)}
-              className="h-8 w-36"
-              options={[
-                { value: 'all', label: `All (${items.length})` },
-                { value: 'untagged', label: 'Needs tags' },
-                { value: 'ready', label: 'Ready' },
-                { value: 'embedded', label: 'XMP embedded' },
-              ]}
-            />
-            <Button
-              size="xs"
-              variant="ghost"
-              icon={<GIcon name="select_all" size={14} />}
-              onClick={() => (selected.size === items.length ? clearSelection() : selectAll())}
-            >
-              {selected.size > 0 ? `Clear (${selected.size})` : 'Select all'}
-            </Button>
-            <Button
-              size="xs"
-              variant="ghost"
-              icon={<GIcon name="delete_sweep" size={14} />}
-              onClick={() => requestRemove(items.map((item) => item.id), `all ${items.length} assets`)}
-            >
-              Clear library
-            </Button>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <div className="w-full sm:w-56">
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Filter files or tags"
+                leading={<GIcon name="search" size={15} />}
+                className="h-10 w-full sm:h-8"
+              />
+            </div>
+            <div className="flex w-full items-center gap-1.5 sm:w-auto">
+              <Select
+                value={filter}
+                onChange={(e) => setFilter(e.target.value as typeof filter)}
+                className="h-10 min-w-0 flex-1 sm:h-8 sm:w-36 sm:flex-none"
+                options={[
+                  { value: 'all', label: `All (${items.length})` },
+                  { value: 'untagged', label: 'Needs tags' },
+                  { value: 'ready', label: 'Ready' },
+                  { value: 'embedded', label: 'XMP embedded' },
+                ]}
+              />
+              <Button
+                size="xs"
+                variant="ghost"
+                icon={<GIcon name="select_all" size={14} />}
+                onClick={() => (selected.size === items.length ? clearSelection() : selectAll())}
+              >
+                {selected.size > 0 ? `Clear (${selected.size})` : 'Select all'}
+              </Button>
+              <Button
+                size="xs"
+                variant="ghost"
+                aria-label="Clear library"
+                icon={<GIcon name="delete_sweep" size={14} />}
+                onClick={() => requestRemove(items.map((item) => item.id), `all ${items.length} assets`)}
+                className="max-sm:px-2.5"
+              >
+                <span className="max-sm:sr-only">Clear library</span>
+              </Button>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="tool-strip flex w-full flex-wrap items-center gap-1.5 sm:w-auto">
             <Button
               size="xs"
               variant="secondary"
@@ -362,16 +372,22 @@ export function LibraryPage() {
             if (e.dataTransfer.files?.length) void importFiles(e.dataTransfer.files);
           }}
           onClick={() => fileRef.current?.click()}
-          className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-[var(--r-card)] border border-dashed border-line-strong bg-surface px-6 py-16 text-center hover:border-accent hover:bg-accent-soft/25"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') fileRef.current?.click();
+          }}
+          aria-label="Import files into the library"
+          className="flex min-h-[16rem] cursor-pointer flex-col items-center justify-center gap-3 rounded-[var(--r-card)] border border-dashed border-line-strong bg-surface px-5 py-10 text-center active:bg-surface-2 hover:border-accent hover:bg-accent-soft/25 sm:py-16"
         >
-          <span className="inline-flex size-12 items-center justify-center rounded-[var(--r-control)] bg-accent-soft text-accent">
-            <GIcon name="add_photo_alternate" size={26} />
+          <span className="inline-flex size-14 items-center justify-center rounded-[var(--r-control)] bg-accent-soft text-accent">
+            <GIcon name="add_photo_alternate" size={28} />
           </span>
-          <div className="text-sm font-semibold text-ink">Drop files</div>
-          <div className="text-xs text-ink-muted">
-            JPG, PNG, WebP, TIFF, AVIF, SVG, EPS, AI
+          <div className="text-[0.9375rem] font-semibold text-ink">Tap to import</div>
+          <div className="max-w-[22rem] text-xs leading-relaxed text-ink-muted">
+            JPG, PNG, WebP, TIFF, AVIF, SVG, EPS, AI. Existing titles and keywords are read on arrival.
           </div>
-          <Button size="sm" variant="primary" icon={<GIcon name="upload_file" size={15} />}>
+          <Button size="sm" variant="primary" className="mt-1 w-full max-w-[14rem]" icon={<GIcon name="upload_file" size={15} />}>
             Browse files
           </Button>
         </div>
@@ -395,7 +411,10 @@ export function LibraryPage() {
                 return (
                   <div
                     key={item.id}
-                    onClick={() => setActiveId(item.id)}
+                    onClick={() => {
+                      setActiveId(item.id);
+                      if (!wideEnoughForSidePanel) setEditorOpen(true);
+                    }}
                     className={clsx(
                       'flex cursor-pointer items-center gap-3 rounded-[var(--r-card)] border p-2.5 transition-colors',
                       isActive
@@ -472,20 +491,48 @@ export function LibraryPage() {
           </div>
 
           {/* Right detail & metadata generator */}
-          <div className="xl:col-span-6">
-            {activeItem && (
-              <Card>
-                <CardHeader title="Metadata Editor" icon={<GIcon name="edit" size={17} />} />
+          {wideEnoughForSidePanel && (
+            <div className="xl:col-span-6">
+              {activeItem && (
+                <Card>
+                  <CardHeader title="Metadata Editor" icon={<GIcon name="edit" size={17} />} />
+                  <ItemEditor
+                    item={activeItem}
+                    onRequestRemove={(ids) => {
+                      const target = items.find((entry) => entry.id === ids[0]);
+                      requestRemove(ids, target?.name ?? `${ids.length} assets`);
+                    }}
+                  />
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* Phone and tablet: the same editor, opened from a row as a sheet. */}
+          {!wideEnoughForSidePanel && (
+            <Modal
+              open={editorOpen && Boolean(activeItem)}
+              onClose={() => setEditorOpen(false)}
+              title="Metadata"
+              description={
+                activeItem
+                  ? `${activeItem.name} · ${activeItem.format.toUpperCase()} · ${activeItem.metadata.keywords.length} tags`
+                  : undefined
+              }
+              size="lg"
+            >
+              {activeItem && (
                 <ItemEditor
                   item={activeItem}
                   onRequestRemove={(ids) => {
+                    setEditorOpen(false);
                     const target = items.find((entry) => entry.id === ids[0]);
                     requestRemove(ids, target?.name ?? `${ids.length} assets`);
                   }}
                 />
-              </Card>
-            )}
-          </div>
+              )}
+            </Modal>
+          )}
         </div>
       )}
 

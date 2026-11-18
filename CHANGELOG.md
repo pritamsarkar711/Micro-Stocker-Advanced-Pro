@@ -3,6 +3,41 @@
 All notable changes to Micro Stocker Advanced Pro are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.3.0] - 2026-11-17
+
+### Added
+- **A real first start.** The app opens on a branded splash, then a welcome
+  screen, then three tour slides that explain metadata, export and the studio
+  tools. Registration or sign-in comes next, and the dashboard only mounts after
+  the account is ready. A returning account goes from the splash straight in, and
+  a session survives a reload.
+- **Phone app bar and search sheet.** The top bar names the current page, and the
+  search button opens a full-screen sheet that filters every tool, and every
+  library file by name or title, as you type.
+- **More button in the tab bar.** Four destinations stay one tap away and the
+  fifth opens the whole rail as a drawer, with the account card pinned at the
+  bottom.
+- **Metadata editor as a sheet.** Tapping an asset on a phone or tablet opens the
+  editor in a bottom sheet instead of a panel a screen and a half below the grid.
+- **Sticky page actions.** Generator and tool pages keep their primary button
+  pinned above the tab bar on a phone, so it is never two scrolls away.
+- **`scripts/qa/mobile-audit.mjs` and `scripts/qa/launch-flow.mjs`.** Four device
+  sizes across every route check horizontal overflow, escaping elements, tab-bar
+  clearance and tap-target size; the launch script walks the whole first-run flow.
+
+### Changed
+- **Built for a thumb.** Buttons and fields grow a step at phone sizes, every
+  checkbox and slider gets a real hit area, form controls sit at 16 px so iOS
+  never zooms on focus, and carousels and tab strips swipe instead of squeezing.
+- **Nothing leaves its box.** Marketplace cards are full-width rows on a phone,
+  the platform list no longer clips names, wide tables scroll inside their card,
+  and the admin tiles read as a 2×2 block.
+- **Safe areas respected.** Header, tab bar, drawer, splash and sheet all pad for
+  the notch and the home indicator, and landscape shortens the bar without
+  dropping its labels.
+- **Registration speaks plainly.** Inline validation replaces the browser bubble,
+  and the create button says what it does.
+
 ## [2.2.0] - 2026-11-17
 
 ### Added

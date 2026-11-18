@@ -20,7 +20,9 @@ export function Tabs<T extends string>({ items, value, onChange, className }: Ta
     <div
       role="tablist"
       className={clsx(
-        'inline-flex max-w-full flex-wrap items-center gap-1 rounded-[var(--r-control)] border border-line bg-surface-2 p-1',
+        // On phones the strip becomes a single swipeable row instead of a
+        // two-row block, which keeps the tab height predictable.
+        'inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-[var(--r-control)] border border-line bg-surface-2 p-1 max-sm:flex-nowrap max-sm:w-full sm:flex-wrap',
         className,
       )}
     >
@@ -34,7 +36,7 @@ export function Tabs<T extends string>({ items, value, onChange, className }: Ta
             aria-selected={active}
             onClick={() => onChange(item.id)}
             className={clsx(
-              'inline-flex h-9 items-center gap-2 rounded-[var(--r-chip)] px-3 text-[0.8125rem] font-semibold whitespace-nowrap transition-colors',
+              'inline-flex h-9 items-center gap-2 rounded-[var(--r-chip)] px-3 text-[0.8125rem] font-semibold whitespace-nowrap transition-colors max-sm:h-10 max-sm:shrink-0',
               active
                 ? 'bg-accent text-on-brand shadow-2xs'
                 : 'text-ink-muted hover:bg-surface hover:text-ink',

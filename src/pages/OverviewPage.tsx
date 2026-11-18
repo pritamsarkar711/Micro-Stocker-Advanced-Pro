@@ -57,6 +57,13 @@ const STUDIO_TOOLS: Array<{
   },
 ];
 
+const GENERATORS: Array<{ to: string; title: string; sub: string; icon: GoogleIconName }> = [
+  { to: '/generate/eps', title: 'AI EPS', sub: 'Editable vector', icon: 'polyline' },
+  { to: '/generate/svg', title: 'AI SVG', sub: 'Layered vector', icon: 'draw' },
+  { to: '/generate/ai', title: 'Illustrator', sub: 'AI file', icon: 'layers' },
+  { to: '/generate/jpg', title: 'JPG image', sub: 'Photo style', icon: 'image' },
+];
+
 const FEATURED_PLATFORMS: PlatformId[] = [
   'shutterstock',
   'adobe',
@@ -151,7 +158,7 @@ export function OverviewPage() {
       <PageHeader
         title="Overview"
         actions={
-          <>
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
             <input
               ref={fileRef}
               type="file"
@@ -166,19 +173,26 @@ export function OverviewPage() {
             <Button
               size="sm"
               variant="secondary"
+              className="w-full sm:w-auto"
               icon={<GIcon name="upload_file" size={16} />}
               onClick={() => fileRef.current?.click()}
             >
               Import files
             </Button>
-            <ButtonLink to="/library" size="sm" variant="primary" icon={<GIcon name="photo_library" size={16} />}>
+            <ButtonLink
+              to="/library"
+              size="sm"
+              variant="primary"
+              className="w-full sm:w-auto"
+              icon={<GIcon name="photo_library" size={16} />}
+            >
               Open Library
             </ButtonLink>
-          </>
+          </div>
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
         <Kpi label="Library Assets" value={String(stats.total)} icon="photo_library" />
         <Kpi label="Tagged & Ready" value={String(stats.titled)} icon="check_circle" />
         <Kpi label="Embedded" value={String(stats.embedded)} icon="bookmark" />
@@ -220,22 +234,41 @@ export function OverviewPage() {
       </Card>
 
       <div>
+        <h2 className="mb-2.5 text-xs font-semibold tracking-wider text-ink-muted uppercase">Create with AI</h2>
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          {GENERATORS.map((tool) => (
+            <Link key={tool.to} to={tool.to} className="min-w-0">
+              <div className="flex h-full flex-col gap-2 rounded-[var(--r-card)] border border-brand/20 bg-brand-soft/45 p-3 active:brightness-95 sm:p-3.5">
+                <span className="inline-flex size-9 items-center justify-center rounded-[var(--r-control)] bg-brand text-on-brand">
+                  <GIcon name={tool.icon} size={19} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-[0.8125rem] font-bold text-ink">{tool.title}</span>
+                  <span className="block truncate text-2xs text-ink-muted">{tool.sub}</span>
+                </span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      <div>
         <h2 className="mb-2.5 text-xs font-semibold tracking-wider text-ink-muted uppercase">
           Studio Tools
         </h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3">
           {STUDIO_TOOLS.map((tool) => (
-            <Link key={tool.to} to={tool.to}>
-              <Card padding="sm" interactive className="flex h-full items-center gap-3">
-                <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-[var(--r-control)] bg-accent-soft text-accent">
-                  <GIcon name={tool.icon} size={20} />
+            <Link key={tool.to} to={tool.to} className="min-w-0">
+              <div className="flex h-full min-h-[4.5rem] flex-col justify-between gap-2 rounded-[var(--r-card)] border border-line bg-surface p-3 active:bg-surface-2 sm:min-h-0 sm:flex-row sm:items-center sm:gap-3">
+                <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-[var(--r-control)] bg-accent-soft text-accent sm:size-10">
+                  <GIcon name={tool.icon} size={19} />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold text-ink">{tool.title}</div>
-                  <div className="truncate text-xs text-ink-muted">{tool.sub}</div>
+                  <div className="text-[0.8125rem] leading-tight font-semibold text-ink sm:truncate sm:text-sm">{tool.title}</div>
+                  <div className="hidden truncate text-xs text-ink-muted sm:block">{tool.sub}</div>
                 </div>
-                <GIcon name="chevron_right" size={16} className="shrink-0 text-ink-faint" />
-              </Card>
+                <GIcon name="chevron_right" size={16} className="hidden shrink-0 text-ink-faint sm:block" />
+              </div>
             </Link>
           ))}
         </div>
@@ -252,23 +285,24 @@ export function OverviewPage() {
           }
         />
 
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="divide-y divide-line overflow-hidden rounded-[var(--r-control)] border border-line bg-surface sm:grid sm:grid-cols-2 sm:gap-2.5 sm:divide-y-0 sm:overflow-visible sm:border-0 sm:bg-transparent lg:grid-cols-3">
           {readiness.map(({ platform, ready }) => (
             <Link
               key={platform.id}
               to="/export"
-              className="flex items-center gap-3 rounded-[var(--r-control)] border border-line bg-surface p-3 hover:border-line-strong hover:bg-surface-2/50"
+              className="flex items-center gap-3 px-3 py-2.5 active:bg-surface-2 sm:rounded-[var(--r-control)] sm:border sm:border-line sm:bg-surface sm:p-3 sm:hover:border-line-strong sm:hover:bg-surface-2/50"
             >
               <PlatformLogo id={platform.id} size={28} />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-xs font-semibold text-ink">{platform.name}</div>
-                <div className="truncate text-2xs text-ink-muted">
+                <div className="text-[0.8125rem] leading-snug font-semibold text-ink">{platform.name}</div>
+                <div className="mt-0.5 truncate text-2xs text-ink-muted">
                   {platform.minMP > 0 ? `${platform.minMP} MP min` : 'Vector'} · {platform.keywords.min} to {platform.keywords.max} tags
                 </div>
               </div>
               <Badge tone={ready > 0 && ready === items.length ? 'brand' : 'neutral'}>
                 {items.length ? `${ready}/${items.length}` : platform.csv ? 'CSV' : 'XMP'}
               </Badge>
+              <GIcon name="chevron_right" size={16} className="text-ink-faint sm:hidden" />
             </Link>
           ))}
         </div>

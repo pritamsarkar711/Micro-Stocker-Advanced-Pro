@@ -20,6 +20,22 @@ reading, writes the exact spreadsheet each marketplace expects, and keeps a
 record of every submission. The heavy image work runs on your own machine, so a
 large library does not depend on an internet connection.
 
+## On a phone
+
+The phone is the primary target, so the app starts like one. A cold start shows
+the logo for a moment, then a welcome screen, then three short tour slides about
+metadata, export and the studio tools. Registration or sign-in comes next, and the
+dashboard only mounts once an account is ready. After that the splash goes
+straight to the workspace.
+
+The phone layout is its own shell rather than a squeezed desktop: an app bar that
+names the page and opens a full-screen search, a five slot tab bar whose fifth
+slot opens the full rail, page actions pinned above the tab bar, and controls
+sized for a fingertip. The header, tab bar, drawer and sheets all pad for the
+notch and the home indicator, and landscape shortens the bar without dropping its
+labels. The metadata editor opens as a bottom sheet, wide tables scroll inside
+their own card, and every marketplace row shows its full name.
+
 ## Screens
 
 **AI EPS Generator.** Type an idea, choose a model, get editable vector output.
@@ -166,6 +182,8 @@ npm run qa:deep        # 24 routes at 10 widths: overflow, clipping, overlap, ta
 npm run qa:a11y        # axe core, WCAG 2.1 AA, light and dark
 npm run qa:contrast    # token contrast pairs
 npm run qa:security    # two step verification, password change, sign in challenge
+npm run qa:mobile      # four phone and tablet sizes across every route
+npm run qa:launch      # splash, welcome, tour, registration, dashboard
 ```
 
 The interface audits need the renderer running with `npm run dev:renderer` and

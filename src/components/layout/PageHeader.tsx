@@ -17,7 +17,7 @@ export function PageHeader({
   eyebrow?: ReactNode;
 }) {
   return (
-    <div className={clsx('mb-5 flex flex-col gap-3.5', className)}>
+    <div className={clsx('mb-4 flex flex-col gap-3 sm:mb-5 sm:gap-3.5', className)}>
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
         <div className="min-w-0">
           {eyebrow && (
@@ -25,7 +25,9 @@ export function PageHeader({
               {eyebrow}
             </div>
           )}
-          <h1 className="display text-[1.5rem] leading-tight font-bold tracking-[-0.018em] text-ink sm:text-[1.625rem]">
+          {/* The phone app bar already names the page, so the heading stays for
+              screen readers instead of repeating itself under the notch. */}
+          <h1 className="display max-lg:sr-only text-[1.5rem] leading-tight font-bold tracking-[-0.018em] text-ink sm:text-[1.625rem]">
             {title}
           </h1>
           {description && (
@@ -33,7 +35,7 @@ export function PageHeader({
           )}
         </div>
         {actions && (
-          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 max-sm:w-full max-sm:justify-end">
             {actions}
           </div>
         )}

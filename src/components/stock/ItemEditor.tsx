@@ -501,7 +501,7 @@ export function ItemEditor({ item, onClose, onRequestRemove }: ItemEditorProps) 
       </div>
 
       {/* Submission flags */}
-      <div className="grid grid-cols-2 gap-2 rounded-[var(--r-control)] border border-line p-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-1 rounded-[var(--r-control)] border border-line px-3 py-1 sm:grid-cols-3 sm:gap-2 sm:py-3">
         <Switch
           checked={item.flags.aiGenerated}
           onChange={(aiGenerated) => updateFlags(item.id, { aiGenerated })}
