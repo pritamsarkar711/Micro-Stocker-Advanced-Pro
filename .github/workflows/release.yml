@@ -61,7 +61,12 @@ jobs:
           portables=(release/*portable*.exe)
           (( ${#installers[@]} == 1 && ${#portables[@]} == 1 )) || { echo "Expected one installer and one portable executable"; exit 1; }
           if gh release view "$TAG" --json isDraft --jq .isDraft > release-draft-status.txt 2>/dev/null; then
-            [[ "$(cat release-draft-status.txt)" == true ]] || { echo "Refusing to modify a published release"; exit 1; }
+            if [[ "$(cat release-draft-status.txt)" != true ]]; then
+              # A published release already exists for this tag (for example when a
+              # previous run failed after publishing). Upload the same versioned
+              # artifacts to it instead of failing the whole build.
+              echo "Release $TAG is already published. Uploading assets from this build."
+            fi
           else
             gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "Micro Stocker Advanced Pro $TAG" --notes "Windows downloads below: the Setup .exe installer (recommended) and the portable .exe. These builds are not code-signed, so Windows may display a SmartScreen warning. Review and test this draft before publishing."
           fi
