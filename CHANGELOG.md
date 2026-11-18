@@ -3,6 +3,45 @@
 All notable changes to Micro Stocker Advanced Pro are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.2.0] - 2026-11-17
+
+### Added
+- **One workspace across devices.** Settings, presets and workspace metadata sync
+  through the account with a newer change wins rule, a device list and a manual
+  push and pull on the Sync and devices page. Image pixels never leave the device.
+- **Live crypto settlement.** The checkout creates an invoice with the coin, the
+  network, the exact amount and a copy button, then watches it. The verifier reads
+  the chain over public RPC, compares destination, amount, network, confirmations
+  and transaction time, refuses a reused hash, and activates the plan without a
+  human. A scheduled scan covers invoices whose tab was closed.
+- **Admin Payments tab.** Wallet addresses, token contracts, confirmations and an
+  enable switch per asset, saved straight to the server.
+- **Tokens.bd as the model supply.** One key reaches every model. DeepSeek 4.1
+  Flash is live; Gemini, MiniMax, Kimi and the image model are seeded switched off
+  until their ids are confirmed.
+
+### Changed
+- **Credits are charged by the four generators only.** Premium background, upscale
+  and video models now need a plan and cost nothing, and the plan cards state the
+  included and the excluded features side by side.
+- **Generators speak plainly.** The field is called Idea, the seasonal suggestion
+  chips are gone, the credit count is an icon and the model selector covers
+  DeepSeek, Gemini and MiniMax.
+- **Official payment marks.** The real bKash and Nagad artwork replaces the redrawn
+  wordmarks, and the heavy cutout models carry a lock for free accounts.
+- **Less text, more width.** Settings, security, generators and the admin console
+  lost their explanatory paragraphs, and the narrow centred columns are gone.
+  Warnings are a small banner with a close button.
+
+### Fixed
+- Crypto invoice approval failed because the verifier had lost its execute grant
+  after the settlement function was tightened.
+- Token amounts were read with six decimals on chains whose tokens use eighteen,
+  and Solana tokens were matched against the native balance instead of the mint.
+- An unrelated transfer into a wallet could mark a waiting invoice as wrong.
+- The output panel header was flush against its card edge, and overlapping text
+  in the spend by model and your order panels is gone.
+
 ## [2.1.0] - 2026-11-17
 
 ### Added
