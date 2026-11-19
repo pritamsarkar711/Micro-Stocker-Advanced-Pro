@@ -42,6 +42,7 @@
     "qa:launch": "node scripts/qa/launch-flow.mjs",
     "qa:admin": "node scripts/qa/admin-flows.mjs",
     "qa:onnx": "node scripts/qa/onnx-upscale.mjs",
+    "qa:bg": "node scripts/qa/onnx-bgremove.mjs",
     "qa:all": "npm run qa:deep && npm run qa:a11y && npm run qa:contrast && npm run qa:interaction && npm run qa:text && npm run qa:suggest && npm run qa:vector && npm run qa:security && npm run qa:tools && npm run qa:mobile && npm run qa:launch",
     "qa:generate": "node scripts/qa/generate-samples.mjs",
     "build:web": "vite build",
