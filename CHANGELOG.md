@@ -3,6 +3,39 @@
 All notable changes to Micro Stocker Advanced Pro are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.3.2] - 2026-11-19
+
+### Added
+- **Models install on the phone itself.** The Image Upscaler offers a 4.6 MB
+  Real-ESRGAN general x4v3 ONNX model (BSD 3 Clause) that installs into
+  app-private storage and runs on ONNX Runtime WebAssembly, so upscaling no
+  longer needs a desktop or a Vulkan driver. Background removal keeps its ONNX
+  cutout models on the same installer.
+- **Account controls in the admin console.** Suspend, restore and remove a user
+  from **Admin console → Users**, with a typed-email confirmation and the same
+  rules enforced in the database.
+- **In-app updates** on both platforms: desktop through electron-updater,
+  Android through a downloaded APK handed to the system installer.
+
+### Changed
+- Phones only list models they can execute; the NCNN/Vulkan packs stay in the
+  desktop build and the phone UI says so in one line.
+- The phone neural pass runs on a capped copy (about 0.9 MP) in overlapping
+  tiles, then the classic resampler fits the result to the requested size.
+- Model installs check free space first and translate platform errors into one
+  actionable sentence.
+
+### Fixed
+- Install failures that told phone users to open a desktop app, or that ended in
+  a bare "Model installation failed", are gone.
+- ONNX Runtime loads its WebAssembly files from the app's own `/ort/` directory
+  instead of requesting a WebGPU build that was never shipped.
+- Upload queue rows no longer wrap pixel counts mid-number on phones.
+- **Admin → Overview → Spend by model** is a stacked list on phones instead of a
+  clipped four-column table.
+- The Video Upscaler lists its installable packs again on desktop.
+- A thrown admin security request can no longer leave that tab spinning.
+
 ## [2.3.1] - 2026-11-17
 
 ### Fixed
