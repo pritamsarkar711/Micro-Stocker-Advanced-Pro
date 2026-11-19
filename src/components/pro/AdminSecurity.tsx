@@ -47,14 +47,21 @@ export function AdminSecurity({
 
   const load = useCallback(async () => {
     setLoading(true);
-    const result = await adminSecurityOverview();
-    setLoading(false);
-    if (isFailure(result)) {
-      setError(result.error);
-      return;
+    try {
+      const result = await adminSecurityOverview();
+      if (isFailure(result)) {
+        setError(result.error);
+        return;
+      }
+      setError('');
+      setRows(result);
+    } catch (thrown) {
+      // A thrown client must still end the spinner, otherwise the tab looks
+      // stuck on a blank panel forever.
+      setError(thrown instanceof Error ? thrown.message : 'Could not load the security list');
+    } finally {
+      setLoading(false);
     }
-    setError('');
-    setRows(result);
   }, []);
 
   useEffect(() => {

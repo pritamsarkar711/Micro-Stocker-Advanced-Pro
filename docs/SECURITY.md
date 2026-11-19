@@ -163,3 +163,57 @@ signed in client can reach.
 Two rules matter here: an anonymous client holds no write grant at all, and a
 write function refuses the call before it touches a row. Removing either layer
 would still leave the other in place.
+
+## Android build: permissions, signing and Play
+
+The phone build asks for two permissions and nothing else:
+
+| Permission | Why it is there | Risk if abused |
+| --- | --- | --- |
+| `INTERNET` | Downloading model weights, the account RPCs and the release feed. | None by itself. |
+| `REQUEST_INSTALL_PACKAGES` | The in-app update: after the user taps **Update**, the APK the app downloaded is handed to the system installer. The app never installs anything on its own. | The system installer still shows its own confirmation screen, and only the file the app placed in its private cache can be offered. |
+
+`android:allowBackup="false"`, the `FileProvider` is `exported="false"` with
+`grantUriPermissions="true"`, and the single activity is the launcher.
+
+**Play policy.** Google Play does not allow an app to update itself outside of
+Play. The GitHub APK channel needs `REQUEST_INSTALL_PACKAGES`; a Play upload
+must not declare it. Ship the Play bundle from a build that omits the permission
+(and let Play deliver updates), and keep the GitHub APK for direct installs.
+Two channels, one code base, no self-update on the store build.
+
+**Signing.** `android/keystore/sideload.p12` is committed on purpose: Android
+only accepts an update signed by the same key as the installed app, and a key
+generated per build would make every in-app update fail with
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE`. It signs the APKs attached to GitHub
+releases, it is not a secret with any value beyond those sideloaded installs,
+and it is **not** the Play key: Play App Signing re-signs every upload with a
+key Google holds. Rotating it forces every existing sideload user to uninstall
+once.
+
+## Dependency and network audit
+
+`npm audit --omit=dev` reports **0 vulnerabilities**. The full audit reports two
+advisories, both in the development toolchain:
+
+| Package | Where | Why it stays |
+| --- | --- | --- |
+| `tar` (via `@capacitor/cli`) | Dev only, used by `cap sync`. | `@capacitor/cli` calls the `tar.extract` API that `tar@7` removed, so an override breaks `cap sync`. Not shipped in any build. |
+
+`overrides` pin `minimatch`, `glob` and `rimraf` to patched majors, which
+removed the rest of the advisories.
+
+Network destinations at runtime, all over HTTPS:
+
+* the Supabase project (account, entitlement, admin RPCs);
+* `api.github.com` (release feed) and the release asset it points at;
+* `github.com` release assets for model weights;
+* nothing else. `cdn.jsdelivr.net` appears only as the fallback the packaged
+  desktop build uses when it cannot fetch the ONNX Runtime binaries from disk.
+
+ONNX Runtime's WebAssembly files are served by the app itself (`/ort/`), so no
+remote code is fetched and `script-src 'self' 'wasm-unsafe-eval'` stays tight.
+
+Model weights come only from the upstream projects' own releases: Real-ESRGAN
+(BSD 3 Clause), U2Net/ISNet/BiRefNet (via the `rembg` release assets) and the
+Real-ESRGAN general x4v3 ONNX export used by the phone upscaler.
