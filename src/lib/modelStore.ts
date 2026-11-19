@@ -209,6 +209,8 @@ async function installModelOnDevice(spec: ModelInstallSpec): Promise<{
   if (nativeActive.has(spec.id)) {
     return { ok: false, error: 'Model download is already running' };
   }
+  const roomCheck = await hasRoomFor(spec.approxBytes ?? 0);
+  if (!roomCheck.ok) return { ok: false, error: roomCheck.error };
   nativeActive.add(spec.id);
   nativeCancels.delete(spec.id);
   try {
@@ -242,7 +244,7 @@ async function installModelOnDevice(spec: ModelInstallSpec): Promise<{
     }
     return result;
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    return { ok: false, error: explainInstallError(error instanceof Error ? error.message : String(error)) };
   } finally {
     nativeActive.delete(spec.id);
     nativeCancels.delete(spec.id);
@@ -264,6 +266,8 @@ export async function installModelInApp(
   if (browserControllers.has(spec.id)) {
     return { ok: false, error: 'Model download is already running' };
   }
+  const roomCheck = await hasRoomFor(spec.approxBytes ?? 0);
+  if (!roomCheck.ok) return { ok: false, error: roomCheck.error };
   const controller = new AbortController();
   browserControllers.set(spec.id, controller);
 
@@ -315,11 +319,7 @@ export async function installModelInApp(
     return {
       ok: false,
       canceled: aborted,
-      error: aborted
-        ? 'Download canceled'
-        : message.includes('Failed to fetch') || message.includes('NetworkError')
-          ? 'This browser tab is not allowed to download model files. Install the Micro Stocker app on your phone (or use the desktop build) to add this model, or keep using the built-in engine, which needs no download.'
-          : message,
+      error: aborted ? 'Download canceled' : explainInstallError(message),
     };
   } finally {
     browserControllers.delete(spec.id);
@@ -379,6 +379,57 @@ export function formatBytes(bytes: number): string {
  * A URL the WebView can read an installed model from, or null when the bytes
  * have to be read into memory instead (browser / desktop).
  */
+
+/**
+ * A tiny install is not the usual failure, but a phone with a full data
+ * partition fails halfway through a chunk with a vendor specific message. Check
+ * the free space up front so the user gets one clear sentence instead.
+ */
+export async function hasRoomFor(approxBytes: number): Promise<{ ok: boolean; error?: string; freeBytes?: number }> {
+  if (!approxBytes || approxBytes <= 0) return { ok: true };
+  const needed = Math.round(approxBytes * 1.15);
+  try {
+    const storage = (navigator as Navigator & { storage?: { estimate?: () => Promise<{ quota?: number; usage?: number }> } })
+      .storage;
+    if (storage?.estimate) {
+      const { quota = 0, usage = 0 } = await storage.estimate();
+      const free = Math.max(0, quota - usage);
+      // A quota of 0 only means the browser declined to answer; never block on it.
+      if (quota > 0 && free < needed) {
+        return {
+          ok: false,
+          freeBytes: free,
+          error: `This device only has ${formatMb(free)} free. The model needs ${formatMb(needed)}. Free some space and try again.`,
+        };
+      }
+    }
+  } catch {
+    /* estimating is best effort; the download reports its own failure */
+  }
+  return { ok: true };
+}
+
+function formatMb(bytes: number): string {
+  if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
+
+/** Turn a raw platform error into a sentence a user can act on. */
+export function explainInstallError(message: string): string {
+  const text = String(message ?? '');
+  if (/ENOSPC|No space left|not enough space|insufficient storage|SQLITE_FULL/i.test(text)) {
+    return 'The device ran out of space while installing the model. Free some storage and try again.';
+  }
+  if (/ENETUNREACH|ECONNRESET|ETIMEDOUT|network|Failed to fetch|Load failed|offline/i.test(text)) {
+    return 'The download was interrupted. Check the connection and try again — the partial file is kept.';
+  }
+  if (/403|404|Not Found|Forbidden/i.test(text)) {
+    return 'The model file is not available at the moment. Try another model, or retry later.';
+  }
+  return text || 'Model installation failed';
+}
+
 export async function installedModelUrl(id: string, fileName: string): Promise<string | null> {
   if (!isNativeShell() || desktop.isDesktop) return null;
   try {

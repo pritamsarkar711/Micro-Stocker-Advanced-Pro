@@ -2,7 +2,7 @@
   "name": "micro-stocker-advanced-pro",
   "productName": "Micro Stocker Advanced Pro",
   "private": false,
-  "version": "2.3.1",
+  "version": "2.3.2",
   "description": "Cross platform microstock contributor studio for AI metadata generation, lossless IPTC and XMP embedding, per agency CSV export across 14 marketplaces, open source image and video upscaling, background removal and multi format image conversion.",
   "author": {
     "name": "pritamsarkar711",
