@@ -194,35 +194,65 @@ jobs:
           test -f "$apk" || { echo "::error title=Missing APK::No release APK was produced at $apk"; exit 1; }
 
           echo "### Signature"
+          # Authoritative "is this validly signed" check: apksigner exits non-zero
+          # on any verification failure, and --verbose states each scheme.
           "$apksigner" verify --verbose --print-certs "$apk" | tee signature.txt
-          # Any unsigned output or a failure exit is fatal; --verbose prints
-          # "Verified using v1 scheme" / "v2 scheme" when the APK verifies.
           grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" signature.txt \
             || { echo "::error title=Signature::The release APK has no valid v2 signature"; exit 1; }
 
-          signer_sha256=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' signature.txt | head -1 | tr -d ':' | tr 'A-F' 'a-f')
-          test -n "$signer_sha256" || { echo "::error title=Signature::Could not read the signer certificate"; exit 1; }
+          # Which key signs the APK. The certificate is read straight out of the
+          # APK's v1 signature block instead of parsing apksigner's text output,
+          # so this does not depend on the exact wording of that report.
+          apk_cert_sha256=$(
+            unzip -Z1 "$apk" | grep -iE '^META-INF/.*\.(RSA|DSA|EC)$' | head -1 | while read -r entry; do
+              unzip -p "$apk" "$entry" > apk-signer.p7b
+              openssl pkcs7 -inform DER -in apk-signer.p7b -print_certs 2>/dev/null \
+                | openssl x509 -outform der 2>/dev/null \
+                | sha256sum | cut -d' ' -f1
+            done
+          )
+          # Fallback for an APK that verifies by v2 only (no v1 block to read):
+          # parse the digest apksigner printed, without anchoring on line start.
+          if [ -z "$apk_cert_sha256" ]; then
+            apk_cert_sha256=$(grep -i 'certificate SHA-256 digest:' signature.txt | head -1 \
+              | sed 's/.*: //' | tr -d ':' | tr 'A-F' 'a-f')
+          fi
+          test -n "$apk_cert_sha256" || {
+            echo "::error title=Signature::Could not read the signing certificate from the APK"
+            echo "apksigner reported:"; cat signature.txt
+            exit 1
+          }
 
-          # The digest of the key existing installs were signed with. An update
-          # only installs when the two match, so the APK's signer is compared with
-          # the key this build was configured to use, not with whatever key
-          # happened to end up in the signing config.
+          # The certificate of the key this build was configured to sign with. An
+          # update only installs when this matches, so it is compared against the
+          # key actually used, not against a hardcoded expectation.
           keystore="${MSAP_ANDROID_KEYSTORE_PATH:-android/keystore/sideload.p12}"
           storepass="${MSAP_ANDROID_KEYSTORE_PASSWORD:-msap-sideload-2026}"
           alias="${MSAP_ANDROID_KEY_ALIAS:-sideload}"
-          # Export the certificate and hash the DER bytes: identical to the value
-          # apksigner prints, without parsing keytool's human-readable output.
-          expected=$(keytool -exportcert -rfc -keystore "$keystore" -storetype PKCS12 \
-            -storepass "$storepass" -alias "$alias" \
-            | openssl x509 -outform der | sha256sum | cut -d' ' -f1)
-          test -n "$expected" || { echo "::error title=Signature::Could not read the expected signing certificate from $keystore"; exit 1; }
-          echo "APK signer   : $signer_sha256"
-          echo "Update key   : $expected"
-          if [ "$signer_sha256" != "$expected" ]; then
+          expected=$(
+            openssl pkcs12 -in "$keystore" -passin "pass:$storepass" -nokeys -clcerts 2>/dev/null \
+              | openssl x509 -outform der | sha256sum | cut -d' ' -f1
+          )
+          if [ -z "$expected" ]; then
+            # PKCS12 parse failed (a JKS keystore, or an alias filter is needed):
+            # fall back to keytool, which ships with the JDK this job installed.
+            expected=$(
+              keytool -exportcert -rfc -keystore "$keystore" -storepass "$storepass" -alias "$alias" \
+                | openssl x509 -outform der | sha256sum | cut -d' ' -f1
+            )
+          fi
+          test -n "$expected" || {
+            echo "::error title=Signature::Could not read the expected signing certificate from $keystore"
+            exit 1
+          }
+
+          echo "APK signer : $apk_cert_sha256"
+          echo "Update key : $expected"
+          if [ "$apk_cert_sha256" != "$expected" ]; then
             if [ "${MSAP_ANDROID_ALLOW_KEY_ROTATION:-0}" = "1" ]; then
-              echo "::warning title=Key rotation::APK signed with a different key than the committed sideload key. Existing installs must uninstall once."
+              echo "::warning title=Key rotation::APK is signed with a different key than the configured signing key. Existing installs must uninstall once."
             else
-              echo "::error title=Signing key changed::The APK is signed by a different key than the committed sideload key, so existing installs cannot update to it. Restore android/keystore/sideload.p12 (or set MSAP_ANDROID_ALLOW_KEY_ROTATION=1 for a deliberate, documented rotation)."
+              echo "::error title=Signing key changed::The APK is signed by a different key than the one existing installs use, so they cannot update to it. Restore the sideload key (or set MSAP_ANDROID_ALLOW_KEY_ROTATION=1 for a deliberate, documented rotation)."
               exit 1
             fi
           fi
