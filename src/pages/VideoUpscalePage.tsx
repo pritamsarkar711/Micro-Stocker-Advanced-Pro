@@ -103,9 +103,15 @@ export function VideoUpscalePage() {
     };
   }, []);
 
+  // Desktop keeps the installable NCNN/RIFE packs; a phone only ever sees the
+  // built-in engine, because those packs cannot execute in a WebView.
   const filteredModels = useMemo(
     () =>
-      VIDEO_MODELS.filter((m) => m.runtime === 'builtin' && (purpose === 'all' || m.purposes.includes(purpose))),
+      VIDEO_MODELS.filter(
+        (m) =>
+          (desktop.isDesktop || m.runtime === 'builtin') &&
+          (purpose === 'all' || m.purposes.includes(purpose)),
+      ),
     [purpose],
   );
   // A downgrade must not leave a gated preset selected.
@@ -630,6 +636,15 @@ export function VideoUpscalePage() {
             />
 
             <p className="mb-3 text-2xs text-ink-muted">Built-in resampling. Check model licences before commercial use.</p>
+            {!desktop.isDesktop && (
+              <p className="mb-3 flex items-start gap-1.5 rounded-[var(--r-xs)] border border-line bg-surface-2/60 px-2.5 py-2 text-2xs leading-relaxed text-ink-muted">
+                <GIcon name="info" size={13} className="mt-px shrink-0" />
+                <span>
+                  The instant engine runs every frame on this phone. The RIFE and NCNN video packs need a desktop
+                  graphics card, so they stay in the Windows, macOS and Linux build.
+                </span>
+              </p>
+            )}
 
             <div className="mb-3 flex flex-wrap gap-1">
               {VIDEO_PURPOSES.map((p) => (
