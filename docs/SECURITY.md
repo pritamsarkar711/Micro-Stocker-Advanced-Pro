@@ -189,7 +189,19 @@ generated per build would make every in-app update fail with
 releases, it is not a secret with any value beyond those sideloaded installs,
 and it is **not** the Play key: Play App Signing re-signs every upload with a
 key Google holds. Rotating it forces every existing sideload user to uninstall
-once.
+once. The key can be replaced without editing the repository by setting the four
+`MSAP_ANDROID_*` variables (see `android/keystore/README.md`); setting only some
+of them fails the build rather than signing with a different key.
+
+**Release artifacts.** The Android workflow publishes the *release* APK (signed,
+not debuggable) and a `SHA256SUMS.txt`; the debug APK stays a workflow artifact
+for diagnostics only, because a release page with two APKs is how a user ends up
+installing the debuggable build. Before upload the workflow verifies the v2
+signature with `apksigner`, compares the signer certificate with the configured
+key, and reads `versionCode`/`versionName` back out of the APK to confirm they
+match `package.json` and the tag. `versionCode` is derived from the version
+(`major * 10000 + minor * 100 + patch`) instead of a hand-maintained counter, so
+a release cannot ship an update Android will refuse to install.
 
 ## Dependency and network audit
 

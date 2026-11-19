@@ -157,7 +157,8 @@ import {
   responseToBytes,
   safeFileName,
 } from '@/lib/native/bytes';
-import { isNewerVersion, parseVersion, pickAssetFor } from '@/lib/updateMath';
+import { isNewerVersion, parseVersion, pickAssetFor, pickAndroidApk } from '@/lib/updateMath';
+import { androidVersionCode } from '../scripts/android-version.mjs';
 import { analysePixels } from '@/lib/vision/analyse';
 import { sanitizeBackup } from '@/lib/stock/backup';
 import { parsePostScript, postScriptToSvg } from '@/lib/vector/postscript';
@@ -1405,6 +1406,53 @@ test('Update checks compare versions and pick the right release asset', () => {
   equal(pickAssetFor('desktop', assets, 'linux')?.name, 'Micro.Stocker.Advanced.Pro-2.4.0-linux-x86_64.AppImage');
   equal(pickAssetFor('link', assets)?.name, 'micro-stocker-pro-2.4.0-debug.apk');
   equal(pickAssetFor('android', []), null, 'no APK means no silent failure');
+});
+
+test('Android updates take the signed release APK, never the debug one', () => {
+  const withBoth = [
+    { name: 'micro-stocker-pro-2.4.0-debug.apk', browser_download_url: 'https://x/debug.apk', size: 20 },
+    { name: 'micro-stocker-pro-2.4.0-release.apk', browser_download_url: 'https://x/release.apk', size: 21 },
+    { name: 'latest.yml', browser_download_url: 'https://x/latest.yml', size: 1 },
+  ];
+  // Listing order must not matter: the release build is the installable one.
+  equal(pickAssetFor('android', withBoth)?.name, 'micro-stocker-pro-2.4.0-release.apk');
+  equal(pickAndroidApk([...withBoth].reverse())?.name, 'micro-stocker-pro-2.4.0-release.apk');
+  equal(pickAssetFor('link', withBoth)?.name, 'micro-stocker-pro-2.4.0-release.apk');
+
+  // Older releases only ever attached a debug APK; it still has to be offered.
+  const legacy = [{ name: 'micro-stocker-pro-2.3.2-debug.apk', browser_download_url: 'https://x/app.apk', size: 20 }];
+  equal(pickAndroidApk(legacy)?.name, 'micro-stocker-pro-2.3.2-debug.apk');
+  equal(pickAndroidApk([]), null, 'no APK means no silent failure');
+});
+
+test('Android versionCode grows with every release so updates install', () => {
+  const { version } = JSON.parse(readFileSync(path.join(FIXTURE_DIR, '..', '..', 'package.json'), 'utf8'));
+  const code = androidVersionCode(version);
+  const [major, minor, patch] = version.replace(/^v/, '').split(/[-+]/)[0].split('.').map(Number);
+
+  equal(code, major * 10000 + minor * 100 + patch, 'formula mirrored by android/app/build.gradle');
+  equal(androidVersionCode('2.3.2'), 20302);
+  equal(androidVersionCode('v2.3.10'), 20310);
+  equal(androidVersionCode('3.0.0'), 30000);
+  assert(androidVersionCode('2.3.3') > androidVersionCode('2.3.2'), 'patch bump is an update');
+  assert(androidVersionCode('2.4.0') > androidVersionCode('2.3.99'), 'minor bump outranks patches');
+  assert(androidVersionCode('3.0.0') > androidVersionCode('2.99.99'), 'major bump outranks minors');
+  // Android rejects a non-increasing versionCode, so the scheme must never repeat.
+  const seen = new Set<number>();
+  for (let m = 0; m < 100; m += 1) {
+    for (let p = 0; p < 100; p += 1) {
+      const value = androidVersionCode(`2.${m}.${p}`);
+      assert(!seen.has(value), `versionCode collision at 2.${m}.${p}`);
+      seen.add(value);
+    }
+  }
+  let threw = false;
+  try {
+    androidVersionCode('2.100.0');
+  } catch {
+    threw = true;
+  }
+  assert(threw, 'a field above 99 fails loudly instead of colliding');
 });
 
 await Promise.all(pending);

@@ -1,0 +1,46 @@
+name: Verify
+
+# Runs the same checks the release path depends on, on every pull request, so a
+# broken build, a failing test or a broken Android signing contract is caught
+# before it can reach main (and therefore Vercel) or a release tag.
+#
+# `npm run verify` is typecheck + unit/integration tests + the Android signing
+# check + the production web build, which is exactly the build Vercel runs.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # --ignore-scripts matches vercel.json: the postinstall hook only downloads
+      # Electron, which a browser/CI verification never uses.
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Verify the app and the Android release contract
+        run: npm run verify
+
+      # The web bundle Vercel serves is produced by `npx vite build`; prove that
+      # exact command still works rather than assuming `npm run build` covers it.
+      - name: Build the web bundle the way Vercel does
+        run: |
+          npx vite build
+          test -f dist/index.html

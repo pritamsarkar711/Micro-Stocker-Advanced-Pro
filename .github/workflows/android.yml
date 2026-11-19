@@ -1,22 +1,55 @@
 name: Android
 
-# Builds the phone build from the same web bundle the desktop uses. The debug APK
-# needs no signing key, so it is produced on every tag and on demand, which makes
-# it installable straight from the run page. A release APK appears when the four
-# signing secrets below are configured.
+# Builds the phone build from the same web bundle the desktop uses, signs it with
+# the release key, and publishes that signed APK.
+#
+# Why it is a *release* build: a debug APK is built with `android:debuggable=true`
+# and is not what users should install. Both build types are signed with the
+# committed sideload key (android/keystore/sideload.p12), which is what lets a
+# newer APK install over an older one in place instead of failing with
+# INSTALL_FAILED_UPDATE_INCOMPATIBLE.
+#
+# Before anything is uploaded the job proves three things about the signed APK:
+#   1. it verifies with apksigner (v1 + v2 signatures),
+#   2. it is signed by the same key as the installed app (certificate digest is
+#      compared with the committed keystore),
+#   3. its versionCode/versionName match package.json and the tag.
+# Without those, "download and update" would be a promise the artifact does not
+# keep, so a mismatch fails the run rather than publishing a broken update.
 
 on:
   workflow_dispatch:
+  pull_request:
+    # A pull request that touches the Android build, the signing setup or the
+    # version contract gets the same signed build and the same verification, so
+    # a signing or update regression is caught before it reaches main.
+    paths:
+      - 'android/**'
+      - 'scripts/android-version.mjs'
+      - 'capacitor.config.ts'
+      - 'package.json'
+      - '.github/workflows/android.yml'
   push:
     tags: ['v*']
 
 permissions:
-  contents: write
+  # Read-only: this workflow builds and verifies the APK, and attaches it to the
+  # release that the Release workflow (which has contents: write) creates for the
+  # tag. A pull request run therefore needs no write access at all.
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
+    permissions:
+      # Attaching the APK to the tag's release is the only write this job needs,
+      # and it only happens for a tag push (see the last step).
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -36,7 +69,7 @@ jobs:
       # Gradle only needs to be pointed at it. Downloading a second copy with a
       # third-party action was the slowest and most fragile step of this job.
       - name: Use the preinstalled Android SDK
-        run: |
+        run: |-
           sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
           if [ ! -d "$sdk/platforms" ]; then
             echo "No Android SDK found at $sdk" >&2
@@ -46,6 +79,19 @@ jobs:
           echo "ANDROID_SDK_ROOT=$sdk" >> "$GITHUB_ENV"
           ls "$sdk/platforms" | tail -2
 
+      # A cold Gradle cache is what turned one transient Maven Central connection
+      # error into "the release has no APK" (kotlin-stdlib-jdk8:1.9.0 could not be
+      # resolved). Reusing the dependency cache makes that failure far less likely
+      # and cuts the build time down.
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
@@ -53,44 +99,216 @@ jobs:
         env:
           VITE_LICENSE_SUPABASE_URL: ${{ vars.MSAP_LICENSE_SUPABASE_URL }}
           VITE_LICENSE_SUPABASE_ANON_KEY: ${{ vars.MSAP_LICENSE_SUPABASE_ANON_KEY }}
-        run: |
+        run: |-
           npm run build:web
           npx cap sync android
 
-      - name: Assemble the debug APK
+      # One source of truth for the version: the same script the Gradle files
+      # mirror, so the tag, package.json and the APK metadata cannot drift apart.
+      - name: Read the version from package.json
+        run: node scripts/android-version.mjs --github-env
+
+      - name: Refuse a tag that disagrees with package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |-
+          tag="${GITHUB_REF#refs/tags/}"
+          if [ "$tag" != "v$version" ]; then
+            echo "::error title=Tag mismatch::Tag $tag does not match package.json version $version"
+            exit 1
+          fi
+
+      # --no-daemon: the runner is disposable. The timeouts raise Gradle's default
+      # 30s HTTP timeout, and the single retry only fires on connection-level
+      # errors, so a genuinely missing artifact still fails immediately with the
+      # real reason in the annotation below.
+      - name: Assemble the signed release and debug APKs
         working-directory: android
-        run: |
+        env:
+          # Left unset for a normal build, where signing.gradle uses the
+          # committed sideload key. When all four are set as repository secrets,
+          # the release is signed with that key instead, and the verification
+          # step below compares against the same key.
+          MSAP_ANDROID_KEYSTORE_PATH: ${{ secrets.MSAP_ANDROID_KEYSTORE_PATH }}
+          MSAP_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.MSAP_ANDROID_KEYSTORE_PASSWORD }}
+          MSAP_ANDROID_KEY_ALIAS: ${{ secrets.MSAP_ANDROID_KEY_ALIAS }}
+          MSAP_ANDROID_KEY_PASSWORD: ${{ secrets.MSAP_ANDROID_KEY_PASSWORD }}
+        run: |-
           chmod +x gradlew
           set -o pipefail
-          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../gradle.log
+          attempt=1
+          while true; do
+            if ./gradlew assembleRelease assembleDebug \
+                 --no-daemon --stacktrace --max-workers=2 \
+                 -Dorg.gradle.internal.http.connectionTimeout=60000 \
+                 -Dorg.gradle.internal.http.socketTimeout=60000 \
+                 2>&1 | tee ../gradle.log; then
+              break
+            fi
+            if [ "$attempt" -lt 2 ] && grep -qiE 'Could not (resolve|GET|HEAD|download)|Connection (reset|refused)|Read timed out|SSLException|Remote host terminated|unexpected end of stream' ../gradle.log; then
+              attempt=$((attempt + 1))
+              echo "::warning title=Gradle retry::Dependency resolution hit a network error; retrying once."
+              sleep 20
+              continue
+            fi
+            exit 1
+          done
 
       # If Gradle fails, its own log is the only useful diagnostic and the run
       # log is awkward to read on a phone, so the reason is surfaced as an
       # annotation on the run itself.
       - name: Report the Gradle failure
         if: failure()
-        run: |
+        run: |-
           log=gradle.log
+          [ -f "$log" ] || exit 0
           reason=$(awk '/What went wrong:/{flag=1} flag' "$log" | head -12 | tr '\n' '|' | cut -c1-1200)
           [ -n "$reason" ] || reason=$(tail -12 "$log" | tr '\n' '|' | cut -c1-1200)
           echo "::error title=Gradle failure::${reason}"
 
-      - name: Name the artifact with the version
-        run: |
-          version=$(node -p "require('./package.json').version")
+      # ---------------------------------------------------------------------
+      # Proof that this APK can update an existing install.
+      # ---------------------------------------------------------------------
+      - name: Verify the release APK is signed, installable and the right version
+        env:
+          # Set the repository variable MSAP_ANDROID_ALLOW_KEY_ROTATION to 1 only
+          # for a deliberate, documented key rotation; existing installs then have
+          # to uninstall once, so the default is to fail instead.
+          MSAP_ANDROID_ALLOW_KEY_ROTATION: ${{ vars.MSAP_ANDROID_ALLOW_KEY_ROTATION }}
+          # Present only when the release key is managed as secrets rather than
+          # the committed sideload key; the comparison follows the same key.
+          MSAP_ANDROID_KEYSTORE_PATH: ${{ secrets.MSAP_ANDROID_KEYSTORE_PATH }}
+          MSAP_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.MSAP_ANDROID_KEYSTORE_PASSWORD }}
+          MSAP_ANDROID_KEY_ALIAS: ${{ secrets.MSAP_ANDROID_KEY_ALIAS }}
+          MSAP_ANDROID_KEY_PASSWORD: ${{ secrets.MSAP_ANDROID_KEY_PASSWORD }}
+        run: |-
+          # One function for every failure, so a red run always explains itself
+          # in an annotation instead of a bare "exit code 1".
+          # shellcheck disable=SC2317
+          fail() {
+            echo "::error title=Android APK verification::$1"
+            exit 1
+          }
+
+          sdk="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          build_tools=$(find "$sdk/build-tools" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort -V | tail -1)
+          [ -n "$build_tools" ] || fail "No build-tools directory under $sdk"
+          apksigner="${build_tools}/apksigner"
+          aapt2="${build_tools}/aapt2"
+          [ -x "$apksigner" ] || fail "apksigner not found in $build_tools"
+          [ -x "$aapt2" ] || fail "aapt2 not found in $build_tools"
+
+          apk=android/app/build/outputs/apk/release/app-release.apk
+          [ -f "$apk" ] || fail "No release APK was produced at $apk"
+
+          echo "### 1. Signature"
+          if ! "$apksigner" verify --verbose --print-certs "$apk" > signature.txt 2>&1; then
+            fail "apksigner rejected the APK: $(tr '\n' '|' < signature.txt | cut -c1-900)"
+          fi
+          cat signature.txt
+          grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' signature.txt \
+            || fail "The release APK has no valid v2 signature (Android 7+ needs it to install)"
+
+          echo "### 2. Signing key"
+          keystore="${MSAP_ANDROID_KEYSTORE_PATH:-android/keystore/sideload.p12}"
+          storepass="${MSAP_ANDROID_KEYSTORE_PASSWORD:-msap-sideload-2026}"
+          keyalias="${MSAP_ANDROID_KEY_ALIAS:-sideload}"
+
+          # The key this build was configured to sign with. An update only
+          # installs when the APK's signer matches it, so that is what the APK is
+          # compared against.
+          expected=$(openssl pkcs12 -in "$keystore" -passin "pass:$storepass" -nokeys -clcerts 2>/dev/null \
+            | openssl x509 -outform der 2>/dev/null | sha256sum | cut -d' ' -f1)
+          if [ -z "$expected" ]; then
+            # A JKS keystore, or an alias-only export: keytool ships with the JDK.
+            expected=$(keytool -exportcert -rfc -keystore "$keystore" -storetype PKCS12 \
+              -storepass "$storepass" -alias "$keyalias" 2>/dev/null \
+              | openssl x509 -outform der 2>/dev/null | sha256sum | cut -d' ' -f1)
+          fi
+          [ -n "$expected" ] || fail "Could not read the signing certificate from $keystore"
+
+          # The APK's certificate, taken from its own v1 signature block rather
+          # than from apksigner's prose.
+          signature_entry=$(unzip -Z1 "$apk" 2>/dev/null \
+            | grep -iE '^META-INF/.*\.(RSA|DSA|EC)$' | head -n 1)
+          apk_cert=""
+          if [ -n "$signature_entry" ]; then
+            if unzip -p "$apk" "$signature_entry" > apk-signature.p7b 2>/dev/null \
+               && openssl pkcs7 -inform DER -in apk-signature.p7b -print_certs > apk-cert.pem 2>/dev/null; then
+              apk_cert=$(openssl x509 -in apk-cert.pem -outform der 2>/dev/null | sha256sum | cut -d' ' -f1)
+            else
+              echo "Could not decode $signature_entry with openssl; falling back to apksigner output."
+            fi
+          fi
+          if [ -z "$apk_cert" ]; then
+            apk_cert=$(grep -i 'certificate SHA-256 digest:' signature.txt | head -n 1 \
+              | sed 's/.*digest: *//' | tr -d ':' | tr 'A-F' 'a-f')
+            [ -n "$apk_cert" ] || { cat signature.txt; fail "Could not determine the APK's signing certificate"; }
+          fi
+
+          echo "APK signer : $apk_cert"
+          echo "Update key : $expected"
+          if [ "$apk_cert" != "$expected" ]; then
+            if [ "${MSAP_ANDROID_ALLOW_KEY_ROTATION:-0}" = "1" ]; then
+              echo "::warning title=Key rotation::APK is signed with a different key than the configured signing key. Existing installs must uninstall once."
+            else
+              fail "The APK is signed by a different key ($apk_cert) than existing installs use ($expected), so they cannot update to it. Restore the sideload key, or set MSAP_ANDROID_ALLOW_KEY_ROTATION=1 for a deliberate, documented rotation."
+            fi
+          fi
+
+          echo "### 3. Version metadata"
+          "$aapt2" dump badging "$apk" > badging.txt 2>aapt.err \
+            || fail "aapt2 could not read the APK: $(tr '\n' '|' < aapt.err | cut -c1-600)"
+          package_line=$(grep -m 1 '^package:' badging.txt)
+          echo "$package_line"
+          [ -n "$package_line" ] || fail "aapt2 reported no package line"
+          apk_code=$(printf '%s' "$package_line" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p")
+          apk_name=$(printf '%s' "$package_line" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")
+          echo "Expected   : versionName=$version versionCode=$versionCode"
+          [ "$apk_code" = "$versionCode" ] \
+            || fail "APK has versionCode '$apk_code', package.json implies '$versionCode'. Android would refuse the update."
+          [ "$apk_name" = "$version" ] \
+            || fail "APK has versionName '$apk_name', expected '$version'"
+
+          echo "### 4. Debuggability"
+          if grep -q 'application-debuggable' badging.txt; then
+            fail "The release APK is marked debuggable"
+          fi
+
+          echo "::notice title=Signed release APK verified::versionCode $apk_code, versionName $apk_name, signer ${apk_cert:0:16}…"
+
+      # Only the release APK is published to the release page: two APK names in
+      # one release is how a user ends up installing the debuggable build. The
+      # debug APK stays available as a workflow artifact for diagnostics.
+      - name: Name the artifacts with the version
+        run: |-
           mkdir -p out
-          cp android/app/build/outputs/apk/debug/app-debug.apk "out/micro-stocker-pro-${version}-debug.apk"
-          echo "version=${version}" >> "$GITHUB_ENV"
+          release_apk="out/micro-stocker-pro-${version}-release.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$release_apk"
+          if [ -f android/app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp android/app/build/outputs/apk/debug/app-debug.apk "out/micro-stocker-pro-${version}-debug.apk"
+          fi
+          # A checksum next to the download lets a user confirm the file they
+          # installed is the one this run produced.
+          (cd out && sha256sum "$(basename "$release_apk")" > SHA256SUMS.txt && cat SHA256SUMS.txt)
 
       - uses: actions/upload-artifact@v4
         with:
-          name: micro-stocker-pro-android-${{ env.version }}
-          path: out/*.apk
+          name: micro-stocker-pro-android-${{ env.version }}${{ github.event_name == 'pull_request' && '-pr' || '' }}
+          path: |
+            out/*.apk
+            out/SHA256SUMS.txt
           retention-days: 90
 
-      - name: Attach the APK to the release
+      # Attaches to the release the tag build is already creating. `draft: true`
+      # means this step never publishes a release on its own; the Release
+      # workflow owns publishing, so the two tag workflows cannot create two
+      # releases for one tag.
+      - name: Attach the APK and checksums to the release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: out/*.apk
+          files: |
+            out/*-release.apk
+            out/SHA256SUMS.txt
+          draft: true
           fail_on_unmatched_files: false

@@ -275,3 +275,13 @@ Open **Settings → Security**.
 - **Upscaler missing** — the Real-ESRGAN binary is downloaded on first use
   from the official GitHub release; the desktop build stores it under your
   user data folder.
+- **Android update asks you to uninstall first** — that only happens when the
+  installed copy was signed with a different key from the release. Uninstall
+  once, install the `-release.apk` from the latest release page, and every later
+  update installs in place. Releases from before the change may only have had a
+  `-debug.apk`; install that one the same way and the next release takes over.
+- **Android says "app not installed"** — check that installs from Micro Stocker
+  are allowed (Android Settings → Apps → Special access → Install unknown apps)
+  and that the download finished, then compare the file with the
+  `SHA256SUMS.txt` on the release page. A truncated APK is rejected by the
+  installer without a clear message.

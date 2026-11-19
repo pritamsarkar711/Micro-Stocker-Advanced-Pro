@@ -24,6 +24,12 @@ allprojects {
     }
 }
 
-task clean(type: Delete) {
-    delete rootProject.buildDir
+// Performance: repositories are declared once here and nowhere else, so Gradle
+// does not walk a longer list per dependency. Resolution failures are handled in
+// the Android workflow (one bounded retry) because the tag build that once lost
+// kotlin-stdlib-jdk8:1.9.0 was a Maven Central connection error, not a bad
+// coordinate — see .github/workflows/android.yml.
+
+tasks.register('clean', Delete) {
+    delete layout.buildDirectory
 }

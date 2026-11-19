@@ -1,0 +1,116 @@
+// ---------------------------------------------------------------------------
+// Release signing
+//
+// Android only installs an update when the new APK is signed by the SAME key as
+// the installed app. Everything here exists to make that true for every build
+// that reaches a user. Applied from app/build.gradle *before* the android block
+// so that `signingConfig signingConfigs.release` can reference it.
+//
+//   1. The committed keystore (android/keystore/sideload.p12) is the default, so
+//      a fresh clone and GitHub Actions both produce installable updates with no
+//      setup. Its password is public on purpose (see android/keystore/README.md).
+//   2. If the four MSAP_ANDROID_* environment variables are present they win, so
+//      the key can be rotated to a private one (a CI secret, a Play upload key)
+//      without editing this file. That path never falls back to the committed
+//      key: half-configured secrets fail the build instead of silently signing
+//      with the wrong key and producing an APK nobody can update to.
+//   3. A release build never falls back to Android's throwaway debug key. That
+//      key changes every CI run, which is exactly what produces
+//      INSTALL_FAILED_UPDATE_INCOMPATIBLE on the user's phone.
+// ---------------------------------------------------------------------------
+
+def keystorePropertyNames = ['storeFile', 'storePassword', 'keyAlias', 'keyPassword']
+def keystoreEnvironment = [
+    storeFile    : System.getenv('MSAP_ANDROID_KEYSTORE_PATH'),
+    storePassword: System.getenv('MSAP_ANDROID_KEYSTORE_PASSWORD'),
+    keyAlias     : System.getenv('MSAP_ANDROID_KEY_ALIAS'),
+    keyPassword  : System.getenv('MSAP_ANDROID_KEY_PASSWORD'),
+]
+def keystoreConfigured = keystorePropertyNames.findAll { keystoreEnvironment[it] }
+def keystoreOverridden = keystoreConfigured.size() > 0
+if (keystoreOverridden && keystoreConfigured.size() != keystorePropertyNames.size()) {
+    throw new GradleException(
+        'Android signing is half configured: MSAP_ANDROID_KEYSTORE_PATH, ' +
+        'MSAP_ANDROID_KEYSTORE_PASSWORD, MSAP_ANDROID_KEY_ALIAS and ' +
+        'MSAP_ANDROID_KEY_PASSWORD must all be set, or none of them ' +
+        '(none signs with the committed sideload key).'
+    )
+}
+
+def keystoreSettings
+def keystoreSource
+if (keystoreOverridden) {
+    keystoreSettings = [
+        storeFile    : file(keystoreEnvironment.storeFile),
+        storePassword: keystoreEnvironment.storePassword,
+        keyAlias     : keystoreEnvironment.keyAlias,
+        keyPassword  : keystoreEnvironment.keyPassword,
+    ]
+    keystoreSource = 'MSAP_ANDROID_* environment variables'
+} else if (rootProject.file('keystore.properties').exists()) {
+    // Optional local override: android/keystore.properties is git-ignored, so a
+    // machine can sign with its own key without touching the environment.
+    def properties = new Properties()
+    rootProject.file('keystore.properties').withInputStream { properties.load(it) }
+    keystorePropertyNames.each { name ->
+        if (!properties.getProperty(name)) {
+            throw new GradleException("android/keystore.properties is missing the '${name}' entry.")
+        }
+    }
+    keystoreSettings = [
+        storeFile    : file(properties.getProperty('storeFile')),
+        storePassword: properties.getProperty('storePassword'),
+        keyAlias     : properties.getProperty('keyAlias'),
+        keyPassword  : properties.getProperty('keyPassword'),
+    ]
+    keystoreSource = 'android/keystore.properties'
+} else {
+    keystoreSettings = [
+        storeFile    : file('../keystore/sideload.p12'),
+        storePassword: 'msap-sideload-2026',
+        keyAlias     : 'sideload',
+        keyPassword  : 'msap-sideload-2026',
+    ]
+    keystoreSource = 'the committed sideload key'
+}
+
+// Only throw when a task that actually packages an APK runs. Configuring the
+// project (e.g. `./gradlew tasks`, or an IDE sync before the keystore is
+// restored) should not fail; producing an unsigned or throwaway-key APK must.
+gradle.taskGraph.whenReady { graph ->
+    if (!keystoreSettings.storeFile.exists()) {
+        def packages = graph.allTasks.findAll {
+            it.name.startsWith('assemble') || it.name.startsWith('package') || it.name == 'bundleRelease'
+        }
+        if (!packages.isEmpty()) {
+            throw new GradleException(
+                "Signing key not found at ${keystoreSettings.storeFile} (from ${keystoreSource}). " +
+                'An APK cannot be produced without the release key, because a build signed with a ' +
+                'different (or throwaway debug) key cannot update an existing install. ' +
+                'Restore android/keystore/sideload.p12, or point MSAP_ANDROID_KEYSTORE_PATH at a real keystore.'
+            )
+        }
+    }
+}
+
+android {
+    signingConfigs {
+        release {
+            storeFile keystoreSettings.storeFile
+            storePassword keystoreSettings.storePassword
+            keyAlias keystoreSettings.keyAlias
+            keyPassword keystoreSettings.keyPassword
+            // PKCS12 in every case here; being explicit avoids a JKS probe on
+            // files that are not JKS and keeps apksigner's report predictable.
+            storeType 'PKCS12'
+            // v1 keeps Android 6 sideloads installable, v2 is what Android 7+
+            // verifies when installing over the existing copy.
+            enableV1Signing true
+            enableV2Signing true
+        }
+    }
+}
+
+// Printed during configuration, so a CI log states which key produced the APK
+// without anyone having to open the file.
+println "Android release signing key: ${keystoreSettings.storeFile} (alias ${keystoreSettings.keyAlias}, from ${keystoreSource})"

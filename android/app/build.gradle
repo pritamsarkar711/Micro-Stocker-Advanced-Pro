@@ -1,4 +1,35 @@
+import groovy.json.JsonSlurper
+
 apply plugin: 'com.android.application'
+
+// Signing first: the release signing config is referenced by the build types
+// below, and it is what makes an installed copy updatable. See signing.gradle.
+apply from: 'signing.gradle'
+
+// ---------------------------------------------------------------------------
+// Version name and code
+//
+// Both come from package.json, which is also what the desktop build, the web
+// build and the in-app update checker compare against, so the phone can never
+// claim a version the release does not have. versionCode is derived
+// (major * 10000 + minor * 100 + patch) because Android ignores an update whose
+// versionCode is not strictly greater than the installed one; deriving it means
+// a version bump automatically produces an installable update. The formula is
+// mirrored in scripts/android-version.mjs.
+// ---------------------------------------------------------------------------
+def packageJson = new JsonSlurper().parseText(rootProject.file('../package.json').text)
+def appVersion = packageJson.version.toString()
+// Plain Groovy (no destructuring) so a future Gradle/Groovy upgrade cannot
+// silently change how the tuple is read.
+def appVersionParts = appVersion.replaceFirst(/^v/, '').split('[-+]')[0].tokenize('.').collect { it.replaceAll(/[^0-9]/, '') as Integer }
+while (appVersionParts.size() < 3) appVersionParts.add(0)
+def majorVersion = appVersionParts[0]
+def minorVersion = appVersionParts[1]
+def patchVersion = appVersionParts[2]
+if (minorVersion > 99 || patchVersion > 99) {
+    throw new GradleException("Version ${appVersion} has a minor or patch number above 99, which would collide in the Android versionCode scheme.")
+}
+def appVersionCode = majorVersion * 10000 + minorVersion * 100 + patchVersion
 
 android {
     namespace "com.microstocker.advancedpro"
@@ -7,8 +38,8 @@ android {
         applicationId "com.microstocker.advancedpro"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 25
-        versionName "2.3.2"
+        versionCode appVersionCode
+        versionName appVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,26 +47,19 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
-    signingConfigs {
-        // Stable sideload key so an APK from a newer release can upgrade an older
-        // install in place (in-app updates). This is NOT the Play Store key: Play
-        // App Signing re-signs uploads, so this file never reaches Play.
-        sideload {
-            storeFile file('../keystore/sideload.p12')
-            storeType 'PKCS12'
-            storePassword 'msap-sideload-2026'
-            keyAlias 'sideload'
-            keyPassword 'msap-sideload-2026'
-        }
-    }
     buildTypes {
         debug {
-            signingConfig signingConfigs.sideload
+            // Same key as release, not the per-machine debug key, so a test build
+            // on a phone can be replaced by the published APK and the other way
+            // round without an uninstall.
+            signingConfig signingConfigs.release
         }
         release {
+            // A build that reaches users must not expose WebView debugging.
+            debuggable false
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.sideload
+            signingConfig signingConfigs.release
         }
     }
 }

@@ -35,6 +35,33 @@ export function isNewerVersion(candidate: string, current: string): boolean {
 export type UpdateChannel = 'desktop' | 'android' | 'link';
 export type DesktopPlatform = 'win32' | 'darwin' | 'linux' | 'web';
 
+/**
+ * The APK to install for an Android update.
+ *
+ * A release carries the signed release APK, and (for diagnostics) a debug APK.
+ * The release build is the one users must install — it is not debuggable and is
+ * the artifact whose signature and versionCode the Android workflow verifies —
+ * so it always wins. The debug APK is only a fallback for older releases that
+ * shipped nothing else, because taking the first `.apk` in listing order could
+ * otherwise hand a user the debug build.
+ */
+export function pickAndroidApk(assets: ReleaseAssetLike[]): ReleaseAssetLike | null {
+  const named = assets.filter((asset) => Boolean(asset.name && asset.browser_download_url));
+  const ending = (suffix: string) =>
+    named.find((asset) => String(asset.name).toLowerCase().endsWith(suffix)) ?? null;
+  const release = ending('-release.apk');
+  if (release) return release;
+  const firstApk = ending('.apk');
+  if (!firstApk) return null;
+  // Ignore a debug APK when any other APK is present.
+  if (!String(firstApk.name).toLowerCase().includes('debug')) return firstApk;
+  return named.find(
+    (asset) =>
+      String(asset.name).toLowerCase().endsWith('.apk') &&
+      !String(asset.name).toLowerCase().includes('debug'),
+  ) ?? firstApk;
+}
+
 /** Pick the release file that this container can actually install. */
 export function pickAssetFor(
   channel: UpdateChannel,
@@ -45,7 +72,7 @@ export function pickAssetFor(
   const find = (test: (name: string) => boolean) =>
     named.find((asset) => test(String(asset.name).toLowerCase())) ?? null;
 
-  if (channel === 'android') return find((name) => name.endsWith('.apk'));
+  if (channel === 'android') return pickAndroidApk(assets);
   if (channel === 'desktop') {
     if (platform === 'win32') return find((name) => name.endsWith('.exe') && name.includes('setup'));
     if (platform === 'darwin') return find((name) => name.endsWith('.dmg'));
@@ -53,7 +80,7 @@ export function pickAssetFor(
     return null;
   }
   return (
-    find((name) => name.endsWith('.apk')) ??
+    pickAndroidApk(assets) ??
     find((name) => name.endsWith('.dmg')) ??
     find((name) => name.endsWith('setup') || name.endsWith('.exe'))
   );
