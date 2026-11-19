@@ -28,7 +28,23 @@ const ROUTES = [
   'settings', 'admin', 'contact', 'report', 'about',
 ];
 
+/**
+ * Real CSS viewport sizes for the brands the customers actually carry in
+ * Bangladesh and India. Vivo/iQOO, Xiaomi (Redmi/POCO), Oppo/realme, Motorola
+ * and Huawei/Honor all ship narrower or taller layouts than a Pixel, and each
+ * one used to be a blind spot.
+ */
 const DEVICES = [
+  { name: 'vivo-y-series', width: 360, height: 800, dpr: 3 },
+  { name: 'iqoo-neo', width: 393, height: 873, dpr: 2.75 },
+  { name: 'redmi-note', width: 393, height: 873, dpr: 2 },
+  { name: 'poco-x', width: 360, height: 800, dpr: 2.75 },
+  { name: 'oppo-a-series', width: 360, height: 780, dpr: 3 },
+  { name: 'realme-number', width: 412, height: 915, dpr: 2.625 },
+  { name: 'moto-g', width: 412, height: 915, dpr: 2.625 },
+  { name: 'huawei-p', width: 393, height: 851, dpr: 2.75 },
+  { name: 'honor-x', width: 360, height: 780, dpr: 2 },
+  { name: 'galaxy-a', width: 384, height: 854, dpr: 2.8125 },
   { name: 'pixel', width: 360, height: 740, dpr: 3 },
   { name: 'iphone', width: 390, height: 844, dpr: 3 },
   { name: 'iphone-max', width: 430, height: 932, dpr: 3 },

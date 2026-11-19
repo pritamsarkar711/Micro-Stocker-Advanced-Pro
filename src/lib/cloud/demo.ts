@@ -7,7 +7,7 @@
  * `import.meta.env.DEV` to `false`, so a real server is always required.
  */
 import type { SupabaseClient, User } from '@supabase/supabase-js';
-import { proRpcHandlers, proTables, type DemoCaller } from './demoPro';
+import { onDemoAccountChange, proRpcHandlers, proTables, type DemoCaller } from './demoPro';
 
 export const demoMode = import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === '1';
 
@@ -60,6 +60,18 @@ const users: DemoUser[] = [
   { id: 'd0000000-0000-4000-8000-000000000003', email: 'bob@demo.local', created_at: daysAgo(19), display_name: 'Bob Ahmed', admin: false, expires_at: null, blocked: false },
   { id: 'd0000000-0000-4000-8000-000000000004', email: 'carol@demo.local', created_at: daysAgo(7), display_name: 'Carol Das', admin: false, expires_at: Date.now() - 2 * DAY, blocked: false },
 ];
+
+// Admin console changes (preview build) must be visible on the sign-in side too:
+// blocking an account here is what makes its next sign-in show as suspended.
+onDemoAccountChange((id, blocked) => {
+  if (blocked === null) {
+    const index = users.findIndex((user) => user.id === id);
+    if (index >= 0) users.splice(index, 1);
+    return;
+  }
+  const user = users.find((entry) => entry.id === id);
+  if (user) user.blocked = blocked;
+});
 
 const codes: DemoCode[] = [
   { id: uid(), code: hex(20), kind: 'premium', duration_seconds: 30 * 86_400, created_at: daysAgo(40), redeemed_at: daysAgo(41), redeemed_by: users[1].id, revoked_at: null },

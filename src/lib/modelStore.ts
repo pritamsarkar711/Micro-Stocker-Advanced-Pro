@@ -4,6 +4,7 @@ import {
   type ModelInstallSpec,
   type ModelProgressEvent,
 } from './desktop';
+import { isNativeShell } from './native/platform';
 
 /**
  * Unified in app model store.
@@ -11,7 +12,10 @@ import {
  * All model downloads, extraction, caching, inspection and removal happen
  * directly inside Micro Stocker Advanced Pro:
  *  In Electron, weights & NCNN Vulkan engines install into userData/models/
- *  In browser mode, ONNX & portable weight files stream into IndexedDB with
+ *  In the Android / iOS app, files stream through the native HTTP bridge into
+ *  the app's private data directory (see native/modelVault.ts) so the release
+ *  CDN's missing CORS headers cannot block them.
+ *  In a plain browser tab, portable weight files stream into IndexedDB with
  *  live byte progress, abort support and instant reload across sessions.
  *
  * External download pages are never opened.
@@ -23,6 +27,8 @@ const STORE_META = 'meta';
 const STORE_BLOBS = 'blobs';
 
 const browserControllers = new Map<string, AbortController>();
+const nativeActive = new Set<string>();
+const nativeCancels = new Set<string>();
 const listeners = new Set<(event: ModelProgressEvent) => void>();
 
 function emit(event: ModelProgressEvent) {
@@ -174,6 +180,14 @@ export async function listInstalledModels(): Promise<Record<string, InstalledMod
   if (desktop.isDesktop) {
     const res = await desktop.models.list();
     for (const item of res.items ?? []) map[item.id] = item;
+  } else if (isNativeShell()) {
+    try {
+      const { nativeListModels } = await import('./native/modelVault');
+      const nativeItems = await nativeListModels();
+      for (const item of Object.values(nativeItems)) map[item.id] = item;
+    } catch {
+      /* fall through to the IndexedDB mirror */
+    }
   }
   const browserItems = await idbList();
   for (const item of browserItems) {
@@ -182,12 +196,69 @@ export async function listInstalledModels(): Promise<Record<string, InstalledMod
   return map;
 }
 
+/**
+ * Phone / tablet path: native HTTP download into the app private folder.
+ * Exposed separately so the UI can tell the two mechanisms apart in messages.
+ */
+async function installModelOnDevice(spec: ModelInstallSpec): Promise<{
+  ok: boolean;
+  canceled?: boolean;
+  record?: InstalledModelRecord;
+  error?: string;
+}> {
+  if (nativeActive.has(spec.id)) {
+    return { ok: false, error: 'Model download is already running' };
+  }
+  nativeActive.add(spec.id);
+  nativeCancels.delete(spec.id);
+  try {
+    const { nativeInstallModel } = await import('./native/modelVault');
+    const result = await nativeInstallModel(spec, {
+      isCanceled: () => nativeCancels.has(spec.id),
+      onProgress: (progress) => {
+        emit({
+          id: spec.id,
+          phase: progress.label === 'Installed' ? 'ready' : 'downloading',
+          fileIndex: progress.fileIndex,
+          fileCount: spec.files.length,
+          loadedBytes: progress.loadedBytes,
+          totalBytes: progress.totalBytes || spec.approxBytes || 0,
+          speedBps: progress.speedBps,
+          label: progress.label || spec.files[progress.fileIndex]?.label || spec.id,
+        });
+      },
+    });
+    if (result.ok && result.record) {
+      emit({
+        id: spec.id,
+        phase: 'ready',
+        fileIndex: spec.files.length,
+        fileCount: spec.files.length,
+        loadedBytes: result.record.sizeBytes,
+        totalBytes: result.record.sizeBytes,
+        speedBps: 0,
+        label: 'Installed',
+      });
+    }
+    return result;
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  } finally {
+    nativeActive.delete(spec.id);
+    nativeCancels.delete(spec.id);
+  }
+}
+
 export async function installModelInApp(
   spec: ModelInstallSpec,
   options?: { preferIdb?: boolean },
 ): Promise<{ ok: boolean; canceled?: boolean; record?: InstalledModelRecord; error?: string }> {
   if (desktop.isDesktop && !options?.preferIdb) {
     return desktop.models.install(spec);
+  }
+
+  if (isNativeShell() && !options?.preferIdb) {
+    return installModelOnDevice(spec);
   }
 
   if (browserControllers.has(spec.id)) {
@@ -246,8 +317,8 @@ export async function installModelInApp(
       canceled: aborted,
       error: aborted
         ? 'Download canceled'
-        : message.includes('Failed to fetch')
-          ? 'Direct model transfer was blocked by browser network policy. Use the desktop app or verify internet access to GitHub releases.'
+        : message.includes('Failed to fetch') || message.includes('NetworkError')
+          ? 'This browser tab is not allowed to download model files. Install the Micro Stocker app on your phone (or use the desktop build) to add this model, or keep using the built-in engine, which needs no download.'
           : message,
     };
   } finally {
@@ -257,6 +328,7 @@ export async function installModelInApp(
 
 export async function cancelModelInstall(id: string): Promise<void> {
   browserControllers.get(id)?.abort();
+  if (isNativeShell() && nativeActive.has(id)) nativeCancels.add(id);
   if (desktop.isDesktop) {
     await desktop.models.cancel(id);
   }
@@ -264,6 +336,14 @@ export async function cancelModelInstall(id: string): Promise<void> {
 
 export async function uninstallModelInApp(id: string): Promise<void> {
   await idbRemove(id);
+  if (isNativeShell() && !desktop.isDesktop) {
+    try {
+      const { nativeRemoveModel } = await import('./native/modelVault');
+      await nativeRemoveModel(id);
+    } catch {
+      /* nothing installed on device */
+    }
+  }
   if (desktop.isDesktop) {
     await desktop.models.remove(id);
   }
@@ -277,6 +357,14 @@ export async function readInstalledModelBytes(id: string, fileName: string): Pro
       /* fall through to IDB cache */
     }
   }
+  if (isNativeShell()) {
+    try {
+      const { nativeReadModelBytes } = await import('./native/modelVault');
+      return await nativeReadModelBytes(id, fileName);
+    } catch {
+      /* fall through to IDB cache */
+    }
+  }
   return idbRead(id, fileName);
 }
 
@@ -285,6 +373,27 @@ export function formatBytes(bytes: number): string {
   if (bytes >= 1_073_741_824) return `${(bytes / 1_073_741_824).toFixed(2)} GB`;
   if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(bytes >= 10_485_760 ? 0 : 1)} MB`;
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+/**
+ * A URL the WebView can read an installed model from, or null when the bytes
+ * have to be read into memory instead (browser / desktop).
+ */
+export async function installedModelUrl(id: string, fileName: string): Promise<string | null> {
+  if (!isNativeShell() || desktop.isDesktop) return null;
+  try {
+    const { nativeModelFileUrl } = await import('./native/modelVault');
+    return await nativeModelFileUrl(id, fileName);
+  } catch {
+    return null;
+  }
+}
+
+/** Where installed weights live, for the storage row in settings. */
+export function modelStoreLocation(): string {
+  if (desktop.isDesktop) return 'Desktop app data folder';
+  if (isNativeShell()) return 'App private storage (survives updates, removed on uninstall)';
+  return 'Browser storage on this device';
 }
 
 export function desktopPlatformKey(): 'windows' | 'macos' | 'linux' {

@@ -40,6 +40,8 @@
     "qa:tools": "node scripts/qa/tools-audit.mjs",
     "qa:mobile": "node scripts/qa/mobile-audit.mjs",
     "qa:launch": "node scripts/qa/launch-flow.mjs",
+    "qa:admin": "node scripts/qa/admin-flows.mjs",
+    "qa:onnx": "node scripts/qa/onnx-upscale.mjs",
     "qa:all": "npm run qa:deep && npm run qa:a11y && npm run qa:contrast && npm run qa:interaction && npm run qa:text && npm run qa:suggest && npm run qa:vector && npm run qa:security && npm run qa:tools && npm run qa:mobile && npm run qa:launch",
     "qa:generate": "node scripts/qa/generate-samples.mjs",
     "build:web": "vite build",
@@ -57,6 +59,7 @@
     "ag-psd": "^34.2.0",
     "buffer": "^6.0.3",
     "clsx": "^2.1.1",
+    "electron-updater": "^6.8.11",
     "heic-to": "^1.6.7",
     "jpeg-js": "^0.4.4",
     "libheif-js": "^1.23.5",
@@ -152,5 +155,10 @@
         "releaseType": "release"
       }
     ]
+  },
+  "overrides": {
+    "minimatch": "^11.0.9",
+    "glob": "^14.0.6",
+    "rimraf": "^6.1.4"
   }
 }

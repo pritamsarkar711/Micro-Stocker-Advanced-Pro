@@ -171,6 +171,12 @@ export function recommendUpscale(
   // The best model may not be usable yet. Never preselect something the user
   // cannot run: fall back to the strongest ready option.
   let chosen = modelId;
+  // The single graph mobile model is a real detail pass, so once it is installed
+  // it is the right pick for photo-like sources that would otherwise fall back to
+  // a plain resampler. Text, art and cutouts keep their dedicated engines.
+  const mobileNeural = 'realesr-general-x4v3';
+  const photoLike = kind === 'photo' || kind === 'small' || kind === 'portrait';
+  if (photoLike && ready(mobileNeural)) chosen = mobileNeural;
   if (!ready(chosen)) {
     const fallback = ['edge-crisp', 'lanczos-pro', 'photo-restore', 'anime4k-shader'].find((id) => ready(id));
     chosen = fallback ?? 'lanczos-pro';

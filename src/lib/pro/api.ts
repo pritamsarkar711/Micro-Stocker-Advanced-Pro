@@ -166,6 +166,8 @@ export interface AdminUser {
   spent_bdt: number;
   generations: number;
   joined: string;
+  last_seen: string | null;
+  confirmed: boolean;
 }
 
 export interface AiProvider {
@@ -209,12 +211,37 @@ function messageOf(error: unknown): string {
   return 'request failed';
 }
 
+/**
+ * Supabase's client has no request timeout, so a stalled mobile connection used
+ * to leave a screen spinning forever. Every call now fails in 20 seconds with a
+ * message the UI can show.
+ */
+const RPC_TIMEOUT_MS = 20_000;
+
+function withTimeout<T>(task: Promise<T>, label: string): Promise<T | { error: string }> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<{ error: string }>((resolve) => {
+    timer = setTimeout(() => resolve({ error: `${label} timed out. Check the connection and try again.` }), RPC_TIMEOUT_MS);
+  });
+  return Promise.race([task, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 async function rpc<T>(name: string, params: Record<string, unknown> = {}): Promise<T | Failure> {
   const client = licensingClient();
   if (!client) return { error: 'Cloud project is not connected' };
-  const { data, error } = await client.rpc(name, params);
-  if (error) return { error: messageOf(error) };
-  return data as T;
+  const result = await withTimeout(
+    Promise.resolve(client.rpc(name, params)) as unknown as Promise<{ data: T | null; error: unknown }>,
+    'The server did not answer',
+  );
+  if (!result || typeof result !== 'object') return { error: 'The server did not answer' };
+  if ('error' in result && result.error && !(result as { data?: unknown }).data) {
+    // A timeout resolves with `{ error: string }`; a PostgREST failure carries
+    // an error object that still has to be turned into readable text.
+    return { error: typeof result.error === 'string' ? result.error : messageOf(result.error) };
+  }
+  return (result as { data: T }).data as T;
 }
 
 async function select<T>(table: string, build?: (query: unknown) => unknown): Promise<T[] | Failure> {
@@ -223,9 +250,15 @@ async function select<T>(table: string, build?: (query: unknown) => unknown): Pr
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query: any = (client as any).from(table).select('*');
   if (build) query = build(query);
-  const { data, error } = await query;
-  if (error) return { error: messageOf(error) };
-  return (data ?? []) as T[];
+  const result = await withTimeout(
+    Promise.resolve(query) as Promise<{ data: T[] | null; error: unknown }>,
+    `Loading ${table}`,
+  );
+  if (!result || typeof result !== 'object') return { error: `Loading ${table} failed` };
+  if ('error' in result && result.error) {
+    return { error: typeof result.error === 'string' ? result.error : messageOf(result.error) };
+  }
+  return ((result as { data: T[] | null }).data ?? []) as T[];
 }
 
 export function isFailure<T>(value: T | Failure): value is Failure {
@@ -300,9 +333,14 @@ export interface CryptoCheck {
 export async function verifyCrypto(invoiceId: string, txHash?: string) {
   const client = licensingClient();
   if (!client) return { error: 'Cloud project is not connected' } as Failure;
-  const { data, error } = await client.functions.invoke('crypto-verify', { body: { invoice_id: invoiceId, tx_hash: txHash } });
-  if (error) return { error: messageOf(error) } as Failure;
-  return data as CryptoCheck;
+  const result = await withTimeout(
+    Promise.resolve(client.functions.invoke('crypto-verify', { body: { invoice_id: invoiceId, tx_hash: txHash } })) as unknown as Promise<{ data: CryptoCheck | null; error: unknown }>,
+    'The chain check did not answer',
+  );
+  if ('error' in result && result.error) {
+    return { error: typeof result.error === 'string' ? result.error : messageOf(result.error) } as Failure;
+  }
+  return (result as { data: CryptoCheck }).data;
 }
 
 /* ------------------------------------------------------------------- admin */
@@ -318,6 +356,9 @@ export const adminUpdateAsset = (id: string, patch: Partial<CryptoAsset>) =>
   rpc<CryptoAsset>('pro_admin_update_asset', { p_id: id, p_patch: patch });
 export const adminReviewOrder = (orderId: string, approve: boolean, note?: string) =>
   rpc<{ order: string; status: string; subscription: string | null }>('pro_admin_review_order', { p_order: orderId, p_approve: approve, p_note: note ?? null });
+export const adminSetBlocked = (userId: string, blocked: boolean) =>
+  rpc<boolean>('pro_admin_set_blocked', { p_user: userId, p_blocked: blocked });
+export const adminDeleteUser = (userId: string) => rpc<boolean>('pro_admin_delete_user', { p_user: userId });
 export const adminGrant = (userId: string, plan: string, months: number, note?: string) =>
   rpc<string>('pro_admin_grant', { p_user: userId, p_plan: plan, p_months: months, p_note: note ?? 'manual grant' });
 export const adminAdjustCredits = (userId: string, delta: number, reason: string) =>

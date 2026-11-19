@@ -31,7 +31,10 @@ export const UPSCALE_PURPOSES: Array<{ id: UpscalePurpose; label: string; icon: 
   { id: 'fast', label: 'Fast', icon: 'speed' },
 ];
 
-export type EngineFamily = 'builtin' | 'realesrgan' | 'realcugan' | 'waifu2x' | 'realsr' | 'srmd';
+export type EngineFamily = 'builtin' | 'realesrgan' | 'realcugan' | 'waifu2x' | 'realsr' | 'srmd' | 'onnx';
+
+/** Families that ship a native NCNN/Vulkan binary and therefore need a desktop. */
+export type NcnnFamily = Exclude<EngineFamily, 'builtin' | 'onnx'>;
 
 export interface UpscaleModel {
   id: string;
@@ -54,10 +57,14 @@ export interface UpscaleModel {
   /** Subfolder in the NCNN engine dir (for waifu2x / realcugan / realsr / srmd). */
   modelsSubDir?: string;
   noiseLevel?: number;
+  /** Single ONNX graph executed by ONNX Runtime Web (phones included). */
+  onnxFile?: string;
+  onnxUrl?: string;
+  onnxBytes?: number;
 }
 
 const ENGINE_ZIPS: Record<
-  Exclude<EngineFamily, 'builtin'>,
+  NcnnFamily,
   {
     group: string;
     sizeMB: number;
@@ -197,6 +204,29 @@ export const UPSCALE_MODELS: UpscaleModel[] = [
     sizeMB: 0,
     agencySafe: true,
     builtinMode: 'anime4k-shader',
+  },
+
+  /*
+   * The one neural model that really runs on a phone. It is a single 4.6 MB
+   * ONNX graph executed by ONNX Runtime's WebAssembly backend, so there is no
+   * engine archive, no Vulkan driver and nothing that can fail to install.
+   * Weights: Real-ESRGAN general x4v3 (BSD 3 Clause, commercial use allowed).
+   */
+  {
+    id: 'realesr-general-x4v3',
+    name: 'Real-ESRGAN Mobile x4',
+    family: 'onnx',
+    purpose: 'photo',
+    purposes: ['photo', 'general', 'commercial', 'restore'],
+    icon: 'developer_board',
+    license: 'BSD 3',
+    nativeScale: 4,
+    scales: [4],
+    sizeMB: 4.6,
+    onnxFile: 'realesr-general-x4v3.onnx',
+    onnxUrl:
+      'https://github.com/ivansantander-hub/kinora-toolchain/releases/download/models-realesrgan-1/realesr-general-x4v3.onnx',
+    onnxBytes: 4866420,
   },
 
   /* RealESRGAN family (BSD 3 Clause commercial license) */
@@ -581,10 +611,39 @@ export const UPSCALE_MODELS: UpscaleModel[] = [
   },
 ];
 
+/**
+ * Neural packs are NCNN/Vulkan desktop binaries. They can never execute in a
+ * phone WebView, so the app must not offer them as downloadable there.
+ */
+export function isDesktopOnlyModel(model: UpscaleModel): boolean {
+  return model.family !== 'builtin' && model.family !== 'onnx';
+}
+
+/** The models that can really render in this container. */
+export function modelsForDevice(isDesktop: boolean): UpscaleModel[] {
+  return isDesktop
+    ? UPSCALE_MODELS
+    : UPSCALE_MODELS.filter((model) => !isDesktopOnlyModel(model));
+}
+
+/** True when the model's weights are a single ONNX file rather than an engine. */
+export function isOnnxModel(model: UpscaleModel): model is UpscaleModel & { onnxFile: string; onnxUrl: string } {
+  return model.family === 'onnx' && Boolean(model.onnxFile && model.onnxUrl);
+}
+
 export function buildUpscaleInstallSpec(model: UpscaleModel): ModelInstallSpec | null {
   if (model.family === 'builtin') return null;
+  if (isOnnxModel(model)) {
+    return {
+      id: model.id,
+      kind: 'image-upscale',
+      primaryFile: model.onnxFile,
+      approxBytes: model.onnxBytes ?? Math.round(model.sizeMB * 1_048_576),
+      files: [{ url: model.onnxUrl, name: model.onnxFile, label: `${model.name} weights` }],
+    };
+  }
   const osKey = desktopPlatformKey();
-  const engine = ENGINE_ZIPS[model.family];
+  const engine = ENGINE_ZIPS[model.family as NcnnFamily];
   const binary = engine.binary[osKey];
   const files: ModelInstallSpec['files'] = [
     {
@@ -626,7 +685,7 @@ export function buildUpscaleInstallSpec(model: UpscaleModel): ModelInstallSpec |
   };
 }
 
-export function engineBinaryFor(family: Exclude<EngineFamily, 'builtin'>): {
+export function engineBinaryFor(family: NcnnFamily): {
   group: string;
   binary: string;
   url: string;

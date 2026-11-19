@@ -1,6 +1,7 @@
 import type { GoogleIconName } from '@/components/ui/GoogleIcon';
 import type { ModelInstallSpec } from '@/lib/desktop';
-import { installModelInApp, readInstalledModelBytes } from '@/lib/modelStore';
+import { installedModelUrl, installModelInApp, readInstalledModelBytes } from '@/lib/modelStore';
+import { loadOrt } from './onnx';
 
 /**
  * Local background removal engine. Model weights have separate terms.
@@ -510,21 +511,27 @@ async function runOnnxMask(
   onProgress?: (ratio: number, label: string) => void,
 ): Promise<{ mask: Uint8ClampedArray; size: number }> {
   const fileName = model.fileName!;
-  let bytes: Uint8Array;
-  try {
-    bytes = await readInstalledModelBytes(model.id, fileName);
-  } catch {
-    const spec = buildBgInstallSpec(model);
-    if (!spec) throw new Error('Model specification missing');
-    onProgress?.(0.08, `Downloading ${model.name}`);
-    const installed = await installModelInApp(spec);
-    if (!installed.ok) throw new Error(installed.error || 'Model download failed');
-    bytes = await readInstalledModelBytes(model.id, fileName);
+  // On the phone the file is already in app storage; hand ONNX Runtime a local
+  // URL so a 100 MB checkpoint never has to be decoded into the JS heap.
+  let source: Uint8Array | string | null = await installedModelUrl(model.id, fileName);
+  let bytes: Uint8Array | null = null;
+  if (!source) {
+    try {
+      bytes = await readInstalledModelBytes(model.id, fileName);
+    } catch {
+      const spec = buildBgInstallSpec(model);
+      if (!spec) throw new Error('Model specification missing');
+      onProgress?.(0.08, `Downloading ${model.name}`);
+      const installed = await installModelInApp(spec);
+      if (!installed.ok) throw new Error(installed.error || 'Model download failed');
+      const url = await installedModelUrl(model.id, fileName);
+      if (url) source = url;
+      else bytes = await readInstalledModelBytes(model.id, fileName);
+    }
   }
 
   onProgress?.(0.32, `Loading ${model.name}`);
-  const ort = await import('onnxruntime-web');
-  ort.env.wasm.numThreads = 1;
+  const ort = await loadOrt();
 
   type OrtSession = {
     inputNames: readonly string[];
@@ -534,7 +541,9 @@ async function runOnnxMask(
 
   let session = sessionCache.get(model.id) as OrtSession | undefined;
   if (!session) {
-    session = (await ort.InferenceSession.create(bytes, {
+    const modelSource = source ?? bytes;
+    if (!modelSource) throw new Error('Model file is missing. Reinstall it from the model list.');
+    session = (await ort.InferenceSession.create(modelSource as Uint8Array, {
       executionProviders: ['wasm'],
     })) as unknown as OrtSession;
     sessionCache.set(model.id, session);

@@ -16,10 +16,26 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        // Stable sideload key so an APK from a newer release can upgrade an older
+        // install in place (in-app updates). This is NOT the Play Store key: Play
+        // App Signing re-signs uploads, so this file never reaches Play.
+        sideload {
+            storeFile file('../keystore/sideload.p12')
+            storeType 'PKCS12'
+            storePassword 'msap-sideload-2026'
+            keyAlias 'sideload'
+            keyPassword 'msap-sideload-2026'
+        }
+    }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.sideload
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.sideload
         }
     }
 }

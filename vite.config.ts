@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath, URL } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -36,11 +37,56 @@ function contentSecurityPolicy(): Plugin {
   };
 }
 
+/**
+ * ONNX Runtime ships its WebAssembly backend as separate files. If the app does
+ * not serve them itself, ONNX Runtime silently pulls them from a third party
+ * CDN: slow on mobile data, broken offline, and a "downloads code at runtime"
+ * finding in a Play Store review. This plugin copies the exact binaries the
+ * installed onnxruntime-web expects into `/ort/` for dev and into `dist/ort/`
+ * for every build, so background removal runs fully offline.
+ */
+function onnxWasmAssets(): Plugin {
+  // Only the plain WebAssembly backend: the app asks ONNX Runtime for the
+  // `wasm` execution provider, so shipping the 20 MB JSEP/WebGPU build too
+  // would double the download for nothing.
+  const files = ['ort-wasm-simd-threaded.wasm', 'ort-wasm-simd-threaded.mjs'];
+  const source = (name: string) =>
+    fileURLToPath(new URL(`./node_modules/onnxruntime-web/dist/${name}`, import.meta.url));
+
+  return {
+    name: 'msap-onnx-wasm',
+    configureServer(server) {
+      server.middlewares.use('/ort', (req, res, next) => {
+        const name = (req.url ?? '').split('?')[0].replace(/^\//, '');
+        if (!files.includes(name)) return next();
+        void readFile(source(name))
+          .then((data) => {
+            res.setHeader('Content-Type', name.endsWith('.wasm') ? 'application/wasm' : 'text/javascript');
+            res.setHeader('Content-Length', String(data.byteLength));
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+            // A HEAD probe must not carry a body, or the browser aborts it.
+            res.end(req.method === 'HEAD' ? undefined : data);
+          })
+          .catch(() => next());
+      });
+    },
+    async generateBundle() {
+      for (const name of files) {
+        try {
+          this.emitFile({ type: 'asset', fileName: `ort/${name}`, source: await readFile(source(name)) });
+        } catch {
+          /* optional variant that this onnxruntime build does not ship */
+        }
+      }
+    },
+  };
+}
+
 // `base: './'` in production is required so the packaged Electron app can load
 // the renderer from the filesystem (file://) instead of a web origin.
 export default defineConfig(({ command }) => ({
   base: command === 'build' ? './' : '/',
-  plugins: [react(), tailwindcss(), contentSecurityPolicy()],
+  plugins: [react(), tailwindcss(), contentSecurityPolicy(), onnxWasmAssets()],
   assetsInclude: ['**/*.wasm'],
   worker: { format: 'es' },
   resolve: {

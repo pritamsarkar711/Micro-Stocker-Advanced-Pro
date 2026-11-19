@@ -24,7 +24,9 @@ import {
   adminModels,
   adminOrders,
   adminProviders,
+  adminDeleteUser,
   adminReviewOrder,
+  adminSetBlocked,
   adminSettings,
   adminStats,
   adminUsers,
@@ -185,7 +187,30 @@ function Overview({ stats, audit }: { stats: AdminStats; audit: Array<{ id: numb
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <Card flush>
           <CardHeader title="Spend by model" subtitle={`Last ${stats.window_days} days`} icon={<GIcon name="memory" size={18} />} />
-          <div className="overflow-x-auto">
+          {/* Phones get a stacked list: a four-column table cannot fit 360 px, and
+              a half-clipped Cost column reads like a bug. */}
+          <ul className="border-t border-line sm:hidden">
+            {stats.by_model.length === 0 && (
+              <li className="px-4 py-4 text-2xs text-ink-muted">No API calls yet.</li>
+            )}
+            {stats.by_model.map((row) => (
+              <li
+                key={row.model_id ?? 'unknown'}
+                className="flex items-start justify-between gap-3 border-b border-line px-4 py-2.5 last:border-0"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-[0.8125rem] font-medium text-ink">{row.model_id ?? 'unknown'}</p>
+                  <p className="mt-0.5 text-2xs tabular-nums text-ink-muted">
+                    {row.calls} calls · {row.tokens_in + row.tokens_out} tokens
+                  </p>
+                </div>
+                <span className="shrink-0 text-[0.8125rem] font-semibold tabular-nums text-ink">
+                  {bdt(Math.round(row.cost_usd * fx))}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto sm:block">
           <table className="w-full min-w-[24rem] border-t border-line text-[0.8125rem]">
             <thead className="bg-surface-2 text-2xs uppercase tracking-wide text-ink-muted">
               <tr>
@@ -343,6 +368,22 @@ function Orders({ orders, onChange }: { orders: AdminOrder[]; onChange: () => vo
 
 /* ----------------------------------------------------------------- users */
 
+const DAY_MS = 86_400_000;
+
+function relativeTime(value: string | null | undefined): string {
+  if (!value) return 'never';
+  const at = new Date(value).getTime();
+  if (!Number.isFinite(at)) return 'never';
+  const diff = Date.now() - at;
+  if (diff < 60_000) return 'just now';
+  const minutes = Math.round(diff / 60_000);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  if (diff < 30 * DAY_MS) return `${Math.round(diff / DAY_MS)} d ago`;
+  return new Date(value as string).toLocaleDateString();
+}
+
 function Users({
   users,
   search,
@@ -361,11 +402,19 @@ function Users({
   const [credits, setCredits] = useState('100');
   const [plan, setPlan] = useState('standard');
   const [months, setMonths] = useState('1');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [suspending, setSuspending] = useState<AdminUser | null>(null);
+  const [removing, setRemoving] = useState<AdminUser | null>(null);
+  const [confirmText, setConfirmText] = useState('');
+
+  const suspended = users.filter((entry) => entry.blocked).length;
 
   const apply = async () => {
     if (!editing) return;
+    setBusy(editing.user_id);
     const grant = await adminGrant(editing.user_id, plan, Number(months), 'admin console');
     if (isFailure(grant)) {
+      setBusy(null);
       toast.error('Could not grant plan', grant.error);
       return;
     }
@@ -373,12 +422,41 @@ function Users({
     if (Number.isFinite(delta) && delta !== 0) {
       const adjusted = await adminAdjustCredits(editing.user_id, delta, 'admin console');
       if (isFailure(adjusted)) {
+        setBusy(null);
         toast.error('Could not adjust credits', adjusted.error);
         return;
       }
     }
+    setBusy(null);
     onToast(`${editing.email ?? 'Account'} updated`);
     setEditing(null);
+    onChange();
+  };
+
+  const setBlocked = async (user: AdminUser, blocked: boolean) => {
+    setBusy(user.user_id);
+    const result = await adminSetBlocked(user.user_id, blocked);
+    setBusy(null);
+    if (isFailure(result)) {
+      toast.error(blocked ? 'Could not suspend' : 'Could not restore', result.error);
+      return;
+    }
+    setSuspending(null);
+    onToast(`${user.email ?? 'Account'} ${blocked ? 'suspended' : 'restored'}`);
+    onChange();
+  };
+
+  const remove = async (user: AdminUser) => {
+    setBusy(user.user_id);
+    const result = await adminDeleteUser(user.user_id);
+    setBusy(null);
+    if (isFailure(result)) {
+      toast.error('Could not remove the account', result.error);
+      return;
+    }
+    setRemoving(null);
+    setConfirmText('');
+    onToast(`${user.email ?? 'Account'} removed`);
     onChange();
   };
 
@@ -386,59 +464,143 @@ function Users({
     <Card flush>
       <CardHeader
         title="Accounts"
-        subtitle={`${users.length} shown`}
+        subtitle={`${users.length} shown${suspended ? ` · ${suspended} suspended` : ''}`}
         icon={<GIcon name="person" size={18} />}
         action={
-          <Field label="">
-            <Input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Search email or name" />
-          </Field>
+          <div className="w-full sm:w-64">
+            <Input
+              value={search}
+              onChange={(event) => onSearch(event.target.value)}
+              placeholder="Search email or name"
+              aria-label="Search accounts"
+            />
+          </div>
         }
       />
-      <div className="overflow-x-auto border-t border-line">
-        <table className="w-full min-w-[720px] text-[0.8125rem]">
-          <thead className="bg-surface-2 text-2xs uppercase tracking-wide text-ink-muted">
-            <tr>
-              <th className="px-4 py-2 text-left font-semibold">Account</th>
-              <th className="px-4 py-2 text-left font-semibold">Plan</th>
-              <th className="px-4 py-2 text-right font-semibold">Credits</th>
-              <th className="px-4 py-2 text-right font-semibold">Spent</th>
-              <th className="px-4 py-2 text-right font-semibold">Jobs</th>
-              <th className="px-4 py-2 text-right font-semibold" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line">
-            {users.map((entry) => (
-              <tr key={entry.user_id}>
-                <td className="px-4 py-2">
-                  <p className="font-medium">{entry.display_name ?? entry.email}</p>
-                  <p className="text-2xs text-ink-muted">{entry.email}</p>
-                </td>
-                <td className="px-4 py-2">
-                  {entry.plan ? (
-                    <Badge tone="brand">
-                      {entry.plan}
-                      {entry.expires_at ? ` · ${new Date(entry.expires_at).toLocaleDateString()}` : ''}
-                    </Badge>
-                  ) : (
-                    <span className="text-2xs text-ink-muted">free</span>
-                  )}
-                </td>
-                <td className="px-4 py-2 text-right tabular-nums">{entry.credits}</td>
-                <td className="px-4 py-2 text-right tabular-nums">{bdt(entry.spent_bdt)}</td>
-                <td className="px-4 py-2 text-right tabular-nums">{entry.generations}</td>
-                <td className="px-4 py-2 text-right">
-                  <Button size="sm" variant="outline" onClick={() => setEditing(entry)}>
-                    Manage
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+
+      <div className="border-t border-line p-3 sm:p-4">
+        {users.length === 0 ? (
+          <p className="py-8 text-center text-sm text-ink-muted">
+            No account matches “{search}”. Clear the search to see everyone.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-2.5 xl:grid-cols-2">
+            {users.map((entry) => {
+              const isAdmin = entry.role === 'admin';
+              const working = busy === entry.user_id;
+              return (
+                <div
+                  key={entry.user_id}
+                  data-testid="admin-user-card"
+                  data-role={entry.role}
+                  className="rounded-[var(--r-control)] border border-line bg-surface p-3"
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-full bg-surface-2 text-2xs font-semibold uppercase text-ink-muted">
+                      {(entry.email ?? '?').slice(0, 2)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
+                          {entry.email ?? 'no email'}
+                        </p>
+                        {isAdmin && <Badge tone="brand">Admin</Badge>}
+                        {entry.blocked ? (
+                          <Badge tone="danger">Suspended</Badge>
+                        ) : (
+                          <Badge tone="ok">Active</Badge>
+                        )}
+                        {!entry.confirmed && <Badge tone="warn">Unverified</Badge>}
+                      </div>
+                      {entry.display_name && (
+                        <p className="truncate text-2xs text-ink-muted">{entry.display_name}</p>
+                      )}
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-2xs text-ink-muted">
+                        <span>
+                          Plan{' '}
+                          <span className="font-medium text-ink">{entry.plan ?? 'Free'}</span>
+                          {entry.expires_at ? ` · to ${new Date(entry.expires_at).toLocaleDateString()}` : ''}
+                        </span>
+                        <span>
+                          <span className="font-medium tabular-nums text-ink">{entry.credits}</span> credits
+                        </span>
+                        <span>
+                          <span className="font-medium tabular-nums text-ink">{bdt(entry.spent_bdt)}</span> spent
+                        </span>
+                        <span>
+                          <span className="font-medium tabular-nums text-ink">{entry.generations}</span> jobs
+                        </span>
+                        <span>Joined {new Date(entry.joined).toLocaleDateString()}</span>
+                        <span>Seen {relativeTime(entry.last_seen)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setEditing(entry);
+                        setPlan(entry.plan ?? 'standard');
+                        setMonths('1');
+                        setCredits('100');
+                      }}
+                      icon={<GIcon name="edit" size={15} />}
+                    >
+                      Manage
+                    </Button>
+                    {!isAdmin &&
+                      (entry.blocked ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          loading={working}
+                          onClick={() => void setBlocked(entry, false)}
+                          icon={<GIcon name="check_circle" size={15} />}
+                        >
+                          Restore
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSuspending(entry)}
+                          icon={<GIcon name="do_not_disturb_on" size={15} />}
+                        >
+                          Suspend
+                        </Button>
+                      ))}
+                    {!isAdmin && (
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => {
+                          setConfirmText('');
+                          setRemoving(entry);
+                        }}
+                        icon={<GIcon name="delete" size={15} />}
+                        className="col-span-2 sm:col-span-1"
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {editing && (
-        <Modal open onClose={() => setEditing(null)} title={editing.email ?? 'Account'} description="Grant a plan or adjust credits. Changes are audited." size="sm">
+        <Modal
+          open
+          onClose={() => setEditing(null)}
+          title={editing.email ?? 'Account'}
+          description="Grant a plan or adjust credits. Changes are audited."
+          size="sm"
+        >
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2">
               <Field label="Plan">
@@ -451,8 +613,84 @@ function Users({
             <Field label="Credit adjustment" hint="negative removes credits">
               <Input value={credits} onChange={(event) => setCredits(event.target.value)} inputMode="numeric" />
             </Field>
-            <Button className="w-full" onClick={() => void apply()} icon={<GIcon name="save" size={18} />}>
+            <Button className="w-full" loading={busy === editing.user_id} onClick={() => void apply()} icon={<GIcon name="save" size={18} />}>
               Apply
+            </Button>
+          </div>
+        </Modal>
+      )}
+
+      {suspending && (
+        <Modal
+          open
+          onClose={() => setSuspending(null)}
+          title="Suspend this account?"
+          description={suspending.email ?? undefined}
+          size="sm"
+        >
+          <p className="text-sm leading-relaxed text-ink-muted">
+            Sign-in keeps working, but every generation and credit spend is refused with “account blocked”
+            until you restore it. Credits, plan and history stay untouched.
+          </p>
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Button variant="outline" onClick={() => setSuspending(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              loading={busy === suspending.user_id}
+              onClick={() => void setBlocked(suspending, true)}
+              icon={<GIcon name="do_not_disturb_on" size={16} />}
+            >
+              Suspend account
+            </Button>
+          </div>
+        </Modal>
+      )}
+
+      {removing && (
+        <Modal
+          open
+          onClose={() => {
+            setRemoving(null);
+            setConfirmText('');
+          }}
+          title="Remove this account?"
+          description="This cannot be undone."
+          size="sm"
+        >
+          <p className="text-sm leading-relaxed text-ink-muted">
+            The profile, wallet, plan, orders, invoices, credit history and generated work for{' '}
+            <span className="font-medium text-ink">{removing.email}</span> are deleted permanently. An audit entry
+            keeps the record that you removed it.
+          </p>
+          <Field label={`Type ${removing.email ?? 'the email'} to confirm`}>
+            <Input
+              value={confirmText}
+              onChange={(event) => setConfirmText(event.target.value)}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+          </Field>
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRemoving(null);
+                setConfirmText('');
+              }}
+            >
+              Keep account
+            </Button>
+            <Button
+              variant="danger"
+              disabled={confirmText.trim().toLowerCase() !== (removing.email ?? '').toLowerCase()}
+              loading={busy === removing.user_id}
+              onClick={() => void remove(removing)}
+              icon={<GIcon name="delete" size={16} />}
+            >
+              Remove permanently
             </Button>
           </div>
         </Modal>

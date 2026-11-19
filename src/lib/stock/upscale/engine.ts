@@ -4,11 +4,22 @@ import { upscaleClassic } from './classic';
 import {
   buildUpscaleInstallSpec,
   engineBinaryFor,
+  isOnnxModel,
   resolveTargetSize,
   UPSCALE_MODELS,
+  type NcnnFamily,
   type UpscaleModel,
   type UpscaleTarget,
 } from './models';
+import { upscaleOnnxImage } from './onnx';
+
+/**
+ * How many source pixels the phone's WebAssembly network may chew through in one
+ * run. Above this the graph crawls and the tab can be killed for memory, so the
+ * engine runs the neural pass on a capped copy and lets the classic resampler
+ * carry the rest of the way to the requested size.
+ */
+const ONNX_PIXEL_LIMIT = 900_000;
 
 export interface UpscaleJobInput {
   blob?: Blob;
@@ -82,6 +93,56 @@ export async function runUpscale(job: UpscaleJobInput): Promise<UpscaleJobResult
   const { passes, tail } = planPasses(goal.factor, model.scales);
   const wantAi = model.family !== 'builtin';
 
+  // Single graph ONNX models (the mobile neural path) run wherever a WebAssembly
+  // backend exists, which is every phone and every desktop build.
+  if (isOnnxModel(model)) {
+    if (!job.blob) throw new Error('Image pixels unavailable. Reimport the file.');
+    job.onProgress?.(0.05, `Preparing ${model.name}`);
+    const installed = await ensureModelInstalled(model);
+    if (!installed.ok) throw new Error(installed.error || 'Model installation failed');
+
+    const pixels = Math.max(1, job.width * job.height);
+    const preScale = pixels > ONNX_PIXEL_LIMIT ? Math.sqrt(ONNX_PIXEL_LIMIT / pixels) : 1;
+    if (preScale < 1) {
+      job.onProgress?.(0.1, `Neural pass on a ${Math.round(preScale * 100)}% copy, then fitted to target`);
+    }
+    const neural = await upscaleOnnxImage(job.blob, {
+      modelId: model.id,
+      fileName: model.onnxFile,
+      url: model.onnxUrl,
+      scale: model.nativeScale,
+      preScale,
+      outFormat: Math.abs(goal.factor / (preScale * model.nativeScale) - 1) > 0.02 ? 'png' : job.outFormat,
+      quality: job.quality,
+      onProgress: (ratio, label) => job.onProgress?.(ratio, label),
+    });
+
+    let finalBlob = neural;
+    const remaining = goal.factor / (preScale * model.nativeScale);
+    if (Math.abs(remaining - 1) > 0.02) {
+      job.onProgress?.(0.9, `Fitting to ${goal.width} by ${goal.height}`);
+      // The neural pass already added the detail, so the fit to the requested
+      // size is a resample: a second convolution over 25 MP would add minutes of
+      // work on a phone for no visible gain.
+      finalBlob = await upscaleClassic(neural, {
+        exactScale: remaining,
+        mode: 'plain',
+        outFormat: job.outFormat,
+        quality: job.quality,
+      });
+    }
+    job.onProgress?.(1, 'Complete');
+    return {
+      blob: finalBlob,
+      filename: outputFilename(job.name, job.target, job.outFormat),
+      width: goal.width,
+      height: goal.height,
+      megapixels: +((goal.width * goal.height) / 1_000_000).toFixed(1),
+      usedAi: true,
+      log: `onnx:${model.id}`,
+    };
+  }
+
   if (wantAi && desktop.isDesktop) {
     if (passes.length === 0) {
       if (!job.blob) throw new Error('Image buffer is missing');
@@ -108,14 +169,14 @@ export async function runUpscale(job: UpscaleJobInput): Promise<UpscaleJobResult
       throw new Error(installed.error || 'Model installation failed');
     }
 
-    const runtime = engineBinaryFor(model.family as Exclude<UpscaleModel['family'], 'builtin'>);
+    const runtime = engineBinaryFor(model.family as NcnnFamily);
     job.onProgress?.(0.2, `Upscaling with ${model.name}`);
     const res = await desktop.upscaler.run({
       inPath: job.path,
       blob: job.path ? undefined : job.blob,
       binary: runtime.binary,
       engineGroup: runtime.group,
-      engineFamily: model.family as 'realesrgan' | 'realcugan' | 'waifu2x' | 'realsr' | 'srmd',
+      engineFamily: model.family as NcnnFamily,
       modelsSubDir: model.modelsSubDir,
       modelId: model.ncnnModelName ?? model.id,
       noiseLevel: model.noiseLevel,

@@ -20,7 +20,14 @@ try {
     create role service_role;
     create schema auth;
     create schema extensions;
-    create table auth.users(id uuid primary key, email text, raw_user_meta_data jsonb default '{}'::jsonb, created_at timestamptz default now(), last_sign_in_at timestamptz);
+    create table auth.users(
+      id uuid primary key,
+      email text,
+      raw_user_meta_data jsonb default '{}'::jsonb,
+      created_at timestamptz default now(),
+      last_sign_in_at timestamptz,
+      email_confirmed_at timestamptz
+    );
     create function auth.uid() returns uuid language sql stable
       as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     create function auth.jwt() returns jsonb language sql stable
@@ -218,7 +225,74 @@ try {
   await asUser(alice, 'aal1');
   assert.equal((await db.query('select public.pro_my_entitlement() as e')).rows[0].e.active, true);
 
-  console.log('Pro platform SQL: free tier, gating, credits, refunds, pricing, orders, crypto settlement, expiry and 2FA passed');
+  // Admin user management: suspend, restore, remove, with the guard rails.
+  await asUser(admin, 'aal1');
+  const directory = (await db.query('select * from public.pro_admin_users()')).rows;
+  const bobRow = directory.find((row) => row.email === 'bob@example.test');
+  assert.ok(bobRow, 'the directory lists every account');
+  assert.equal(bobRow.blocked, false);
+  assert.ok('last_seen' in bobRow && 'confirmed' in bobRow, 'directory carries sign in state');
+  assert.equal(directory.length, 3);
+
+  // Give him a live plan first, so the refusal below can only come from the block.
+  await db.query("select public.pro_admin_grant($1, 'standard', 1)", [bob]);
+  await db.query('select public.pro_admin_set_blocked($1, true)', [bob]);
+  assert.equal(
+    (await db.query('select blocked from public.profiles where id = $1', [bob])).rows[0].blocked,
+    true,
+    'suspend flips the flag',
+  );
+  const auditTail = await db.query('select action, target from public.admin_audit order by id desc limit 1');
+  assert.equal(auditTail.rows[0].action, 'user.suspend');
+  assert.equal(auditTail.rows[0].target, bob);
+
+  // A suspended account cannot spend or start work even though it can sign in.
+  await asUser(bob, 'aal1');
+  const blockedEntitlement = (await db.query('select public.pro_my_entitlement() as e')).rows[0].e;
+  assert.equal(blockedEntitlement.blocked, true, 'the client is told the account is blocked');
+  assert.equal(blockedEntitlement.active, false, 'a suspended plan grants nothing');
+  await assert.rejects(
+    db.query("select public.pro_begin_generation('eps', 'blocked account', '{}'::jsonb, null)"),
+    /account blocked/,
+  );
+
+  await asUser(admin, 'aal1');
+  await db.query('select public.pro_admin_set_blocked($1, false)', [bob]);
+  assert.equal(
+    (await db.query('select blocked from public.profiles where id = $1', [bob])).rows[0].blocked,
+    false,
+    'restore clears it',
+  );
+
+  // Guards: no self lockout, no removing an administrator, no non-admin access.
+  await assert.rejects(
+    db.query('select public.pro_admin_set_blocked($1, true)', [admin]),
+    /your own account/,
+  );
+  await assert.rejects(db.query('select public.pro_admin_delete_user($1)', [admin]), /your own account/);
+  const secondAdmin = '00000000-0000-4000-8000-000000000009';
+  await db.exec('reset role');
+  await db.query('insert into auth.users(id,email) values ($1,$2)', [secondAdmin, 'second-admin@example.test']);
+  await db.query("update public.profiles set role = 'admin' where id = $1", [secondAdmin]);
+  await asUser(admin, 'aal1');
+  await assert.rejects(db.query('select public.pro_admin_delete_user($1)', [secondAdmin]), /administrator/);
+  await asUser(alice, 'aal1');
+  await assert.rejects(db.query('select public.pro_admin_set_blocked($1, true)', [bob]), /not allowed/);
+  await assert.rejects(db.query('select public.pro_admin_delete_user($1)', [bob]), /not allowed/);
+
+  // Deleting cascades to every owned row and keeps the audit trail.
+  await asUser(admin, 'aal1');
+  await db.query('select public.pro_admin_delete_user($1)', [bob]);
+  await db.exec('reset role');
+  assert.equal((await db.query('select count(*)::int as n from auth.users where id = $1', [bob])).rows[0].n, 0);
+  assert.equal((await db.query('select count(*)::int as n from public.profiles where id = $1', [bob])).rows[0].n, 0);
+  assert.equal(
+    (await db.query("select count(*)::int as n from public.admin_audit where action = 'user.delete' and target = $1", [bob])).rows[0].n,
+    1,
+    'the removal itself is audited',
+  );
+
+  console.log('Pro platform SQL: free tier, gating, credits, refunds, pricing, orders, crypto settlement, expiry, 2FA and admin user management passed');
 } finally {
   await db.close();
 }
