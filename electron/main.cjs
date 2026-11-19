@@ -11,6 +11,7 @@
 
 const { app, BrowserWindow, Menu, dialog, ipcMain, shell, nativeTheme, session } =
   require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const fsSync = require('node:fs');
@@ -314,10 +315,93 @@ function spawnBinary(binaryPath, args, cwd, onLog) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* In app updates (electron-updater)                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Windows/macOS/Linux updates use the `latest.yml` (and platform equivalent)
+ * that electron-builder writes next to every GitHub release. The installer is
+ * downloaded in the background, then the app restarts into the new build, so a
+ * user never has to visit GitHub again.
+ *
+ * Only packaged builds have `app-update.yml`; in dev every call answers with a
+ * clear "development build" error instead of throwing.
+ */
+function sendUpdateProgress(payload) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('updates:progress', payload);
+  }
+}
+
+let updaterReady = false;
+
+function prepareUpdater() {
+  if (updaterReady) return;
+  updaterReady = true;
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.logger = null;
+
+  autoUpdater.on('download-progress', (progress) => {
+    sendUpdateProgress({ status: 'downloading', percent: Math.round(progress.percent ?? 0) });
+  });
+  autoUpdater.on('update-downloaded', (info) => {
+    sendUpdateProgress({ status: 'downloaded', version: info?.version });
+  });
+  autoUpdater.on('error', (error) => {
+    sendUpdateProgress({ status: 'error', error: error ? String(error.message || error) : 'update failed' });
+  });
+}
+
+function updaterUnavailable() {
+  if (!app.isPackaged) {
+    return { ok: false, error: 'Update checks run in the installed build, not the development server.' };
+  }
+  return null;
+}
+
+/* -------------------------------------------------------------------------- */
 /* IPC channels                                                               */
 /* -------------------------------------------------------------------------- */
 
 function registerIpc() {
+  ipcMain.handle('updates:check', async () => {
+    const blocked = updaterUnavailable();
+    if (blocked) return blocked;
+    try {
+      prepareUpdater();
+      const result = await autoUpdater.checkForUpdates();
+      const version = result?.updateInfo?.version ?? null;
+      if (!version) return { ok: true, version: null };
+      return {
+        ok: true,
+        version,
+        notes: typeof result.updateInfo.releaseNotes === 'string' ? result.updateInfo.releaseNotes : '',
+        publishedAt: result.updateInfo.releaseDate ?? null,
+      };
+    } catch (error) {
+      return { ok: false, error: error ? String(error.message || error) : 'update check failed' };
+    }
+  });
+
+  ipcMain.handle('updates:download', async () => {
+    const blocked = updaterUnavailable();
+    if (blocked) return blocked;
+    try {
+      prepareUpdater();
+      await autoUpdater.downloadUpdate();
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error ? String(error.message || error) : 'update download failed' };
+    }
+  });
+
+  ipcMain.handle('updates:install', () => {
+    if (!app.isPackaged) return { ok: false };
+    setImmediate(() => autoUpdater.quitAndInstall(false, true));
+    return { ok: true };
+  });
+
   ipcMain.handle('app:info', () => ({
     name: app.getName(),
     version: app.getVersion(),

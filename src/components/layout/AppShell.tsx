@@ -1,14 +1,40 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import clsx from 'clsx';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { MobileTabBar } from './MobileTabBar';
 import { MobileHeader } from './MobileHeader';
 import { AuthModal } from '@/components/auth/AuthModal';
 import { SecurityBanner } from '@/components/auth/SecurityBanner';
+import { UpdateNotice } from '@/components/app/UpdateNotice';
+import { useLicense } from '@/state/LicenseState';
 import { desktop } from '@/lib/desktop';
 import { useToast } from '@/state/ToastState';
+
+/**
+ * A suspended account is enforced on the server, but the app must say so in one
+ * place instead of letting every button fail with "account blocked".
+ */
+function AccountSuspendedNotice() {
+  const { isBlocked } = useLicense();
+  if (!isBlocked) return null;
+  return (
+    <div className="mb-3 rounded-[var(--r-card)] border border-danger/30 bg-danger-soft p-3">
+      <p className="text-sm font-semibold text-danger">This account is suspended</p>
+      <p className="mt-1 text-2xs leading-relaxed text-ink-muted">
+        Generating, plan downloads and credit spending are paused until support restores the account. Your
+        library and files on this device are untouched.
+      </p>
+      <Link
+        to="/contact"
+        className="mt-2 inline-flex h-9 items-center rounded-[var(--r-control)] border border-danger/40 bg-surface px-3 text-2xs font-semibold text-danger"
+      >
+        Contact support
+      </Link>
+    </div>
+  );
+}
 
 export function AppShell({ children }: { children?: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -78,6 +104,8 @@ export function AppShell({ children }: { children?: ReactNode }) {
         >
           <div className="workspace workspace-enter">
             <SecurityBanner />
+            <AccountSuspendedNotice />
+            <UpdateNotice />
             {children ?? <Outlet />}
           </div>
         </main>

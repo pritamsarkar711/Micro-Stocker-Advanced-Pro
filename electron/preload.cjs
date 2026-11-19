@@ -146,6 +146,17 @@ const api = {
   video: {
     probeFfmpeg: () => ipcRenderer.invoke('video:probe-ffmpeg'),
   },
+
+  updates: {
+    check: () => ipcRenderer.invoke('updates:check'),
+    download: () => ipcRenderer.invoke('updates:download'),
+    install: () => ipcRenderer.invoke('updates:install'),
+    onProgress: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on('updates:progress', listener);
+      return () => ipcRenderer.removeListener('updates:progress', listener);
+    },
+  },
 };
 
 contextBridge.exposeInMainWorld('desktop', api);

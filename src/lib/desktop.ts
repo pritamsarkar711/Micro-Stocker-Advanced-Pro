@@ -1,4 +1,5 @@
 import { APP_NAME, APP_VERSION } from './version';
+import { isNativeShell } from './native/platform';
 
 export interface AppInfo {
   name: string;
@@ -191,6 +192,14 @@ export interface DesktopBridge {
   video: {
     probeFfmpeg: () => Promise<{ ok: boolean; available: boolean }>;
   };
+  updates?: {
+    check: () => Promise<{ ok: boolean; version?: string | null; notes?: string; publishedAt?: string | null; error?: string }>;
+    download: () => Promise<{ ok: boolean; error?: string }>;
+    install: () => Promise<{ ok: boolean }>;
+    onProgress: (
+      cb: (event: { status: 'checking' | 'available' | 'none' | 'downloading' | 'downloaded' | 'error'; percent?: number; version?: string; error?: string }) => void,
+    ) => () => void;
+  };
 }
 
 declare global {
@@ -379,6 +388,27 @@ export const desktop: DesktopBridge =
 export async function httpRequest(payload: NetRequestPayload): Promise<NetResponse> {
   if (typeof window !== 'undefined' && window.desktop?.net?.request) {
     return window.desktop.net.request(payload);
+  }
+  // Inside the Android / iOS shell a web fetch is still an origin restricted
+  // request. The native bridge is not, so every API call (update check, license
+  // sync, AI proxy) goes through it and no server has to send CORS headers.
+  if (isNativeShell()) {
+    try {
+      const { CapacitorHttp } = await import('@capacitor/core');
+      const response = await CapacitorHttp.request({
+        url: payload.url,
+        method: payload.method ?? 'GET',
+        headers: payload.headers,
+        data: payload.body,
+        responseType: 'text',
+        connectTimeout: Math.min(payload.timeoutMs ?? 20000, 30000),
+        readTimeout: payload.timeoutMs ?? 60000,
+      });
+      const text = typeof response.data === 'string' ? response.data : JSON.stringify(response.data ?? '');
+      return { ok: response.status >= 200 && response.status < 300, status: response.status, text };
+    } catch (error) {
+      return { ok: false, status: 0, error: error instanceof Error ? error.message : String(error) };
+    }
   }
   return browserFallback.net.request(payload);
 }

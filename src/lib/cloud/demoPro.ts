@@ -173,6 +173,28 @@ function record(action: string, caller: DemoCaller | null, target: string | null
   auditLog.unshift({ id: auditId++, actor: caller?.id ?? null, action, target, detail, created_at: now() });
 }
 
+/* ------------------------------------------------------- admin user management */
+
+/**
+ * Accounts shown in the Admin console preview. The sign-in demo keeps its own
+ * copy of the users, so changes are mirrored through a hook instead of an import
+ * that would be circular.
+ */
+export const demoAccounts: Array<Record<string, unknown> & { user_id: string; email: string; role: string; blocked: boolean }> = [
+  { user_id: DEMO_ADMIN_ID, email: 'admin@demo.local', display_name: 'Studio Admin', role: 'admin', blocked: false, plan: null, expires_at: null, credits: 0, spent_bdt: 0, generations: 0, joined: new Date(Date.now() - 120 * DAY).toISOString(), last_seen: new Date(Date.now() - 2 * 3600_000).toISOString(), confirmed: true },
+  { user_id: DEMO_ALICE_ID, email: 'alice@demo.local', display_name: 'Alice Rahman', role: 'user', blocked: false, plan: 'starter', expires_at: subscriptions[0].expires_at, credits: walletCredits[DEMO_ALICE_ID], spent_bdt: 299, generations: generations.length, joined: new Date(Date.now() - 42 * DAY).toISOString(), last_seen: new Date(Date.now() - 26 * 3600_000).toISOString(), confirmed: true },
+  { user_id: 'd0000000-0000-4000-8000-000000000003', email: 'bob@demo.local', display_name: 'Bob Ahmed', role: 'user', blocked: false, plan: 'starter', expires_at: new Date(Date.now() + 12 * DAY).toISOString(), credits: walletCredits['d0000000-0000-4000-8000-000000000003'], spent_bdt: 299, generations: 3, joined: new Date(Date.now() - 19 * DAY).toISOString(), last_seen: new Date(Date.now() - 9 * DAY).toISOString(), confirmed: true },
+  { user_id: 'd0000000-0000-4000-8000-000000000004', email: 'carol@demo.local', display_name: 'Carol Das', role: 'user', blocked: false, plan: null, expires_at: null, credits: 0, spent_bdt: 0, generations: 0, joined: new Date(Date.now() - 7 * DAY).toISOString(), last_seen: null, confirmed: false },
+];
+
+type AccountHook = (id: string, blocked: boolean | null) => void;
+let accountHook: AccountHook | null = null;
+
+/** Registers the sign-in preview so a suspension there is visible too. */
+export function onDemoAccountChange(hook: AccountHook) {
+  accountHook = hook;
+}
+
 /** RPC handlers mirroring public.pro_* in the database. */
 export const proRpcHandlers: Record<string, (params: Json, caller: DemoCaller | null) => unknown> = {
   pro_my_entitlement(_params, caller) {
@@ -314,14 +336,48 @@ export const proRpcHandlers: Record<string, (params: Json, caller: DemoCaller | 
       by_model: usage,
     });
   },
-  pro_admin_users() {
-    return ok(
-      [
-        { user_id: DEMO_ADMIN_ID, email: 'admin@demo.local', display_name: 'Studio Admin', role: 'admin', blocked: false, plan: null, expires_at: null, credits: 0, spent_bdt: 0, generations: 0, joined: new Date(Date.now() - 120 * DAY).toISOString() },
-        { user_id: DEMO_ALICE_ID, email: 'alice@demo.local', display_name: 'Alice Rahman', role: 'user', blocked: false, plan: 'starter', expires_at: subscriptions[0].expires_at, credits: walletCredits[DEMO_ALICE_ID], spent_bdt: 299, generations: generations.length, joined: new Date(Date.now() - 42 * DAY).toISOString() },
-        { user_id: 'd0000000-0000-4000-8000-000000000003', email: 'bob@demo.local', display_name: 'Bob Ahmed', role: 'user', blocked: false, plan: 'starter', expires_at: new Date(Date.now() + 12 * DAY).toISOString(), credits: walletCredits['d0000000-0000-4000-8000-000000000003'], spent_bdt: 299, generations: 3, joined: new Date(Date.now() - 19 * DAY).toISOString() },
-      ],
+  pro_admin_users(params, caller) {
+    if (!caller?.admin) return fail('not allowed');
+    const search = String(params.p_search ?? '').toLowerCase();
+    const rows = demoAccounts.filter(
+      (row) => !search || String(row.email ?? '').toLowerCase().includes(search) || String(row.display_name ?? '').toLowerCase().includes(search),
     );
+    return ok(rows.map((row) => ({ ...row })));
+  },
+  pro_admin_set_blocked(params, caller) {
+    if (!caller?.admin) return fail('not allowed');
+    const id = String(params.p_user ?? '');
+    const row = demoAccounts.find((entry) => entry.user_id === id);
+    if (!row) return fail('account not found');
+    if (id === caller.id) return fail('you cannot suspend your own account');
+    if (row.role === 'admin') return fail('administrator accounts cannot be suspended');
+    const blocked = Boolean(params.p_blocked);
+    row.blocked = blocked;
+    record(blocked ? 'user.suspend' : 'user.restore', caller, id, { email: row.email, blocked });
+    accountHook?.(id, blocked);
+    return ok(blocked);
+  },
+  pro_admin_delete_user(params, caller) {
+    if (!caller?.admin) return fail('not allowed');
+    const id = String(params.p_user ?? '');
+    const index = demoAccounts.findIndex((entry) => entry.user_id === id);
+    if (index < 0) return fail('account not found');
+    if (id === caller.id) return fail('you cannot delete your own account');
+    if (demoAccounts[index].role === 'admin') return fail('administrator accounts cannot be deleted');
+    record('user.delete', caller, id, { email: demoAccounts[index].email });
+    demoAccounts.splice(index, 1);
+    accountHook?.(id, null);
+    return ok(true);
+  },
+  pro_admin_sessions(_params, caller) {
+    if (!caller?.admin) return fail('not allowed');
+    return ok(demoAccounts.map((row) => ({
+      user_id: row.user_id,
+      email: row.email,
+      last_seen: row.last_seen,
+      confirmed: row.confirmed,
+      blocked: row.blocked,
+    })));
   },
   pro_admin_review_order(params, caller) {
     if (!caller?.admin) return fail('not allowed');

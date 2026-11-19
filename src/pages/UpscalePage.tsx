@@ -30,6 +30,8 @@ import {
   UPSCALE_PURPOSES,
   UPSCALE_TARGETS,
   isPremiumUpscaleModel,
+  isDesktopOnlyModel,
+  modelsForDevice,
   type UpscaleModel,
   type UpscalePurpose,
 } from '@/lib/stock/upscale/models';
@@ -152,12 +154,21 @@ export function UpscalePage() {
     [modelId],
   );
 
+  // Phones can only execute the built-in engine. Listing downloadable desktop
+  // packs here is what produced "install failed" popups on Android, so the
+  // catalog shows what this device can actually run.
+  const deviceModels = useMemo(() => modelsForDevice(desktop.isDesktop), []);
+  const mobileNeuralMB = useMemo(() => {
+    const mobile = deviceModels.find((m) => m.family === 'onnx');
+    return mobile ? Math.round(mobile.sizeMB) : 0;
+  }, [deviceModels]);
+  const desktopPackCount = UPSCALE_MODELS.length - deviceModels.length;
   const filteredModels = useMemo(
     () =>
       purpose === 'all'
-        ? UPSCALE_MODELS
-        : UPSCALE_MODELS.filter((m) => m.purposes.includes(purpose)),
-    [purpose],
+        ? deviceModels
+        : deviceModels.filter((m) => m.purposes.includes(purpose)),
+    [purpose, deviceModels],
   );
 
   const autoApply = useCallback(
@@ -670,7 +681,7 @@ export function UpscalePage() {
                 {queue.map((entry) => {
                   const preview = resolveTargetSize(entry.width, entry.height, activeTarget);
                   return (
-                    <div key={entry.id} className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0">
+                    <div key={entry.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3 first:pt-0 last:pb-0">
                       <img
                         src={entry.outUrl ?? entry.srcUrl}
                         alt={entry.name}
@@ -681,15 +692,15 @@ export function UpscalePage() {
                           {entry.outName ?? entry.name}
                         </div>
                         <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-2xs text-ink-muted tabular-nums">
-                          <span>
+                          <span className="whitespace-nowrap">
                             {entry.width}x{entry.height}
                           </span>
-                          <GIcon name="arrow_forward" size={12} />
-                          <span className="font-medium text-ink">
+                          <GIcon name="arrow_forward" size={12} className="shrink-0" />
+                          <span className="whitespace-nowrap font-medium text-ink">
                             {entry.outW ?? preview.width}x{entry.outH ?? preview.height}
                           </span>
                           {entry.outMP && <Badge tone="brand">{entry.outMP} MP</Badge>}
-                          {entry.outBlob && <span>({formatBytes(entry.outBlob.size)})</span>}
+                          {entry.outBlob && <span className="whitespace-nowrap">({formatBytes(entry.outBlob.size)})</span>}
                         </div>
                         {entry.status === 'running' && (
                           <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-3">
@@ -704,7 +715,7 @@ export function UpscalePage() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex w-full items-center justify-end gap-1.5 sm:w-auto sm:justify-start">
                         {entry.status === 'done' && entry.outBlob && entry.outName && (
                           <>
                             <Button
@@ -776,6 +787,17 @@ export function UpscalePage() {
               })}
             </div>
 
+            {desktopPackCount > 0 && (
+              <p className="mb-3 flex items-start gap-1.5 rounded-[var(--r-xs)] border border-line bg-surface-2/60 px-2.5 py-2 text-2xs leading-relaxed text-ink-muted">
+                <GIcon name="info" size={13} className="mt-px shrink-0" />
+                <span>
+                  {filteredModels.length} models run on this device. The built-in engines need no download; the mobile neural model
+                  installs once ({mobileNeuralMB} MB) and then works offline. {desktopPackCount} desktop GPU packs
+                  (Real-ESRGAN NCNN, RealCUGAN, Waifu2x) need a graphics card and stay in the Windows, macOS and Linux build.
+                </span>
+              </p>
+            )}
+
             <div className="grid max-h-[26rem] gap-2 overflow-y-auto pr-1 md:grid-cols-2 2xl:grid-cols-3">
               {filteredModels.map((model) => (
                 <ModelTile
@@ -788,7 +810,7 @@ export function UpscalePage() {
                   selected={modelId === model.id}
                   builtin={model.family === 'builtin'}
                   installed={Boolean(installed[model.id])}
-                  desktopOnly={model.family !== 'builtin'}
+                  desktopOnly={isDesktopOnlyModel(model)}
                   isDesktop={desktop.isDesktop}
                   progress={dlProgress[model.id]}
                   onSelect={() => {

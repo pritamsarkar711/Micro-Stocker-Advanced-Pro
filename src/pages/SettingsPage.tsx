@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import clsx from 'clsx';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -18,6 +18,9 @@ import { useAuth } from '@/state/AuthState';
 import { useLibrary } from '@/state/library';
 import { useWorkspaceSync } from '@/state/WorkspaceSync';
 import { useToast } from '@/state/ToastState';
+import { APP_VERSION } from '@/lib/version';
+import { modelStoreLocation } from '@/lib/modelStore';
+import { subscribeUpdate, updateState, checkUpdates, beginUpdate, restartToInstall, snoozeUpdate } from '@/lib/updateStore';
 import { bdtUnit, CURRENCIES, type CurrencyCode } from '@/lib/format';
 import { sanitizeBackup } from '@/lib/stock/backup';
 import { desktop } from '@/lib/desktop';
@@ -249,6 +252,8 @@ export function SettingsPage() {
           )}
         </Card>
 
+        <UpdatesCard />
+
         <Card>
           <CardHeader title="Workspace data" icon={<GIcon name="storage" size={18} />} subtitle={`${items.length} files on this device`} />
           <div className="flex flex-wrap items-center gap-2">
@@ -289,5 +294,69 @@ export function SettingsPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+/** Update status and the manual check, in plain language. */
+function UpdatesCard() {
+  const state = useSyncExternalStore(subscribeUpdate, updateState, updateState);
+  const checking = state.phase === 'checking';
+  const update = state.update;
+  const available = Boolean(update) && (state.phase === 'available' || state.phase === 'ready');
+
+  return (
+    <Card>
+      <CardHeader
+        title="Updates"
+        icon={<GIcon name="install_desktop" size={18} />}
+        subtitle={`Micro Stocker Advanced Pro ${APP_VERSION}`}
+        action={<Badge tone={available ? 'brand' : 'neutral'}>{available ? `${update?.version} ready` : 'Up to date'}</Badge>}
+      />
+      <div className="space-y-2.5 text-[0.8125rem] text-ink-muted">
+        <p className="leading-relaxed">
+          {available
+            ? `Version ${update?.version} is available. The app installs it for you: no file hunting, no manual download.`
+            : 'The app checks GitHub releases at most once a day and tells you the moment a new build is out.'}
+        </p>
+        <p className="text-2xs leading-relaxed text-ink-faint">
+          Model and update files stay in: {modelStoreLocation()}.
+        </p>
+
+        {state.phase === 'error' && state.message && (
+          <p className="rounded-[var(--r-xs)] border border-danger/30 bg-danger-soft px-2 py-1.5 text-2xs text-danger">
+            {state.message}
+          </p>
+        )}
+        {state.phase === 'current' && <p className="text-2xs text-ok">This is the newest published build.</p>}
+
+        <div className="flex flex-wrap gap-2 pt-1">
+          {available ? (
+            <Button size="sm" icon={<GIcon name="download" size={15} />} onClick={() => void beginUpdate()}>
+              Install {update?.version}
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              loading={checking}
+              icon={<GIcon name="refresh" size={15} />}
+              onClick={() => void checkUpdates(true)}
+            >
+              Check for updates
+            </Button>
+          )}
+          {state.phase === 'ready' && (
+            <Button size="sm" variant="secondary" icon={<GIcon name="restart_alt" size={15} />} onClick={() => void restartToInstall()}>
+              Restart to finish
+            </Button>
+          )}
+          {available && (
+            <Button size="sm" variant="ghost" onClick={() => snoozeUpdate()}>
+              Remind me tomorrow
+            </Button>
+          )}
+        </div>
+      </div>
+    </Card>
   );
 }

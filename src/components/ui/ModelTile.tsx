@@ -127,7 +127,15 @@ export function ModelTile({
               </button>
             )}
           </div>
-        ) : onInstall && (!desktopOnly || isDesktop) ? (
+        ) : desktopOnly && !isDesktop ? (
+          <span
+            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-[var(--r-xs)] border border-line bg-surface-2 px-2 text-2xs font-medium text-ink-faint"
+            title="This pack needs a desktop GPU. It runs in the Windows, macOS and Linux builds."
+          >
+            <GIcon name="install_desktop" size={13} />
+            Desktop
+          </span>
+        ) : onInstall ? (
           <button
             type="button"
             onClick={onInstall}

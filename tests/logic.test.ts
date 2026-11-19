@@ -51,6 +51,8 @@ import {
   UPSCALE_PURPOSES,
   UPSCALE_TARGETS,
   buildUpscaleInstallSpec,
+  isDesktopOnlyModel,
+  modelsForDevice,
   resolveTargetSize,
 } from '@/lib/stock/upscale/models';
 import { BG_MODELS, BG_PURPOSES, buildBgInstallSpec, postprocessBgMask } from '@/lib/tools/bgremove';
@@ -146,6 +148,16 @@ import { CURRENCIES, currencyMeta, money } from '@/lib/format';
 import { sizeCapOptions } from '@/lib/stock/sizecaps';
 import { APP_NAME, APP_VERSION } from '@/lib/version';
 import { recommendUpscale } from '@/lib/stock/upscale/recommend';
+import {
+  base64ToBytes as vaultBase64ToBytes,
+  bytesToBase64 as vaultBytesToBase64,
+  isDownloadComplete,
+  nextChunkRange,
+  parseContentRangeTotal,
+  responseToBytes,
+  safeFileName,
+} from '@/lib/native/bytes';
+import { isNewerVersion, parseVersion, pickAssetFor } from '@/lib/updateMath';
 import { analysePixels } from '@/lib/vision/analyse';
 import { sanitizeBackup } from '@/lib/stock/backup';
 import { parsePostScript, postScriptToSvg } from '@/lib/vector/postscript';
@@ -1332,6 +1344,67 @@ test('password policy refuses common and short passwords', () => {
   equal(checkPassword('short').ok, false);
   equal(checkPassword('correct horse battery').ok, true);
   equal(checkPassword('Tr0ub4dor&3x').ok, true);
+});
+
+test('Mobile model vault parses ranged downloads correctly', () => {
+  equal(parseContentRangeTotal('bytes 0-4194303/7340032'), 7340032);
+  equal(parseContentRangeTotal('bytes 4194304-7340031/*'), 0);
+  equal(parseContentRangeTotal(undefined), 0);
+  equal(safeFileName('../../etc/passwd'), 'etc_passwd');
+  equal(safeFileName('u2netp.onnx'), 'u2netp.onnx');
+  equal(safeFileName(''), 'part.bin');
+  const payload = new Uint8Array([0, 1, 2, 250, 255]);
+  equal(Array.from(vaultBase64ToBytes(vaultBytesToBase64(payload))).join(','), Array.from(payload).join(','));
+  equal(responseToBytes(vaultBytesToBase64(payload)).byteLength, 5);
+  equal(responseToBytes(payload.buffer).byteLength, 5);
+  equal(responseToBytes(null).byteLength, 0);
+  const plan = nextChunkRange(4 * 1024 * 1024, 4 * 1024 * 1024);
+  equal(plan.start, 4194304);
+  equal(plan.end, 8388607);
+  equal(isDownloadComplete(7340032, 7340032, 1024, 4194304), true);
+  equal(isDownloadComplete(4194304, 7340032, 4194304, 4194304), false);
+  equal(isDownloadComplete(500, 0, 500, 4194304), true, 'a short last chunk ends an unknown length file');
+});
+
+test('Model catalogs only offer what the current device can run', () => {
+  const desktop = modelsForDevice(true);
+  const phone = modelsForDevice(false);
+  equal(desktop.length, UPSCALE_MODELS.length);
+  assert(phone.length > 0, 'phones still get the built-in engine');
+  assert(phone.every((model) => model.family !== 'realesrgan'), 'no NCNN binary is offered on a phone');
+  assert(phone.some((model) => model.family === 'onnx'), 'the phone gets its own neural model');
+  assert(desktop.some((model) => model.family === 'realesrgan'), 'desktop keeps the NCNN packs');
+  assert(UPSCALE_MODELS.filter(isDesktopOnlyModel).length > 0, 'NCNN packs are classified as desktop only');
+  const mobile = phone.find((model) => model.family === 'onnx')!;
+  assert(!isDesktopOnlyModel(mobile), 'the ONNX model runs on a phone');
+  const spec = buildUpscaleInstallSpec(mobile);
+  assert(Boolean(spec), 'the mobile model is installable');
+  equal(spec!.files.length, 1, 'one file, no engine archive');
+  assert(spec!.files[0].url.endsWith('.onnx'), 'weights come from a single .onnx file');
+  equal(spec!.files[0].extractZip, undefined, 'nothing to unzip on a phone');
+  assert(phone.filter((model) => buildUpscaleInstallSpec(model) === null).length >= 4, 'built-in engines need no download');
+});
+
+test('Update checks compare versions and pick the right release asset', () => {
+  equal(isNewerVersion('2.4.0', '2.3.1'), true);
+  equal(isNewerVersion('v2.4.0', '2.4.0'), false);
+  equal(isNewerVersion('2.3.10', '2.3.9'), true);
+  equal(isNewerVersion('2.3.1', '2.4.0'), false);
+  equal(parseVersion('v3.0.0-beta.2').join('.'), '3.0.0');
+
+  const assets = [
+    { name: 'Micro.Stocker.Advanced.Pro-Setup-2.4.0-win-x64.exe', browser_download_url: 'https://x/setup.exe', size: 10 },
+    { name: 'micro-stocker-pro-2.4.0-debug.apk', browser_download_url: 'https://x/app.apk', size: 20 },
+    { name: 'Micro.Stocker.Advanced.Pro-2.4.0.dmg', browser_download_url: 'https://x/app.dmg', size: 30 },
+    { name: 'Micro.Stocker.Advanced.Pro-2.4.0-linux-x86_64.AppImage', browser_download_url: 'https://x/app.appimage', size: 40 },
+    { name: 'latest.yml', browser_download_url: 'https://x/latest.yml', size: 1 },
+  ];
+  equal(pickAssetFor('android', assets)?.name, 'micro-stocker-pro-2.4.0-debug.apk');
+  equal(pickAssetFor('desktop', assets, 'win32')?.name, 'Micro.Stocker.Advanced.Pro-Setup-2.4.0-win-x64.exe');
+  equal(pickAssetFor('desktop', assets, 'darwin')?.name, 'Micro.Stocker.Advanced.Pro-2.4.0.dmg');
+  equal(pickAssetFor('desktop', assets, 'linux')?.name, 'Micro.Stocker.Advanced.Pro-2.4.0-linux-x86_64.AppImage');
+  equal(pickAssetFor('link', assets)?.name, 'micro-stocker-pro-2.4.0-debug.apk');
+  equal(pickAssetFor('android', []), null, 'no APK means no silent failure');
 });
 
 await Promise.all(pending);
