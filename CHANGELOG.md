@@ -3,6 +3,42 @@
 All notable changes to Micro Stocker Advanced Pro are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+- **Android releases now ship a signed release APK that updates in place.** The
+  Android workflow built and published a *debug* APK (debuggable, and not the
+  artifact the update path should install). It now builds `assembleRelease`,
+  verifies the v2 signature with `apksigner`, and publishes
+  `micro-stocker-pro-<version>-release.apk` with a `SHA256SUMS.txt`. The debug
+  APK remains a workflow artifact for diagnostics only.
+- **The APK version can no longer drift from the app version.** `versionCode` was
+  a hand-maintained counter (25) next to a hardcoded `versionName`; both now come
+  from `package.json`, with `versionCode` derived as
+  `major * 10000 + minor * 100 + patch`. A release therefore always outranks the
+  one before it, which is what Android requires before it will install an update.
+- **A tag build can no longer publish an uninstallable APK.** The workflow
+  compares the APK's signer certificate with the configured signing key and
+  refuses the release if they differ, and checks that the tag, `package.json`,
+  `versionCode` and `versionName` all agree.
+- **A transient Maven error no longer costs a release its APK.** One tag build
+  failed on `kotlin-stdlib-jdk8:1.9.0` because a cold Gradle cache met a Maven
+  Central connection error. The job now caches Gradle dependencies and retries
+  once, only for connection-level failures, so a genuinely wrong coordinate
+  still fails immediately with the real reason.
+- In-app updates pick the signed release APK instead of whichever `.apk` the
+  release API listed first, so a release carrying both no longer offers the
+  debug build.
+
+### Changed
+- Release signing moved to `android/app/signing.gradle`: the committed sideload
+  key stays the default, and a private key can be supplied through four
+  `MSAP_ANDROID_*` variables without editing the repository. Setting only some
+  of them fails the build instead of silently signing with a different key.
+- `npm run verify` (and the new Verify workflow on every pull request) now
+  includes `npm run android:check`, which confirms the signing key, the build
+  types and the version-code scheme without needing a JDK.
+
 ## [2.3.2] - 2026-11-19
 
 ### Added

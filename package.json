@@ -19,7 +19,7 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "node scripts/run-tests.mjs && node tests/pro-platform-db.mjs && node scripts/ssr-smoke.mjs",
-    "verify": "npm run typecheck && npm test && npm run build",
+    "verify": "npm run typecheck && npm test && npm run android:check && npm run build",
     "preview": "vite preview --host 0.0.0.0",
     "pack": "npm run build && electron-builder --config electron-builder.yml --dir",
     "dist": "npm run build && electron-builder --config electron-builder.yml",
@@ -48,7 +48,9 @@
     "build:web": "vite build",
     "android:sync": "npm run build:web && cap sync android",
     "android:debug": "npm run android:sync && cd android && ./gradlew assembleDebug",
-    "android:release": "npm run android:sync && cd android && ./gradlew assembleRelease"
+    "android:release": "npm run android:sync && cd android && ./gradlew assembleRelease",
+    "android:check": "node scripts/android-signing-check.mjs",
+    "android:version": "node scripts/android-version.mjs"
   },
   "dependencies": {
     "@capacitor/filesystem": "^6.0.4",

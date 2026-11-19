@@ -65,7 +65,9 @@ jobs:
           set -euo pipefail
           VERSION_TAG="v$(node -p "require('./package.json').version")"
           TAG="$VERSION_TAG"
-          [[ "$GITHUB_REF" == refs/tags/* ]] && TAG="${GITHUB_REF#refs/tags/}"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
           [[ "$TAG" == "$VERSION_TAG" ]] || { echo "Tag and package version do not match"; exit 1; }
           shopt -s nullglob
           installers=(release/*Setup*.exe)

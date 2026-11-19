@@ -150,12 +150,20 @@ Windows builds are unsigned unless the release notes say otherwise. Every build
 talks to the same backend, so one account, one subscription and one credit
 balance cover the desktop app, the web app and the phone.
 
-**Android.** Each release carries an APK built from the same bundle. Install it on
-the phone, sign in with the account you already use, and the library, presets and
-credits are already there. Files you export are written to Documents and offered
-through the share sheet, so a design can go straight to Drive or a chat app. The
-phone build is produced by the Android workflow in this repository, which runs on
-every version tag.
+**Android.** Each release carries a signed APK built from the same bundle
+(`micro-stocker-pro-<version>-release.apk`, with a `SHA256SUMS.txt` beside it).
+Install it on the phone, sign in with the account you already use, and the
+library, presets and credits are already there. Files you export are written to
+Documents and offered through the share sheet, so a design can go straight to
+Drive or a chat app.
+
+Updates install in place: every APK is signed with the same key
+(`android/keystore/sideload.p12`), so **Update** in the app upgrades the installed
+copy instead of asking you to uninstall it. The phone build is produced by the
+Android workflow in this repository, which runs on every version tag and checks
+the signature, the signing key and the version code of the APK before attaching
+it. Build one yourself with `npm run android:release`, or check the signing setup
+with `npm run android:check`.
 
 ## Build from source
 

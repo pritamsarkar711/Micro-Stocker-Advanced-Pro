@@ -41,6 +41,8 @@ image-search/
 
 # Android build output and generated Capacitor assets
 android/.gradle/
+# Local signing override (a private keystore path + password; never commit it)
+android/keystore.properties
 android/build/
 android/app/build/
 android/local.properties
