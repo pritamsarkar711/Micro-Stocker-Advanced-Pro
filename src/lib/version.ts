@@ -10,7 +10,7 @@ import { isAndroid } from './native/platform';
 
 export const APP_NAME = 'Micro Stocker Advanced Pro';
 export const ANDROID_APP_NAME = 'vecmotion';
-export const APP_VERSION = '2.3.2';
+export const APP_VERSION = '2.4.0';
 
 /**
  * The name shown to the user. The Android build is branded vecmotion; the
