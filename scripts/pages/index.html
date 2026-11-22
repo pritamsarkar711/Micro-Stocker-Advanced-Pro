@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#101114" />
+  <title>vecmotion — Mobile creator studio for Android</title>
+  <meta
+    name="description"
+    content="Download vecmotion for Android: AI metadata with CSV export, image and video upscaling to 8K, motion video loops, background generation, image to vector and background removal. Free, original, commercial-safe."
+  />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23101114'/%3E%3Ccircle cx='32' cy='32' r='13' fill='none' stroke='%238b5cf6' stroke-width='5'/%3E%3Ccircle cx='32' cy='32' r='4' fill='%23ec4899'/%3E%3Cpath d='M32 4v10M32 50v10M4 32h10M50 32h10' stroke='%2322d3ee' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <style>
+    :root {
+      --bg: #101114;
+      --surface: #17181c;
+      --surface-2: #1e2026;
+      --line: #26272e;
+      --ink: #f3f4f6;
+      --muted: #9ca3af;
+      --faint: #6b7280;
+      --brand: #8b5cf6;
+      --brand-2: #ec4899;
+      --cyan: #22d3ee;
+      --ok: #34d399;
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: radial-gradient(1200px 700px at 80% -10%, rgba(139, 92, 246, 0.22), transparent 55%),
+                  radial-gradient(900px 600px at -10% 30%, rgba(34, 211, 238, 0.12), transparent 50%),
+                  var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, 'Helvetica Neue', Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.55;
+    }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 0 1.25rem; }
+    header.site {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.1rem 0; border-bottom: 1px solid var(--line);
+    }
+    .brand { display: flex; align-items: center; gap: 0.7rem; text-decoration: none; }
+    .brand svg { display: block; }
+    .brand b { font-size: 1.15rem; letter-spacing: -0.02em; color: var(--ink); }
+    .brand small { display: block; font-size: 0.62rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--faint); font-weight: 600; }
+    .gh-link { display: inline-flex; align-items: center; gap: 0.45rem; color: var(--muted); text-decoration: none; font-size: 0.8rem; border: 1px solid var(--line); border-radius: 10px; padding: 0.4rem 0.75rem; }
+    .gh-link:hover { color: var(--ink); border-color: var(--brand); }
+
+    .hero { padding: 4rem 0 2.5rem; text-align: center; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 0.45rem;
+      border: 1px solid rgba(139, 92, 246, 0.45); background: rgba(139, 92, 246, 0.12);
+      color: #c4b5fd; border-radius: 999px; padding: 0.3rem 0.85rem;
+      font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .hero h1 {
+      margin: 1.4rem auto 0.9rem; max-width: 46rem;
+      font-size: clamp(2.1rem, 5.2vw, 3.4rem); line-height: 1.06; letter-spacing: -0.03em; font-weight: 800;
+    }
+    .hero h1 .grad {
+      background: linear-gradient(100deg, #a78bfa 0%, #ec4899 45%, #22d3ee 100%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .hero p.lead { color: var(--muted); font-size: 1.05rem; max-width: 40rem; margin: 0 auto; }
+
+    .download {
+      margin: 2rem auto 0.9rem; display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; align-items: center;
+    }
+    .dl-button {
+      display: inline-flex; align-items: center; gap: 0.65rem;
+      background: linear-gradient(135deg, #7c3aed, #db2777);
+      color: #fff; text-decoration: none; font-weight: 700; letter-spacing: -0.01em;
+      font-size: 1.05rem; border-radius: 14px; padding: 0.95rem 1.6rem;
+      box-shadow: 0 12px 40px rgba(219, 39, 119, 0.35), inset 0 1px 0 rgba(255,255,255,0.25);
+      transition: transform 120ms ease, box-shadow 120ms ease;
+    }
+    .dl-button:hover { transform: translateY(-1px); box-shadow: 0 16px 48px rgba(124, 58, 237, 0.45), inset 0 1px 0 rgba(255,255,255,0.25); }
+    .dl-secondary { color: var(--muted); text-decoration: none; font-size: 0.8rem; border: 1px solid var(--line); border-radius: 12px; padding: 0.85rem 1rem; }
+    .dl-secondary:hover { color: var(--ink); border-color: var(--brand); }
+
+    .meta-row { display: flex; flex-wrap: wrap; gap: 0.5rem 1.1rem; justify-content: center; color: var(--faint); font-size: 0.78rem; }
+    .meta-row b { color: var(--muted); font-weight: 600; }
+    code.inline { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.72rem; background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 0.12rem 0.4rem; color: #d8b4fe; }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.9rem; margin: 2.5rem 0; }
+    .card { background: linear-gradient(180deg, var(--surface), var(--surface-2)); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.1rem 1.1rem 1.15rem; }
+    .card h3 { font-size: 0.9rem; letter-spacing: -0.01em; display: flex; align-items: center; gap: 0.55rem; }
+    .card p { margin-top: 0.4rem; color: var(--muted); font-size: 0.82rem; }
+    .icon { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; border-radius: 10px; background: rgba(139, 92, 246, 0.15); }
+
+    section.block { border-top: 1px solid var(--line); padding: 2.2rem 0; }
+    section.block h2 { font-size: 1.25rem; letter-spacing: -0.02em; margin-bottom: 0.9rem; }
+    .steps { counter-reset: step; display: grid; gap: 0.7rem; max-width: 46rem; }
+    .steps li { list-style: none; position: relative; padding-left: 2.2rem; color: var(--muted); font-size: 0.9rem; }
+    .steps li::before {
+      counter-increment: step; content: counter(step);
+      position: absolute; left: 0; top: -0.15rem;
+      width: 1.5rem; height: 1.5rem; border-radius: 8px;
+      background: var(--surface-2); border: 1px solid var(--line);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 700; color: var(--cyan);
+    }
+    pre.verify {
+      max-width: 46rem; overflow-x: auto; background: #0b0c0f; border: 1px solid var(--line);
+      border-radius: 12px; padding: 0.9rem 1rem; font-size: 0.75rem; color: #a7f3d0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-all;
+    }
+
+    footer.site { border-top: 1px solid var(--line); padding: 1.5rem 0 2rem; display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; justify-content: space-between; color: var(--faint); font-size: 0.78rem; }
+    footer.site a { color: var(--muted); text-decoration: none; }
+    footer.site a:hover { color: var(--ink); }
+    @media (prefers-reduced-motion: no-preference) {
+      .dl-button:active { transform: scale(0.98); }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="site">
+      <a class="brand" href="./">
+        <svg width="40" height="40" viewBox="0 0 64 64" role="img" aria-label="vecmotion logo">
+          <rect width="64" height="64" rx="14" fill="#17181c"/>
+          <circle cx="32" cy="32" r="13" fill="none" stroke="#8b5cf6" stroke-width="5"/>
+          <circle cx="32" cy="32" r="4" fill="#ec4899"/>
+          <path d="M32 6v9M32 49v9M6 32h9M49 32h9" stroke="#22d3ee" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+        <span><b>vecmotion</b><small>Mobile Creator Studio</small></span>
+      </a>
+      <a class="gh-link" href="{{REPO_URL}}" rel="noopener">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        Source on GitHub
+      </a>
+    </header>
+
+    <main>
+      <section class="hero">
+        <span class="pill">Android · v{{VERSION}}</span>
+        <h1>Create stock-ready assets<br /><span class="grad">entirely on your phone.</span></h1>
+        <p class="lead">
+          vecmotion is a complete mobile microstock studio: AI metadata with direct CSV export,
+          image and video upscaling to 8K, seamless motion video loops, unlimited background
+          generation, image to vector conversion and one-tap background removal.
+        </p>
+        <div class="download">
+          <a class="dl-button" href="{{APK_NAME}}" download>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Download vecmotion {{VERSION}} for Android
+          </a>
+          <a class="dl-secondary" href="{{RELEASE_URL}}" rel="noopener">All releases &amp; release notes</a>
+        </div>
+        <div class="meta-row">
+          <span><b>Package</b> vecmotion-{{VERSION}}-release.apk</span>
+          <span><b>Size</b> {{APK_SIZE_MB}} MB</span>
+          <span><b>Requires</b> Android 8.0+</span>
+          <span><b>SHA-256</b> <code class="inline">{{SHA256_SHORT}}…</code></span>
+        </div>
+      </section>
+
+      <div class="grid" aria-label="Features">
+        <div class="card"><h3><span class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>AI metadata, direct CSV</h3><p>Import EPS, SVG, JPG or PNG. Connect OpenRouter, Google Gemini, Groq, NVIDIA or your own API. Platform-agnostic titles and keywords, downloaded straight to CSV.</p></div>
+        <div class="card"><h3><span class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></span>Image upscaling to 8K</h3><p>2K, 4K and 8K output with device-compatible neural models, up to 8x enlargement, plus marketplace presets (Shutterstock, Adobe Stock, Getty, 123RF and more) or None.</p></div>
+        <div class="card"><h3><span class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ec4899" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></span>Video upscaling to 8K</h3><p>Footage upscaled on-device: 2K, 4K and 8K masters with the same marketplace presets, tuned to what your phone can actually run.</p></div>
+        <div class="card"><h3><span class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>Motion Video Generator</h3><p>Describe an idea or upload an image. Built-in rendering produces seamless, high-quality animation loops with live preview, exported in 2K, 4K or 8K. No AI API required.</p></div>
+        <div class="card"><h3><span class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 15l5-5 6 6 4-4 3 3"/></svg></span>Background Generator</h3><p>Unlimited original backgrounds: gradients, aurora, bokeh, waves, geometric, mesh, textures, patterns, starfields and topography. PNG, JPG, and editable SVG/EPS vectors up to 8K.</p></div>
+        <div class="card"><h3><span class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f472b6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg></span>Image to Vector</h3><p>PNG, JPG and WebP traced into editable SVG, EPS and AI artwork with colour-quantisation and contour tracing that keeps real vector structure.</p></div>
+      </div>
+
+      <section class="block" id="install">
+        <h2>Install on Android</h2>
+        <ol class="steps">
+          <li>Tap <b>Download vecmotion {{VERSION}} for Android</b> above and let the APK finish downloading.</li>
+          <li>Open the downloaded file from your browser’s downloads tray or the Files app.</li>
+          <li>Android asks once to allow installs from your browser — tap <b>Settings</b>, enable <b>Allow from this source</b>, and go back.</li>
+          <li>Tap <b>Install</b>. Future updates install in place over this build; your data stays.</li>
+        </ol>
+      </section>
+
+      <section class="block" id="verify">
+        <h2>Verify your download</h2>
+        <p style="color: var(--muted); font-size: 0.9rem; margin-bottom: 0.75rem; max-width: 46rem;">
+          The release is signed with the vecmotion sideload key and every build publishes its SHA-256 next to the APK.
+          Check yours matches before installing:
+        </p>
+        <pre class="verify">SHA-256  {{SHA256}}
+
+# Linux / macOS / Android (Termux)
+sha256sum vecmotion-{{VERSION}}-release.apk
+
+# Windows (PowerShell)
+Get-FileHash vecmotion-{{VERSION}}-release.apk -Algorithm SHA256
+
+# Expected value (also in SHA256SUMS.txt on the release):
+cat SHA256SUMS.txt</pre>
+      </section>
+    </main>
+
+    <footer class="site">
+      <span>vecmotion {{VERSION}} · Android package <code class="inline">com.microstocker.advancedpro</code></span>
+      <span><a href="{{REPO_URL}}" rel="noopener">GitHub</a> · <a href="{{RELEASE_URL}}" rel="noopener">Release v{{VERSION}}</a> · <a href="{{REPO_URL}}/blob/main/LICENSE" rel="noopener">License</a></span>
+    </footer>
+  </div>
+</body>
+</html>
