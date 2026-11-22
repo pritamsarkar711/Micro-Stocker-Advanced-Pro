@@ -35,11 +35,10 @@ import {
   type PlanPrice,
 } from '@/lib/pro/api';
 
-const FEATURE_ROWS: Array<{ key: keyof Plan['features']; label: string; free: string }> = isAndroid()
+const FEATURE_ROWS: Array<{ key: keyof Plan['features']; label: string; free?: string }> = isAndroid()
   ? [
-    { key: 'jpg', label: 'JPG image studio', free: 'Locked' },
-    { key: 'premium_upscale', label: 'Premium upscale models', free: 'Standard models only' },
-    { key: 'video_premium', label: 'Premium video upscaling', free: 'Standard modes only' },
+    { key: 'premium_upscale', label: 'Image upscaling to 8K' },
+    { key: 'video_premium', label: 'Video upscaling to 8K' },
   ]
   : [
     { key: 'vector', label: 'EPS, SVG and AI generators', free: 'Locked' },
@@ -189,7 +188,7 @@ export function SubscriptionPage() {
     <div>
       <PageHeader
         title="Subscription"
-        description={isAndroid() ? "A small monthly fee keeps vecmotion running. Premium unlocks upscale models and video tools." : "The studio is free. A plan unlocks the premium generators and the top upscale models."}
+        description={isAndroid() ? 'A minimal monthly fee keeps vecmotion running. Optional — every tool in the app works without it.' : "The studio is free. A plan unlocks the premium generators and the top upscale models."}
         actions={
           premium ? (
             <Badge tone="ok" icon={<GIcon name="verified" size={14} />}>
@@ -344,7 +343,10 @@ export function SubscriptionPage() {
         <Card>
           <CardHeader title="Free forever" icon={<GIcon name="lock_open" size={18} />} />
           <ul className="space-y-1.5 text-[0.8125rem] text-ink-muted">
-            {['Image converter and optimiser', 'Background remover', 'Standard upscale models', 'Vector Studio and the full metadata workspace'].map((line) => (
+            {(isAndroid()
+              ? ['Every tool in the app — metadata, upscalers, motion, backgrounds, vector converter', 'Up to 8K exports', 'Direct CSV download']
+              : ['Image converter and optimiser', 'Background remover', 'Standard upscale models', 'Vector Studio and the full metadata workspace']
+            ).map((line) => (
               <li key={line} className="flex items-center gap-2">
                 <GIcon name="check_circle" size={16} className="text-ok" />
                 {line}
@@ -352,7 +354,9 @@ export function SubscriptionPage() {
             ))}
           </ul>
           <p className="mt-3 border-t border-line pt-3 text-2xs text-ink-muted">
-            No account is required to use those tools. Plans only unlock the premium generators and the top tier models.
+            {isAndroid()
+              ? 'No account is required. The plan only helps keep vecmotion maintained; it unlocks nothing extra.'
+              : 'No account is required to use those tools. Plans only unlock the premium generators and the top tier models.'}
           </p>
         </Card>
 
@@ -416,7 +420,9 @@ export function SubscriptionPage() {
           <ul className="space-y-1.5 text-2xs leading-relaxed text-ink-muted">
             <li className="flex gap-1.5">
               <GIcon name="check_circle" size={15} className="mt-0.5 shrink-0 text-ok" />
-              Credits are spent only when one of the four generators or another credit tool starts.
+              {isAndroid()
+                ? 'Credits are included as a thank-you and are spent only when a credit-based tool starts.'
+                : 'Credits are spent only when one of the four generators or another credit tool starts.'}
             </li>
             <li className="flex gap-1.5">
               <GIcon name="check_circle" size={15} className="mt-0.5 shrink-0 text-ok" />

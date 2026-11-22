@@ -1,0 +1,154 @@
+name: Pages
+
+# Publishes the signed Android APK to GitHub Pages.
+#
+# The APK is NOT committed to the repository (it is 18+ MB and rebuilt for
+# every release). Instead this workflow downloads the exact artifact that the
+# Android workflow already built, verified (apksigner + signer certificate +
+# aapt2 version metadata) and attached to the GitHub Release for the tag, then
+# serves it on GitHub Pages together with a self-contained download page and
+# the release's SHA256SUMS.txt.
+#
+# Triggers:
+#   * a published release for a v* tag — deploys that release's verified APK;
+#   * workflow_dispatch with a `tag` input — re-deploys an existing release
+#     without rebuilding anything.
+
+on:
+  release:
+    # The tag workflows build, sign and attach the APK to the release as a
+    # draft; a human reviews and publishes it. Only then is the APK pushed to
+    # GitHub Pages, so this workflow can never ship a build a human has not
+    # approved.
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to deploy (e.g. v2.5.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{ github.event.release.tag_name || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve the release tag
+        id: tag
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [ -n "$RELEASE_TAG" ]; then tag="$RELEASE_TAG"; elif [ -n "$INPUT_TAG" ]; then tag="$INPUT_TAG"; else tag="${GITHUB_REF#refs/tags/}"; fi
+          case "$tag" in
+            v[0-9]*) ;;
+            *) echo "::error title=Tag::Refusing to deploy a non-release tag: $tag"; exit 1 ;;
+          esac
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: The tag must match package.json
+        run: |
+          pkg=$(node -p "require('./package.json').version")
+          if [ "$pkg" != "${{ steps.tag.outputs.version }}" ]; then
+            echo "::error title=Tag mismatch::Tag ${{ steps.tag.outputs.tag }} does not match package.json version $pkg"
+            exit 1
+          fi
+
+      # The Android workflow runs on the same tag and takes a few minutes to
+      # build, sign and verify the APK. Poll the release (draft or published)
+      # until the APK asset shows up instead of racing it.
+      - name: Wait for the release APK
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ steps.tag.outputs.tag }}"
+          version="${{ steps.tag.outputs.version }}"
+          wanted="vecmotion-${version}-release.apk"
+          for attempt in $(seq 1 60); do
+            assets=$(gh release view "$tag" --json assets --jq '.assets[].name' 2>/dev/null || true)
+            if printf '%s\n' "$assets" | grep -qx "$wanted"; then
+              echo "Found $wanted on release $tag"
+              exit 0
+            fi
+            echo "Attempt $attempt/60: $wanted not on the release yet; waiting 30s…"
+            sleep 30
+          done
+          echo "::error title=APK missing::Release $tag never received $wanted within 30 minutes"
+          exit 1
+
+      - name: Download the verified APK and checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ steps.tag.outputs.tag }}"
+          version="${{ steps.tag.outputs.version }}"
+          mkdir -p _site
+          gh release download "$tag" --pattern "vecmotion-${version}-release.apk" --pattern "SHA256SUMS.txt" --dir _site
+          ls -l _site
+
+      - name: Verify the APK against the release checksums
+        run: |
+          cd _site
+          version="${{ steps.tag.outputs.version }}"
+          apk="vecmotion-${version}-release.apk"
+          grep -q "$apk" SHA256SUMS.txt || {
+            echo "::error title=Checksum::SHA256SUMS.txt has no entry for $apk"
+            exit 1
+          }
+          expected=$(awk -v f="$apk" '$2 == f { print $1 }' SHA256SUMS.txt)
+          actual=$(sha256sum "$apk" | awk '{ print $1 }')
+          if [ "$expected" != "$actual" ]; then
+            echo "::error title=Checksum mismatch::expected $expected, got $actual"
+            exit 1
+          fi
+          echo "SHA-256 OK: $actual"
+          echo "apk_sha256=$actual" >> "$GITHUB_ENV"
+          echo "apk_size_mb=$(awk '{ printf "%.1f", $1 / 1048576 }' <<< "$(stat -c %s "$apk")")" >> "$GITHUB_ENV"
+
+      - name: Render the download page
+        run: |
+          version="${{ steps.tag.outputs.version }}"
+          repo="${{ github.server_url }}/${{ github.repository }}"
+          apk="vecmotion-${version}-release.apk"
+          sed \
+            -e "s|{{VERSION}}|${version}|g" \
+            -e "s|{{APK_NAME}}|${apk}|g" \
+            -e "s|{{APK_SIZE_MB}}|${apk_size_mb}|g" \
+            -e "s|{{SHA256}}|${apk_sha256}|g" \
+            -e "s|{{SHA256_SHORT}}|${apk_sha256:0:16}|g" \
+            -e "s|{{REPO_URL}}|${repo}|g" \
+            -e "s|{{RELEASE_URL}}|${repo}/releases/tag/v${version}|g" \
+            scripts/pages/index.html > _site/index.html
+          test -s _site/index.html
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Summary
+        run: |
+          echo "### vecmotion ${{ steps.tag.outputs.tag }} is live" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ steps.deployment.outputs.page_url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "SHA-256 \`${apk_sha256}\`" >> "$GITHUB_STEP_SUMMARY"

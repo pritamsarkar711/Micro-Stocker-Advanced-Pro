@@ -94,7 +94,7 @@ export function SettingsPage() {
         <AiPanel />
       </Card>
 
-      <div className="grid items-start gap-4 xl:grid-cols-2">
+      <div className={isAndroid() ? undefined : 'grid items-start gap-4 xl:grid-cols-2'}>
         <Card>
           <CardHeader title="Appearance" icon={<GIcon name="palette" size={18} />} />
           <div className="grid gap-4 sm:grid-cols-2">
@@ -147,6 +147,7 @@ export function SettingsPage() {
           </div>
         </Card>
 
+        {isAndroid() ? null : (
         <Card>
           <CardHeader
             title="Workflow"
@@ -198,6 +199,7 @@ export function SettingsPage() {
             </div>
           )}
         </Card>
+        )}
       </div>
 
       <Card>
@@ -313,11 +315,11 @@ function UpdatesCard() {
       <CardHeader
         title="Updates"
         icon={<GIcon name="install_desktop" size={18} />}
-        subtitle={isAndroid() ? "vecmotion" : `Micro Stocker Advanced Pro ${APP_VERSION}`}
+        subtitle={isAndroid() ? `vecmotion ${APP_VERSION}` : `Micro Stocker Advanced Pro ${APP_VERSION}`}
         action={<Badge tone={available ? 'brand' : 'neutral'}>{available ? `${update?.version} ready` : 'Up to date'}</Badge>}
       />
       <div className="space-y-2.5 text-[0.8125rem] text-ink-muted">
-        {available ? (
+        {isAndroid() ? null : available ? (
           <p className="leading-relaxed">Version {update?.version} is available.</p>
         ) : (
           <p className="leading-relaxed">The app checks for new builds and lets you know when one is ready.</p>
@@ -328,7 +330,7 @@ function UpdatesCard() {
             {state.message}
           </p>
         )}
-        {state.phase === 'current' && <p className="text-2xs text-ok">You have the latest build.</p>}
+        {!isAndroid() && state.phase === 'current' && <p className="text-2xs text-ok">You have the latest build.</p>}
 
         <div className="flex flex-wrap gap-2 pt-1">
           {available ? (
@@ -346,7 +348,7 @@ function UpdatesCard() {
               Check for updates
             </Button>
           )}
-          {state.phase === 'ready' && (
+          {!isAndroid() && state.phase === 'ready' && (
             <Button size="sm" variant="secondary" icon={<GIcon name="restart_alt" size={15} />} onClick={() => void restartToInstall()}>
               Restart to finish
             </Button>

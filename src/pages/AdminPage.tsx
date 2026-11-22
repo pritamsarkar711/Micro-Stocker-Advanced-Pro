@@ -809,7 +809,7 @@ const PROVIDER_HELP: Record<string, { keysUrl: string; blurb: string; steps: str
     steps: [
       'Sign in to platform.moonshot.ai with the account you topped up.',
       'Open Console → API Keys and press "Create API key".',
-      'Name it "Micro Stocker", press create, then copy the value that starts with sk-. It is shown once.',
+      'Name it "vecmotion", press create, then copy the value that starts with sk-. It is shown once.',
     ],
     placeholder: 'sk-...',
   },

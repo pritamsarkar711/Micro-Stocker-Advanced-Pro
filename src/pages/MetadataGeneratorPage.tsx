@@ -18,10 +18,15 @@ import {
   PROVIDERS,
   PROVIDER_LIST,
   saveAiSettings,
+  syncProviderModels,
+  inferModelBrand,
   type AiSettings,
+  type ModelPreset,
+  type ProviderKind,
 } from '@/lib/stock/ai';
 import { generateUniversalCsv } from '@/lib/stock/csv';
 import type { StockItem, StockFormat } from '@/lib/stock/types';
+import { visionBlobForFile } from '@/lib/stock/visionBlobForFile';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 
 /** Android-only consolidated Metadata Generator.
@@ -42,14 +47,63 @@ export function MetadataGeneratorPage() {
   >({});
   const [settings, setSettings] = useState<AiSettings>(DEFAULT_AI);
   const [busy, setBusy] = useState(false);
+  const [liveModels, setLiveModels] = useState<Partial<Record<ProviderKind, ModelPreset[]>>>({});
+  const [syncing, setSyncing] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     void loadAiSettings().then(setSettings);
   }, []);
 
+  // Persist the provider settings as soon as they change so a key never gets lost.
+  const saveTimer = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => void saveAiSettings(settings), 400);
+    return () => window.clearTimeout(saveTimer.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings]);
+
   const preset = PROVIDERS[settings.kind];
   const canGenerate = Boolean(user) && files.length > 0;
+
+  // Live free-model discovery: the provider's own /models endpoint is the
+  // source of truth, so newly released free vision models show up here
+  // without an app update. Falls back to the built-in curated list.
+  const availableModels = (() => {
+    const synced = liveModels[settings.kind];
+    const base = synced && synced.length ? synced : preset.models;
+    if (settings.model && !base.some((m) => m.id === settings.model)) {
+      return [
+        {
+          id: settings.model,
+          label: settings.model,
+          brand: inferModelBrand(settings.model, preset.brand),
+          free: true,
+        },
+        ...base,
+      ];
+    }
+    return base;
+  })();
+
+  const handleSyncModels = async () => {
+    setSyncing(true);
+    try {
+      const result = await syncProviderModels(settings);
+      if (!result.ok) {
+        toast.error('Model sync failed', result.error);
+        return;
+      }
+      setLiveModels((prev) => ({ ...prev, [settings.kind]: result.models }));
+      if (result.models.length && !result.models.some((m) => m.id === settings.model)) {
+        setSettings((prev) => ({ ...prev, model: result.models[0].id }));
+      }
+      toast.success(`${result.models.length} models loaded`);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const handleImport = async (fileList: FileList | File[]) => {
     const next = Array.from(fileList).filter((f) => {
@@ -82,6 +136,7 @@ export function MetadataGeneratorPage() {
     if (existing?.status === 'done') return;
     setMetaById((prev) => ({ ...prev, [file.name]: { title: '', keywords: [], status: 'generating' } }));
     try {
+      const visionBlob = await visionBlobForFile(file);
       const metadata = await generateAiMetadata(
         {
           name: file.name,
@@ -92,7 +147,7 @@ export function MetadataGeneratorPage() {
           metadata: { title: '', description: '', keywords: [], categories: [] },
         },
         settings,
-        { imageBlob: file },
+        { imageBlob: visionBlob },
       );
       setMetaById((prev) => ({ ...prev, [file.name]: { title: metadata.title, keywords: metadata.keywords, status: 'done' } }));
       toast.success('Metadata generated', file.name);
@@ -250,10 +305,23 @@ export function MetadataGeneratorPage() {
             </Field>
           )}
 
-          <Field label="Model">
+          <Field
+            label="Model"
+            hint={
+              <button
+                type="button"
+                disabled={syncing}
+                onClick={() => void handleSyncModels()}
+                className="inline-flex items-center gap-1 text-accent hover:underline disabled:opacity-50"
+              >
+                <GIcon name="refresh" size={12} className={syncing ? 'animate-spin' : undefined} />
+                {syncing ? 'Loading' : 'Refresh free models'}
+              </button>
+            }
+          >
             <RichSelect
               value={settings.model}
-              options={preset.models.map((m) => ({
+              options={availableModels.map((m) => ({
                 value: m.id,
                 label: m.label,
                 icon: <BrandLogo brand={m.brand} size={15} />,
@@ -271,11 +339,7 @@ export function MetadataGeneratorPage() {
             />
           </div>
 
-          <div className="flex items-end justify-between gap-2">
-            <Button size="sm" variant="secondary" onClick={() => void saveAiSettings(settings)}>
-              Save AI settings
-            </Button>
-          </div>
+          <p className="text-2xs text-ink-faint">Settings save automatically on this device.</p>
         </div>
       </Card>
 

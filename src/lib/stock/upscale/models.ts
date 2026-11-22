@@ -619,11 +619,22 @@ export function isDesktopOnlyModel(model: UpscaleModel): boolean {
   return model.family !== 'builtin' && model.family !== 'onnx';
 }
 
-/** The models that can really render in this container. */
-export function modelsForDevice(isDesktop: boolean): UpscaleModel[] {
-  return isDesktop
-    ? UPSCALE_MODELS
-    : UPSCALE_MODELS.filter((model) => !isDesktopOnlyModel(model));
+/**
+ * The models that can really render in this container.
+ *
+ * On a phone the list is filtered twice: desktop-only NCNN packs never
+ * appear, and neural graphs that do not fit this device's RAM tier are
+ * hidden too, so the user only ever sees models that will actually run.
+ */
+export function modelsForDevice(isDesktop: boolean, tier: 'low' | 'mid' | 'high' = 'high'): UpscaleModel[] {
+  if (isDesktop) return UPSCALE_MODELS;
+  return UPSCALE_MODELS.filter((model) => {
+    if (isDesktopOnlyModel(model)) return false;
+    if (model.family === 'builtin') return true;
+    if (tier === 'high') return true;
+    if (tier === 'mid') return model.sizeMB <= 64;
+    return model.sizeMB <= 16;
+  });
 }
 
 /** True when the model's weights are a single ONNX file rather than an engine. */
@@ -712,7 +723,7 @@ export interface UpscaleTarget {
   group: 'resolution' | 'platform';
   longEdge?: number;
   megapixels?: number;
-  factor?: 2 | 3 | 4;
+  factor?: 2 | 3 | 4 | 8;
   maxEdge?: number;
   maxMP?: number;
   recommendedFormat?: 'jpg' | 'png' | 'webp';
@@ -725,8 +736,10 @@ export const UPSCALE_TARGETS: UpscaleTarget[] = [
   { id: '6k', label: '6K Print', badge: '6144 px', icon: 'print', group: 'resolution', longEdge: 6144 },
   { id: '5k', label: '5K Studio', badge: '5120 px', icon: 'desktop_windows', group: 'resolution', longEdge: 5120 },
   { id: '4k', label: '4K UHD', badge: '3840 px', icon: '4k', group: 'resolution', longEdge: 3840 },
+  { id: '2k', label: '2K QHD', badge: '2560 px', icon: 'hd', group: 'resolution', longEdge: 2560 },
   { id: 'x2', label: '2x Scale', badge: '2x', icon: 'zoom_in', group: 'resolution', factor: 2 },
   { id: 'x4', label: '4x Scale', badge: '4x', icon: 'fullscreen', group: 'resolution', factor: 4 },
+  { id: 'x8', label: '8x Scale', badge: '8x', icon: 'fullscreen', group: 'resolution', factor: 8 },
 
   /* Marketplace compliant presets (2026 rules) */
   {
@@ -852,28 +865,3 @@ export function resolveTargetSize(
 /** Legacy exports retained for test compatibility. */
 export const MODELS = UPSCALE_MODELS;
 export const TARGETS = UPSCALE_TARGETS;
-
-/**
- * The highest quality models are the only ones behind Pro.
- *
- * Everything else stays free: the built-in resamplers, the cleanup filters and
- * every standard neural model a customer already uses for catalogue work.
- */
-const PREMIUM_UPSCALE_MODELS = new Set([
-  'realesrgan-x4plus',
-  'realesrgan-x4plus-anime',
-  'realesrgan-general-wdn',
-  'realcugan-pro',
-  'lsdir-4x',
-  'lsdir-plus-clean',
-  'hfa2k-4x',
-  'ultrasharp-4x',
-  'ultramix-balanced-4x',
-  'nomos8k-sc',
-  'digital-art-4x',
-  'uniscale-restore-4x',
-]);
-
-export function isPremiumUpscaleModel(id: string): boolean {
-  return PREMIUM_UPSCALE_MODELS.has(id);
-}

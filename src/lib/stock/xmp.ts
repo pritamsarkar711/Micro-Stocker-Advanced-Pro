@@ -1,3 +1,4 @@
+import { appName } from '@/lib/version';
 import type { StockFormat, StockMetadata } from './types';
 
 /**
@@ -41,7 +42,7 @@ export function buildXmpPacket(meta: StockMetadata, options?: { creator?: string
       xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/"
       xmlns:Iptc4xmpExt="http://iptc.org/std/Iptc4xmpExt/2008-02-29/"
       xmlns:xmp="http://ns.adobe.com/xap/1.0/">
-      <xmp:CreatorTool>Micro Stocker Advanced Pro</xmp:CreatorTool>
+      <xmp:CreatorTool>${xmlEscape(appName())}</xmp:CreatorTool>
       <photoshop:Headline>${title}</photoshop:Headline>${digitalSource}
       <dc:title>
         <rdf:Alt><rdf:li xml:lang="x-default">${title}</rdf:li></rdf:Alt>

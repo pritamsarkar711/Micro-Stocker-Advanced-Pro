@@ -1,3 +1,4 @@
+import { appName } from '@/lib/version';
 import { kv } from '@/lib/kv';
 import { analyseBlob } from '@/lib/vision';
 import type { ImageInsight } from '@/lib/vision';
@@ -21,11 +22,10 @@ import {
  * with a 402 at generation time. Live discovery still refreshes each list when a
  * key is present, so newly released free models appear without an update.
  *
- * Every provider uses only active, genuinely free models or zero cost local
- * inference, supports multimodal image vision wherever the model accepts
- * images, strips reasoning tags cleanly, fetches live free models from each
- * provider API, and routes requests through Electron's CORS free IPC bridge on
- * desktop or fetch in the browser.
+ * Every provider uses only active, genuinely free models, supports
+ * multimodal image vision wherever the model accepts images, strips reasoning
+ * tags cleanly, fetches live free models from each provider API, and routes
+ * requests through Electron's CORS free IPC bridge on desktop or fetch in the browser.
  */
 
 export type ProviderKind = 'openrouter' | 'gemini' | 'groq' | 'nvidia' | 'custom';
@@ -42,7 +42,7 @@ export interface ProviderPreset {
   kind: ProviderKind;
   name: string;
   brand: BrandId;
-  protocol: 'local' | 'openai' | 'gemini' | 'ollama';
+  protocol: 'openai' | 'gemini';
   baseUrl: string;
   needsKey: boolean;
   optionalKey?: boolean;
@@ -493,8 +493,8 @@ async function callOpenAiProtocol(
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (key) headers.Authorization = `Bearer ${key}`;
   if (settings.kind === 'openrouter') {
-    headers['HTTP-Referer'] = 'https://microstocker.app';
-    headers['X-Title'] = 'Micro Stocker Advanced Pro';
+    headers['HTTP-Referer'] = 'https://github.com/pritamsarkar711/Micro-Stocker-Advanced-Pro';
+    headers['X-Title'] = appName();
   }
 
   const postOnce = async (withJsonFormat: boolean, withVision: boolean) => {

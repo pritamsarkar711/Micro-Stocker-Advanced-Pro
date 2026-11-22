@@ -1,3 +1,4 @@
+import { appName } from '@/lib/version';
 import { Capacitor } from '@capacitor/core';
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
@@ -25,7 +26,7 @@ function toBase64(blob: Blob): Promise<string> {
 }
 
 export async function saveBlobNative(blob: Blob, filename: string) {
-  const folder = 'Micro Stocker';
+  const folder = appName();
   const path = `${folder}/${filename}`;
   const data = await toBase64(blob);
 

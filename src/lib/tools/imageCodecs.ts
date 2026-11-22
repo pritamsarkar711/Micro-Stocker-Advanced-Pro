@@ -1,4 +1,5 @@
 import * as pako from 'pako';
+import { appName } from '@/lib/version';
 import { Buffer as BrowserBuffer } from 'buffer';
 import jxlEncWasmUrl from '@jsquash/jxl/codec/enc/jxl_enc.wasm?url';
 import jxlDecWasmUrl from '@jsquash/jxl/codec/dec/jxl_dec.wasm?url';
@@ -1806,7 +1807,7 @@ export async function decodeSvgz(bytes: Uint8Array): Promise<Raster> {
 export function encodeEps(rgba: Uint8ClampedArray, width: number, height: number): Uint8Array {
   const png = encodePng(rgba, width, height);
   return encodeText(
-    `%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 ${width} ${height}\n%%HiResBoundingBox: 0 0 ${width} ${height}\n%%Creator: Micro Stocker Advanced Pro\n%%EndComments\n% MSAP_PNG_HEX:${bytesToHex(png)}\n%%EOF\n`,
+    `%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 ${width} ${height}\n%%HiResBoundingBox: 0 0 ${width} ${height}\n%%Creator: ${appName()}\n%%EndComments\n% MSAP_PNG_HEX:${bytesToHex(png)}\n%%EOF\n`,
   );
 }
 
@@ -1821,7 +1822,7 @@ export function encodePdf(rgba: Uint8ClampedArray, width: number, height: number
   const content = encodeText(`q ${width} 0 0 ${height} 0 0 cm /Im0 Do Q\n`);
   const writer = new ByteWriter();
   const offsets = new Array<number>(7).fill(0);
-  writer.ascii('%PDF-1.4\n%Micro Stocker Advanced Pro\n');
+  writer.ascii(`%PDF-1.4\n%${appName()}\n`);
   const addObject = (number: number, body: Uint8Array | string) => {
     offsets[number] = writer.length;
     writer.ascii(`${number} 0 obj\n`).bytes(typeof body === 'string' ? encodeText(body) : body).ascii('\nendobj\n');

@@ -8,14 +8,21 @@ import { BrandLogo } from '@/components/ui/BrandLogo';
 import { GIcon, type GoogleIconName } from '@/components/ui/GoogleIcon';
 import { useApp } from '@/state/AppState';
 import { desktop } from '@/lib/desktop';
-import { APP_NAME } from '@/lib/version';
+import { APP_NAME, appName } from '@/lib/version';
+import { isAndroid } from '@/lib/native/platform';
 
-const HIGHLIGHTS: { icon: GoogleIconName; label: string; text: string }[] = [
+const DESKTOP_HIGHLIGHTS: { icon: GoogleIconName; label: string; text: string }[] = [
   { icon: 'memory', label: 'AI metadata', text: 'Runs on device with a local model, or with your own API key.' },
   { icon: 'image', label: 'Upscale and convert', text: 'Local GPU upscalers, background removal, multi format export.' },
   { icon: 'fact_check', label: 'Pre-flight checks', text: 'Quality, editability and duplicate checks before you upload.' },
   { icon: 'polyline', label: 'Vector Studio', text: 'Draw, open and export editable SVG and EPS artwork.' },
   { icon: 'sell', label: 'Agency ready', text: 'Lossless IPTC and XMP writes plus CSV presets for every agency.' },
+];
+
+const ANDROID_HIGHLIGHTS: { icon: GoogleIconName; label: string; text: string }[] = [
+  { icon: 'sell', label: 'AI metadata', text: 'Platform agnostic titles and keywords from OpenRouter, Gemini, Groq, NVIDIA or your own API — downloaded straight to CSV.' },
+  { icon: 'photo_size_select_large', label: 'Upscale to 8K', text: 'Image and video upscaling up to 8K with device compatible models, plus marketplace presets.' },
+  { icon: 'videocam', label: 'Motion studio', text: 'Built in motion video generator, unlimited commercial safe backgrounds and an image to vector converter.' },
 ];
 
 export function AboutPage() {
@@ -37,13 +44,13 @@ export function AboutPage() {
         </div>
 
         <p className="max-w-3xl text-sm leading-relaxed text-ink-muted">
-          {APP_NAME} is a complete microstock contributor studio: AI metadata, lossless IPTC and XMP
-          embedding, agency CSV exports, image upscaling, video resize, background removal and format
-          conversion.
+          {isAndroid()
+            ? `${appName()} is a complete mobile microstock studio: AI metadata with CSV export, image and video upscaling to 8K, background removal, background generation, motion video and image to vector conversion.`
+            : `${APP_NAME} is a complete microstock contributor studio: AI metadata, lossless IPTC and XMP embedding, agency CSV exports, image upscaling, video resize, background removal and format conversion.`}
         </p>
 
         <div className="grid gap-3 md:grid-cols-3">
-          {HIGHLIGHTS.map((item) => (
+          {(isAndroid() ? ANDROID_HIGHLIGHTS : DESKTOP_HIGHLIGHTS).map((item) => (
             <div key={item.label} className="rounded-[var(--r-control)] border border-line p-3.5">
               <div className="flex items-center gap-2 text-sm font-semibold text-ink">
                 <GIcon name={item.icon} size={18} className="text-brand" />
@@ -58,12 +65,14 @@ export function AboutPage() {
           <div className="rounded-[var(--r-control)] border border-line p-3">
             <div className="text-2xs uppercase tracking-wide text-ink-faint">Runtime</div>
             <div className="mt-1 text-sm font-semibold text-ink">
-              {runtime.isDesktop ? `Desktop (${runtime.platform})` : 'Web workspace'}
+              {runtime.isDesktop ? `Desktop (${runtime.platform})` : isAndroid() ? 'Android' : 'Web workspace'}
             </div>
           </div>
           <div className="rounded-[var(--r-control)] border border-line p-3">
             <div className="text-2xs uppercase tracking-wide text-ink-faint">Engine</div>
-            <div className="mt-1 text-sm font-semibold text-ink">Chromium {runtime.chrome}</div>
+            <div className="mt-1 text-sm font-semibold text-ink">
+              {runtime.isDesktop ? `Chromium ${runtime.chrome}` : isAndroid() ? 'Android WebView' : `Chromium ${runtime.chrome}`}
+            </div>
           </div>
           <div className="rounded-[var(--r-control)] border border-line p-3">
             <div className="text-2xs uppercase tracking-wide text-ink-faint">Creator</div>
