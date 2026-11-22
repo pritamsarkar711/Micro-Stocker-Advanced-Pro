@@ -19,7 +19,7 @@ import { useLibrary } from '@/state/library';
 import { useWorkspaceSync } from '@/state/WorkspaceSync';
 import { useToast } from '@/state/ToastState';
 import { APP_VERSION } from '@/lib/version';
-import { modelStoreLocation } from '@/lib/modelStore';
+import { isAndroid } from '@/lib/native/platform';
 import { subscribeUpdate, updateState, checkUpdates, beginUpdate, restartToInstall, snoozeUpdate } from '@/lib/updateStore';
 import { bdtUnit, CURRENCIES, type CurrencyCode } from '@/lib/format';
 import { sanitizeBackup } from '@/lib/stock/backup';
@@ -127,20 +127,22 @@ export function SettingsPage() {
                 ))}
               </div>
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[0.8125rem] font-medium">Scale ({Math.round(zoom * 100)}%)</span>
-              <div className="flex items-center gap-1">
-                <Button size="xs" variant="secondary" onClick={() => nudgeZoom(-0.1)} aria-label="Zoom out">
-                  <GIcon name="zoom_out" size={15} />
-                </Button>
-                <Button size="xs" variant="ghost" onClick={() => setZoom(1)}>
-                  100%
-                </Button>
-                <Button size="xs" variant="secondary" onClick={() => nudgeZoom(0.1)} aria-label="Zoom in">
-                  <GIcon name="zoom_in" size={15} />
-                </Button>
+            {isAndroid() ? null : (
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[0.8125rem] font-medium">Scale ({Math.round(zoom * 100)}%)</span>
+                <div className="flex items-center gap-1">
+                  <Button size="xs" variant="secondary" onClick={() => nudgeZoom(-0.1)} aria-label="Zoom out">
+                    <GIcon name="zoom_out" size={15} />
+                  </Button>
+                  <Button size="xs" variant="ghost" onClick={() => setZoom(1)}>
+                    100%
+                  </Button>
+                  <Button size="xs" variant="secondary" onClick={() => nudgeZoom(0.1)} aria-label="Zoom in">
+                    <GIcon name="zoom_in" size={15} />
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
             <Switch checked={settings.reduceMotion} onChange={(reduceMotion) => updateSettings({ reduceMotion })} label="Reduce motion" />
           </div>
         </Card>
@@ -157,42 +159,44 @@ export function SettingsPage() {
               />
             }
           />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Optimizer output">
-              <div className="grid grid-cols-5 gap-1 rounded-[var(--r-control)] border border-line bg-surface-2 p-0.5">
-                {(['keep', 'jpg', 'webp', 'avif', 'png'] as const).map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => updateSettings({ optimizeFormat: value })}
-                    className={clsx(
-                      'h-7 rounded-[5px] text-2xs font-semibold uppercase',
-                      settings.optimizeFormat === value ? 'bg-accent text-on-brand' : 'text-ink-muted hover:text-ink',
-                    )}
-                  >
-                    {value === 'keep' ? 'Keep' : value}
-                  </button>
-                ))}
-              </div>
-            </Field>
-            <Field label="Upscaler output">
-              <div className="grid grid-cols-3 gap-1 rounded-[var(--r-control)] border border-line bg-surface-2 p-0.5">
-                {(['jpg', 'webp', 'png'] as const).map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => updateSettings({ upscaleFormat: value })}
-                    className={clsx(
-                      'h-7 rounded-[5px] text-2xs font-semibold uppercase',
-                      settings.upscaleFormat === value ? 'bg-accent text-on-brand' : 'text-ink-muted hover:text-ink',
-                    )}
-                  >
-                    {value}
-                  </button>
-                ))}
-              </div>
-            </Field>
-          </div>
+          {isAndroid() ? null : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Optimizer output">
+                <div className="grid grid-cols-5 gap-1 rounded-[var(--r-control)] border border-line bg-surface-2 p-0.5">
+                  {(['keep', 'jpg', 'webp', 'avif', 'png'] as const).map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => updateSettings({ optimizeFormat: value })}
+                      className={clsx(
+                        'h-7 rounded-[5px] text-2xs font-semibold uppercase',
+                        settings.optimizeFormat === value ? 'bg-accent text-on-brand' : 'text-ink-muted hover:text-ink',
+                      )}
+                    >
+                      {value === 'keep' ? 'Keep' : value}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+              <Field label="Upscaler output">
+                <div className="grid grid-cols-3 gap-1 rounded-[var(--r-control)] border border-line bg-surface-2 p-0.5">
+                  {(['jpg', 'webp', 'png'] as const).map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => updateSettings({ upscaleFormat: value })}
+                      className={clsx(
+                        'h-7 rounded-[5px] text-2xs font-semibold uppercase',
+                        settings.upscaleFormat === value ? 'bg-accent text-on-brand' : 'text-ink-muted hover:text-ink',
+                      )}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+            </div>
+          )}
         </Card>
       </div>
 
@@ -309,25 +313,22 @@ function UpdatesCard() {
       <CardHeader
         title="Updates"
         icon={<GIcon name="install_desktop" size={18} />}
-        subtitle={`Micro Stocker Advanced Pro ${APP_VERSION}`}
+        subtitle={isAndroid() ? "vecmotion" : `Micro Stocker Advanced Pro ${APP_VERSION}`}
         action={<Badge tone={available ? 'brand' : 'neutral'}>{available ? `${update?.version} ready` : 'Up to date'}</Badge>}
       />
       <div className="space-y-2.5 text-[0.8125rem] text-ink-muted">
-        <p className="leading-relaxed">
-          {available
-            ? `Version ${update?.version} is available. The app installs it for you: no file hunting, no manual download.`
-            : 'The app checks GitHub releases at most once a day and tells you the moment a new build is out.'}
-        </p>
-        <p className="text-2xs leading-relaxed text-ink-faint">
-          Model and update files stay in: {modelStoreLocation()}.
-        </p>
+        {available ? (
+          <p className="leading-relaxed">Version {update?.version} is available.</p>
+        ) : (
+          <p className="leading-relaxed">The app checks for new builds and lets you know when one is ready.</p>
+        )}
 
         {state.phase === 'error' && state.message && (
           <p className="rounded-[var(--r-xs)] border border-danger/30 bg-danger-soft px-2 py-1.5 text-2xs text-danger">
             {state.message}
           </p>
         )}
-        {state.phase === 'current' && <p className="text-2xs text-ok">This is the newest published build.</p>}
+        {state.phase === 'current' && <p className="text-2xs text-ok">You have the latest build.</p>}
 
         <div className="flex flex-wrap gap-2 pt-1">
           {available ? (

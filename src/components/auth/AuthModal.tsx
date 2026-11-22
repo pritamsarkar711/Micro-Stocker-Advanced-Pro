@@ -10,9 +10,11 @@ import { useLicense } from '@/state/LicenseState';
 import { useToast } from '@/state/ToastState';
 import { date } from '@/lib/format';
 import { AuthForm } from './AuthForm';
+import { Avatar } from '@/components/ui/Avatar';
+import { avatarGallery, randomAvatarSpec, serializeAvatar } from '@/lib/avatar';
 
 export function AuthModal() {
-  const { user, modalOpen, closeAuth, updateDisplayName, logout, mfaRequired, recovery, recoveryError } = useAuth();
+  const { user, modalOpen, closeAuth, updateDisplayName, updateAvatar, logout, mfaRequired, recovery, recoveryError } = useAuth();
   const { premium, isAdmin, expiresAt } = useLicense();
   const toast = useToast();
   const [editName, setEditName] = useState('');
@@ -72,9 +74,7 @@ export function AuthModal() {
     >
       <div className="space-y-4">
         <div className="flex items-center gap-3 rounded-[var(--r-control)] border border-line bg-surface-2 p-3">
-          <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-brand text-[0.9375rem] font-bold text-on-brand">
-            {user.displayName.slice(0, 1).toUpperCase()}
-          </span>
+          <Avatar stored={user.avatar} seed={user.id} size={11} />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[0.875rem] font-semibold text-ink">{user.displayName}</div>
             <div className="truncate text-[0.75rem] text-ink-muted">{user.email}</div>
@@ -129,6 +129,53 @@ export function AuthModal() {
             >
               Save
             </Button>
+          </div>
+        </Field>
+
+        <Field label="Profile picture">
+          <p className="text-[0.7rem] text-ink-muted mb-2">Pick a generated avatar, or shuffle for a new look.</p>
+          <div className="flex flex-wrap gap-2">
+            {avatarGallery(user.id, 6).map((src, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await updateAvatar(src);
+                    toast.success('Avatar updated');
+                  } catch (err) {
+                    toast.error('Could not save avatar', err instanceof Error ? err.message : String(err));
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+                aria-label={`Avatar ${i + 1}`}
+                className="size-10 shrink-0 rounded-full border border-line object-cover hover:border-brand hover:scale-105 transition-transform"
+                style={{ width: 40, height: 40 }}
+              >
+                <img src={src} width="40" height="40" alt="" style={{ width: 40, height: 40 }} />
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  const spec = randomAvatarSpec(user.id);
+                  await updateAvatar(serializeAvatar(spec));
+                  toast.success('Avatar shuffled');
+                } catch (err) {
+                  toast.error('Could not shuffle avatar', err instanceof Error ? err.message : String(err));
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              className="size-10 shrink-0 rounded-full border border-dashed border-line object-cover bg-surface-2 hover:border-brand active:scale-95 transition-transform"
+              style={{ width: 40, height: 40 }}
+            >
+              <GIcon name="refresh" size={16} className="text-ink-muted" />
+            </button>
           </div>
         </Field>
       </div>

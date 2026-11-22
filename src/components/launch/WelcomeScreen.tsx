@@ -1,5 +1,6 @@
 import { GIcon, type GoogleIconName } from '@/components/ui/GoogleIcon';
 import { Logo } from '@/components/layout/Logo';
+import { appName } from '@/lib/version';
 
 /**
  * The hand-off between the splash and the tour. It answers three questions in
@@ -20,7 +21,7 @@ export function WelcomeScreen({ onStart, onSignIn }: { onStart: () => void; onSi
         <div className="flex items-center gap-2.5">
           <Logo size={30} />
           <div className="min-w-0">
-            <p className="truncate text-[0.8125rem] font-bold text-ink">Micro Stocker Advanced Pro</p>
+            <p className="truncate text-[0.8125rem] font-bold text-ink">{appName()}</p>
             <p className="truncate text-2xs text-ink-muted">Contributor studio</p>
           </div>
         </div>

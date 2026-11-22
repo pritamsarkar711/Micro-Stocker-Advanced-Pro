@@ -12,7 +12,6 @@ import { PlatformLogo } from '@/components/stock/PlatformLogo';
 import { useLibrary } from '@/state/library';
 import { useToast } from '@/state/ToastState';
 import { useLicense } from '@/state/LicenseState';
-import { useNavigate } from 'react-router-dom';
 import { desktop, triggerBlobDownload, type ModelProgressEvent } from '@/lib/desktop';
 import {
   cancelModelInstall,
@@ -33,7 +32,6 @@ import {
   VIDEO_OUTPUT_FORMATS,
   VIDEO_PURPOSES,
   VIDEO_TARGETS,
-  isPremiumVideoTarget,
   type UpscaleVideoResult,
   type VideoMeta,
   type VideoModel,
@@ -57,9 +55,7 @@ interface VideoJob {
 export function VideoUpscalePage() {
   const { addGeneratedBlob } = useLibrary();
   const toast = useToast();
-  const navigate = useNavigate();
-  const { hasFeature, planName, isAdmin } = useLicense();
-  const premiumAllowed = hasFeature('video_premium');
+  const { planName, isAdmin } = useLicense();
   const fileRef = useRef<HTMLInputElement>(null);
   const playerRef = useRef<HTMLVideoElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -115,14 +111,6 @@ export function VideoUpscalePage() {
     [purpose],
   );
   // A downgrade must not leave a gated preset selected.
-  useEffect(() => {
-    if (premiumAllowed) return;
-    setTargetId((current) => {
-      const target = VIDEO_TARGETS.find((t) => t.id === current);
-      return target && isPremiumVideoTarget(target) ? '1080p' : current;
-    });
-  }, [premiumAllowed]);
-
   const activeModel = VIDEO_MODELS.find((m) => m.id === modelId) ?? VIDEO_MODELS[0];
   const activeTarget = VIDEO_TARGETS.find((t) => t.id === targetId) ?? VIDEO_TARGETS[0];
   const activeJob = jobs.find((j) => j.id === activeId) ?? jobs[0];
@@ -130,10 +118,6 @@ export function VideoUpscalePage() {
   function selectTarget(id: string) {
     const t = VIDEO_TARGETS.find((x) => x.id === id);
     if (!t) return;
-    if (isPremiumVideoTarget(t) && !premiumAllowed) {
-      toast.warning('Pro preset', '4K and 8K masters are part of Pro. Free renders stop at 2K QHD.');
-      return;
-    }
     setTargetId(id);
     if (t.defaultFps) setFps(t.defaultFps);
   }
@@ -212,10 +196,6 @@ export function VideoUpscalePage() {
 
   async function runAll() {
     if (!jobs.length || running) return;
-    if (isPremiumVideoTarget(activeTarget) && !premiumAllowed) {
-      toast.warning('Pro preset', 'Upgrade to Pro to render 4K and 8K video.');
-      return;
-    }
     const controller = new AbortController();
     abortRef.current = controller;
     setRunning(true);
@@ -301,7 +281,7 @@ export function VideoUpscalePage() {
         actions={
           <>
             <Badge tone="brand" icon={<GIcon name="workspace_premium" size={14} />}>
-              {isAdmin ? 'Administrator · 4K and 8K' : premiumAllowed ? `${planName ?? 'Pro'} · 4K and 8K` : 'Free · up to 2K'}
+              {isAdmin ? 'Administrator' : planName ?? 'Free'}
             </Badge>
             <input
               ref={fileRef}
@@ -375,29 +355,12 @@ export function VideoUpscalePage() {
                         <div className="truncate font-semibold text-ink">{t.label}</div>
                         <div className="flex items-center gap-1 text-2xs text-ink-muted">
                           <span className="truncate">{t.badge}</span>
-                          {isPremiumVideoTarget(t) && !premiumAllowed && (
-                            <span className="shrink-0 rounded-full border border-accent/40 px-1 text-[0.5625rem] font-semibold text-accent">Pro</span>
-                          )}
                         </div>
                       </div>
                     </button>
                   ))}
                 </div>
               </div>
-
-              {!premiumAllowed && (
-                <div className="rounded-[var(--r-control)] border border-accent/30 bg-accent-soft/50 px-2.5 py-2 text-2xs">
-                  <p className="font-semibold text-ink">4K and 8K masters are part of Pro</p>
-                  <p className="mt-0.5 text-ink-muted">Free renders stop at 2K QHD.</p>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/subscription')}
-                    className="mt-1 font-semibold text-accent underline underline-offset-2"
-                  >
-                    See plans
-                  </button>
-                </div>
-              )}
 
               <div>
                 <div className="mb-1.5 text-xs font-medium text-ink-muted">Stock footage presets</div>
@@ -419,9 +382,6 @@ export function VideoUpscalePage() {
                         <div className="truncate font-medium">{t.label}</div>
                         <div className="flex items-center gap-1 text-2xs text-ink-muted">
                           <span className="truncate">{t.badge}</span>
-                          {isPremiumVideoTarget(t) && !premiumAllowed && (
-                            <span className="shrink-0 rounded-full border border-accent/40 px-1 text-[0.5625rem] font-semibold text-accent">Pro</span>
-                          )}
                         </div>
                       </div>
                     </button>

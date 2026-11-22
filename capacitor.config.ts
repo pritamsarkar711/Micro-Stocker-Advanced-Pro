@@ -9,7 +9,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
  */
 const config: CapacitorConfig = {
   appId: 'com.microstocker.advancedpro',
-  appName: 'Micro Stocker Pro',
+  appName: 'vecmotion',
   webDir: 'dist',
   android: {
     allowMixedContent: false,

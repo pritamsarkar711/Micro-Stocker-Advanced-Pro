@@ -4,7 +4,6 @@ import { AppShell } from '@/components/layout/AppShell';
 import { PageLoading } from '@/components/layout/PageLoading';
 import { AppProvider } from '@/state/AppState';
 import { AuthProvider } from '@/state/AuthState';
-import { PremiumGate } from '@/components/auth/PremiumGate';
 import { AdminGate } from '@/components/auth/AdminGate';
 import { LicenseProvider } from '@/state/LicenseState';
 import { ToastProvider } from '@/state/ToastState';
@@ -15,22 +14,19 @@ import { WorkspaceSyncProvider } from '@/state/WorkspaceSync';
 import { LaunchGate } from '@/components/launch/LaunchGate';
 
 const SubscriptionPage = lazy(() => import('@/pages/SubscriptionPage').then((m) => ({ default: m.SubscriptionPage })));
-const GeneratePage = lazy(() => import('@/pages/GeneratePage').then((m) => ({ default: m.GeneratePage })));
 const OverviewPage = lazy(() => import('@/pages/OverviewPage').then((m) => ({ default: m.OverviewPage })));
-const LibraryPage = lazy(() => import('@/pages/LibraryPage').then((m) => ({ default: m.LibraryPage })));
-const PreparePage = lazy(() => import('@/pages/PreparePage').then((m) => ({ default: m.PreparePage })));
-const ExportPage = lazy(() => import('@/pages/ExportPage').then((m) => ({ default: m.ExportPage })));
+const MetadataGeneratorPage = lazy(() => import('@/pages/MetadataGeneratorPage').then((m) => ({ default: m.MetadataGeneratorPage })));
 const UpscalePage = lazy(() => import('@/pages/UpscalePage').then((m) => ({ default: m.UpscalePage })));
 const VideoUpscalePage = lazy(() => import('@/pages/VideoUpscalePage').then((m) => ({ default: m.VideoUpscalePage })));
 const BgRemovePage = lazy(() => import('@/pages/BgRemovePage').then((m) => ({ default: m.BgRemovePage })));
-const VectorPage = lazy(() => import('@/pages/VectorPage').then((m) => ({ default: m.VectorPage })));
 const QualityPage = lazy(() => import('@/pages/QualityPage').then((m) => ({ default: m.QualityPage })));
 const OptimizePage = lazy(() => import('@/pages/OptimizePage').then((m) => ({ default: m.OptimizePage })));
 const ConvertPage = lazy(() => import('@/pages/ConvertPage').then((m) => ({ default: m.ConvertPage })));
+const VectorizePage = lazy(() => import('@/pages/VectorizePage').then((m) => ({ default: m.VectorizePage })));
+const MotionPage = lazy(() => import('@/pages/MotionPage').then((m) => ({ default: m.MotionPage })));
+const BackgroundsPage = lazy(() => import('@/pages/BackgroundsPage').then((m) => ({ default: m.BackgroundsPage })));
 const EarningsPage = lazy(() => import('@/pages/EarningsPage').then((m) => ({ default: m.EarningsPage })));
-const SubmissionsPage = lazy(() => import('@/pages/SubmissionsPage').then((m) => ({ default: m.SubmissionsPage })));
 const PlannerPage = lazy(() => import('@/pages/PlannerPage').then((m) => ({ default: m.PlannerPage })));
-const PlatformsPage = lazy(() => import('@/pages/PlatformsPage').then((m) => ({ default: m.PlatformsPage })));
 const ReleasesPage = lazy(() => import('@/pages/ReleasesPage').then((m) => ({ default: m.ReleasesPage })));
 const BankPage = lazy(() => import('@/pages/BankPage').then((m) => ({ default: m.BankPage })));
 const CloudPage = lazy(() => import('@/pages/CloudPage').then((m) => ({ default: m.CloudPage })));
@@ -59,23 +55,17 @@ export default function App() {
                         <Route path="subscription" element={<SubscriptionPage />} />
                         <Route element={<Outlet />}>
                         <Route index element={<OverviewPage />} />
-                        <Route path="library" element={<LibraryPage />} />
-                        <Route path="prepare" element={<PreparePage />} />
-                        <Route path="export" element={<ExportPage />} />
+                        <Route path="metadata" element={<MetadataGeneratorPage />} />
                         <Route path="upscale" element={<UpscalePage />} />
-                        <Route path="generate/eps" element={<PremiumGate feature="vector"><GeneratePage kind="eps" /></PremiumGate>} />
-                        <Route path="generate/svg" element={<PremiumGate feature="vector"><GeneratePage kind="svg" /></PremiumGate>} />
-                        <Route path="generate/ai" element={<PremiumGate feature="vector"><GeneratePage kind="ai" /></PremiumGate>} />
-                        <Route path="generate/jpg" element={<PremiumGate feature="jpg"><GeneratePage kind="jpg" /></PremiumGate>} />
                         <Route path="video-upscale" element={<VideoUpscalePage />} />
                         <Route path="bg-remove" element={<BgRemovePage />} />
-                        <Route path="vector" element={<VectorPage />} />
                         <Route path="quality" element={<QualityPage />} />
                         <Route path="optimize" element={<OptimizePage />} />
                         <Route path="convert" element={<ConvertPage />} />
+                        <Route path="vectorize" element={<VectorizePage />} />
+                        <Route path="motion" element={<MotionPage />} />
+                        <Route path="backgrounds" element={<BackgroundsPage />} />
                         <Route path="planner" element={<PlannerPage />} />
-                        <Route path="plan" element={<SubmissionsPage />} />
-                        <Route path="platforms" element={<PlatformsPage />} />
                         <Route path="releases" element={<ReleasesPage />} />
                         <Route path="bank" element={<BankPage />} />
                         <Route path="admin" element={<AdminGate><AdminPage /></AdminGate>} />

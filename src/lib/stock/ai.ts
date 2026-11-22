@@ -5,7 +5,6 @@ import { httpRequest } from '@/lib/desktop';
 import type { BrandId } from '@/components/ui/BrandLogo';
 import type { StockItem, StockMetadata } from './types';
 import {
-  analyzeImageVisuals,
   cleanStockSentence,
   draftMetadata,
   scrubStockKeywords,
@@ -29,17 +28,7 @@ import {
  * desktop or fetch in the browser.
  */
 
-export type ProviderKind =
-  | 'local'
-  | 'openrouter'
-  | 'gemini'
-  | 'groq'
-  | 'cerebras'
-  | 'mistral'
-  | 'nvidia'
-  | 'together'
-  | 'ollama'
-  | 'custom';
+export type ProviderKind = 'openrouter' | 'gemini' | 'groq' | 'nvidia' | 'custom';
 
 export interface ModelPreset {
   id: string;
@@ -63,19 +52,6 @@ export interface ProviderPreset {
 }
 
 export const PROVIDERS: Record<ProviderKind, ProviderPreset> = {
-  local: {
-    kind: 'local',
-    name: 'Local AI (Built in)',
-    brand: 'local',
-    protocol: 'local',
-    baseUrl: '',
-    needsKey: false,
-    badge: 'Offline & free',
-    models: [
-      { id: 'local-visual-v2', label: 'Local Visual & Stock Analyzer', brand: 'local', vision: true, free: true },
-    ],
-  },
-
   openrouter: {
     kind: 'openrouter',
     name: 'OpenRouter',
@@ -94,13 +70,7 @@ export const PROVIDERS: Record<ProviderKind, ProviderPreset> = {
       { id: 'inclusionai/ling-3.2-flash:free', label: 'Ling 3.2 Flash (Free)', brand: 'openrouter', vision: true, free: true },
       { id: 'thinkingmachines/inkling-2-small:free', label: 'Inkling 2 Small (Free)', brand: 'openrouter', vision: true, free: true },
       { id: 'dots-studio/dots-3-note-preview:free', label: 'Dots3 Note Preview (Free)', brand: 'openrouter', vision: true, free: true },
-      { id: 'baidu/ernie-5.5-flash-preview:free', label: 'ERNIE 5.5 Flash (Free)', brand: 'openrouter', free: true },
-      { id: 'nvidia/nemotron-3-ultra-550b-a55b:free', label: 'Nemotron 3 Ultra 550B (Free)', brand: 'nvidia', free: true },
       { id: 'nvidia/nemotron-3.5-lightning:free', label: 'Nemotron 3.5 Lightning (Free)', brand: 'nvidia', free: true },
-      { id: 'cohere/north-mini-code:free', label: 'Cohere North Mini (Free)', brand: 'cohere', free: true },
-      { id: 'liquid/lfm-3-1.7b:free', label: 'Liquid LFM 3 1.7B (Free)', brand: 'liquid', free: true },
-      { id: 'particle-ai/particle-1:free', label: 'Particle-1 (Free)', brand: 'openrouter', free: true },
-      { id: 'recursive/flint-v1.0:free', label: 'Flint 1.0 (Free)', brand: 'openrouter', free: true },
     ],
   },
 
@@ -114,7 +84,7 @@ export const PROVIDERS: Record<ProviderKind, ProviderPreset> = {
     keyUrl: 'https://aistudio.google.com/apikey',
     badge: 'Free tier',
     models: [
-      { id: 'gemini-4-hydrogen', label: 'Gemini 4 Hydrogen (Vision)', brand: 'gemini', vision: true, free: true },
+      { id: 'gemini-3.1-flash', label: 'Gemini 3.1 Flash (Vision)', brand: 'gemini', vision: true, free: true },
       { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash (Vision)', brand: 'gemini', vision: true, free: true },
       { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash (Vision)', brand: 'gemini', vision: true, free: true },
       { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash Lite (Vision)', brand: 'gemini', vision: true, free: true },
@@ -139,41 +109,6 @@ export const PROVIDERS: Record<ProviderKind, ProviderPreset> = {
     ],
   },
 
-  cerebras: {
-    kind: 'cerebras',
-    name: 'Cerebras',
-    brand: 'cerebras',
-    protocol: 'openai',
-    baseUrl: 'https://api.cerebras.ai/v1',
-    needsKey: true,
-    keyUrl: 'https://cloud.cerebras.ai',
-    badge: '1M daily free',
-    models: [
-      { id: 'gpt-oss-120b', label: 'GPT OSS 120B', brand: 'openai', free: true },
-      { id: 'qwen-3-235b-a22b-instruct-2507', label: 'Qwen 3 235B Instruct', brand: 'qwen', free: true },
-      { id: 'qwen-3-32b', label: 'Qwen 3 32B', brand: 'qwen', free: true },
-      { id: 'zai-glm-4.7', label: 'GLM 4.7', brand: 'zhipu', free: true },
-      { id: 'llama3.1-8b', label: 'Llama 3.1 8B Fast', brand: 'meta', free: true },
-    ],
-  },
-
-  mistral: {
-    kind: 'mistral',
-    name: 'Mistral AI',
-    brand: 'mistral',
-    protocol: 'openai',
-    baseUrl: 'https://api.mistral.ai/v1',
-    needsKey: true,
-    keyUrl: 'https://console.mistral.ai/api-keys',
-    badge: 'Free tier',
-    models: [
-      { id: 'mistral-small-latest', label: 'Mistral Small Latest (Vision)', brand: 'mistral', vision: true, free: true },
-      { id: 'pixtral-12b-2409', label: 'Pixtral 12B (Vision)', brand: 'mistral', vision: true, free: true },
-      { id: 'ministral-8b-latest', label: 'Ministral 8B Latest', brand: 'mistral', free: true },
-      { id: 'open-mistral-nemo', label: 'Mistral Nemo 12B', brand: 'mistral', free: true },
-    ],
-  },
-
   nvidia: {
     kind: 'nvidia',
     name: 'NVIDIA NIM',
@@ -190,43 +125,6 @@ export const PROVIDERS: Record<ProviderKind, ProviderPreset> = {
       { id: 'nvidia/llama-3.1-nemotron-ultra-253b-v1', label: 'Nemotron Ultra 253B', brand: 'nvidia', free: true },
       { id: 'deepseek-ai/deepseek-v3.2', label: 'DeepSeek V3.2', brand: 'deepseek', free: true },
       { id: 'mistralai/mistral-small-3.1-24b-instruct-2503', label: 'Mistral Small 3.1 24B (Vision)', brand: 'mistral', vision: true, free: true },
-    ],
-  },
-
-  together: {
-    kind: 'together',
-    name: 'Together AI',
-    brand: 'together',
-    protocol: 'openai',
-    baseUrl: 'https://api.together.xyz/v1',
-    needsKey: true,
-    keyUrl: 'https://api.together.ai/settings/api-keys',
-    badge: 'Free models',
-    models: [
-      { id: 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free', label: 'Llama 3.3 70B Turbo Free', brand: 'meta', free: true },
-      { id: 'meta-llama/Llama-Vision-Free', label: 'Llama 3.2 Vision Free', brand: 'meta', vision: true, free: true },
-      { id: 'deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free', label: 'DeepSeek R1 Distill 70B Free', brand: 'deepseek', free: true },
-    ],
-  },
-
-  ollama: {
-    kind: 'ollama',
-    name: 'Ollama',
-    brand: 'ollama',
-    protocol: 'ollama',
-    baseUrl: 'http://localhost:11434',
-    needsKey: false,
-    badge: 'Local GPU',
-    models: [
-      { id: 'gemma4:e4b', label: 'Gemma 4 E4B (Vision)', brand: 'gemma', vision: true, free: true },
-      { id: 'qwen3-vl:8b', label: 'Qwen 3 VL 8B (Vision)', brand: 'qwen', vision: true, free: true },
-      { id: 'llama3.2-vision:11b', label: 'Llama 3.2 Vision 11B', brand: 'meta', vision: true, free: true },
-      { id: 'llava:7b', label: 'LLaVA 7B (Vision)', brand: 'ollama', vision: true, free: true },
-      { id: 'qwen3:8b', label: 'Qwen 3 8B', brand: 'qwen', free: true },
-      { id: 'llama3.2:3b', label: 'Llama 3.2 3B', brand: 'meta', free: true },
-      { id: 'mistral:7b', label: 'Mistral 7B', brand: 'mistral', free: true },
-      { id: 'deepseek-r1:8b', label: 'DeepSeek R1 8B', brand: 'deepseek', free: true },
-      { id: 'phi4-mini', label: 'Phi 4 Mini', brand: 'microsoft', free: true },
     ],
   },
 
@@ -258,8 +156,8 @@ export interface AiSettings {
 }
 
 export const DEFAULT_AI: AiSettings = {
-  kind: 'local',
-  model: 'local-visual-v2',
+  kind: 'openrouter',
+  model: 'openrouter/free',
   baseUrl: '',
   keys: {},
   modelsByProvider: {},
@@ -296,7 +194,7 @@ export function sanitizeAiSettings(raw: Partial<AiSettings> | null | undefined):
     ...raw,
     kind,
     model,
-    baseUrl: raw?.baseUrl ?? (kind === 'ollama' || kind === 'custom' ? preset.baseUrl : ''),
+    baseUrl: raw?.baseUrl ?? (kind === 'custom' ? preset.baseUrl : ''),
     keys: raw?.keys ?? {},
     modelsByProvider: raw?.modelsByProvider ?? {},
     targetKeywords: Math.min(49, Math.max(7, Number(raw?.targetKeywords) || 35)),
@@ -315,8 +213,6 @@ export const saveAiSettings = (settings: AiSettings): Promise<boolean> =>
 export function isAiConfigured(settings: AiSettings): boolean {
   const preset = PROVIDERS[settings.kind];
   if (!preset) return false;
-  if (settings.kind === 'local') return true;
-  if (settings.kind === 'ollama') return Boolean((settings.baseUrl || preset.baseUrl).trim() && settings.model.trim());
   if (settings.kind === 'custom') return Boolean(settings.baseUrl.trim() && settings.model.trim());
   if (preset.needsKey && !settings.keys[settings.kind]?.trim()) return false;
   return Boolean(settings.model.trim());
@@ -325,13 +221,6 @@ export function isAiConfigured(settings: AiSettings): boolean {
 export function normalizeOpenAiBase(raw: string, fallback: string): string {
   let url = (raw.trim() || fallback).replace(/\/+$/, '');
   url = url.replace(/\/chat\/completions$/i, '');
-  return url;
-}
-
-export function normalizeOllamaBase(raw: string): string {
-  let url = (raw.trim() || PROVIDERS.ollama.baseUrl).replace(/\/+$/, '');
-  url = url.replace(/\/api(\/(chat|generate|tags))?$/i, '');
-  url = url.replace(/\/v1$/i, '');
   return url;
 }
 
@@ -436,7 +325,7 @@ function buildPrompt(
       ? 'Write factual journalistic metadata describing visible subjects and context.'
       : settings.tone === 'minimal'
         ? 'Write crisp, understated metadata highlighting composition, color and copy space.'
-        : 'Write high converting commercial microstock metadata optimized for Shutterstock, Adobe Stock and Magnific buyer search.';
+        : 'Write clear, descriptive commercial metadata suited to any stock marketplace.';
 
   const dims = item.width && item.height ? `${item.width}x${item.height} px` : 'standard resolution';
   const kind =
@@ -647,7 +536,6 @@ async function callOpenAiProtocol(
     settings.kind === 'openrouter' ||
     settings.kind === 'custom' ||
     settings.kind === 'nvidia' ||
-    settings.kind === 'together' ||
     /gemma|deepseek-r1|compound|lfm/i.test(model);
 
   let res = await postOnce(!prefersPlainJson, Boolean(vision));
@@ -768,59 +656,8 @@ async function callGeminiProtocol(
   return text;
 }
 
-async function callOllamaProtocol(
-  settings: AiSettings,
-  prompt: string,
-  vision: VisionPayload | null,
-): Promise<string> {
-  const base = normalizeOllamaBase(settings.baseUrl);
-  const model = settings.model.trim();
-  if (!model) throw new Error('Choose or install an Ollama model first.');
-
-  const send = async (withVision: boolean) => {
-    const userMessage: Record<string, unknown> = { role: 'user', content: prompt };
-    if (withVision && vision) userMessage.images = [vision.base64];
-    return httpRequest({
-      url: `${base}/api/chat`,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        stream: false,
-        format: 'json',
-        options: { temperature: 0.35 },
-        messages: [
-          {
-            role: 'system',
-            content: 'You generate commercial microstock metadata and respond strictly in valid JSON.',
-          },
-          userMessage,
-        ],
-      }),
-      timeoutMs: 120000,
-    });
-  };
-
-  let res = await send(Boolean(vision));
-  if (!res.ok && vision && res.status === 400) {
-    res = await send(false);
-  }
-  if (!res.ok) {
-    if (res.status === 0) {
-      throw new Error(
-        `Could not connect to Ollama at ${base}. Start Ollama locally with ollama serve.`,
-      );
-    }
-    throw new Error(parseApiError(res.status, res.text || '', 'Ollama'));
-  }
-  const data = JSON.parse(res.text || '{}') as { message?: { content?: string }; response?: string };
-  const text = data.message?.content ?? data.response ?? '';
-  if (!text.trim()) throw new Error('Ollama returned an empty response.');
-  return text;
-}
-
 /* -------------------------------------------------------------------------- */
-/* Public generation, testing, live model discovery & Ollama pull             */
+/* Public generation, testing & live model discovery                         */
 /* -------------------------------------------------------------------------- */
 
 export async function generateAiMetadata(
@@ -829,34 +666,6 @@ export async function generateAiMetadata(
   options?: { imageBlob?: Blob | null },
 ): Promise<StockMetadata> {
   const cleanSettings = sanitizeAiSettings(settings);
-
-  // Built in Local AI: zero keys, inspects pixels + filename + stock rules.
-  if (cleanSettings.kind === 'local') {
-    const visuals = cleanSettings.useVision ? await analyzeImageVisuals(options?.imageBlob) : null;
-    const insight = cleanSettings.useVision ? await analyseBlob(options?.imageBlob) : null;
-    const drafted = draftMetadata(item, cleanSettings.targetKeywords, visuals, insight);
-    if (cleanSettings.tone === 'editorial') {
-      return {
-        ...drafted,
-        description: cleanStockSentence(
-          `${drafted.title}. Documentary view captured with authentic natural detail.`,
-          200,
-          false,
-        ),
-      };
-    }
-    if (cleanSettings.tone === 'minimal') {
-      return {
-        ...drafted,
-        description: cleanStockSentence(
-          `${drafted.title}. Clean composition with generous copy space.`,
-          200,
-          false,
-        ),
-      };
-    }
-    return drafted;
-  }
 
   const preset = PROVIDERS[cleanSettings.kind];
   const insight = await analyseBlob(options?.imageBlob);
@@ -871,8 +680,6 @@ export async function generateAiMetadata(
   let raw: string;
   if (preset.protocol === 'gemini') {
     raw = await callGeminiProtocol(cleanSettings, prompt, vision);
-  } else if (preset.protocol === 'ollama') {
-    raw = await callOllamaProtocol(cleanSettings, prompt, vision);
   } else {
     raw = await callOpenAiProtocol(cleanSettings, prompt, vision);
   }
@@ -916,36 +723,8 @@ export async function syncProviderModels(
   settings: AiSettings,
 ): Promise<{ ok: true; models: ModelPreset[] } | { ok: false; error: string }> {
   const preset = PROVIDERS[settings.kind];
-  if (settings.kind === 'local') {
-    return { ok: true, models: preset.models };
-  }
 
   try {
-    if (settings.kind === 'ollama') {
-      const base = normalizeOllamaBase(settings.baseUrl);
-      const res = await httpRequest({ url: `${base}/api/tags`, timeoutMs: 12000 });
-      if (!res.ok) {
-        return {
-          ok: false,
-          error: `Could not reach Ollama at ${base}. Ensure ollama serve is running.`,
-        };
-      }
-      const data = JSON.parse(res.text || '{}') as {
-        models?: Array<{ name?: string; details?: { parameter_size?: string } }>;
-      };
-      const installed: ModelPreset[] = (data.models ?? [])
-        .map((m) => String(m.name ?? '').trim())
-        .filter(Boolean)
-        .map((id) => ({
-          id,
-          label: id,
-          brand: inferModelBrand(id, 'ollama'),
-          vision: modelSupportsVision('ollama', id),
-          free: true,
-        }));
-      return { ok: true, models: installed };
-    }
-
     if (settings.kind === 'openrouter') {
       const res = await httpRequest({ url: 'https://openrouter.ai/api/v1/models', timeoutMs: 20000 });
       if (!res.ok) return { ok: false, error: `OpenRouter returned ${res.status}.` };
@@ -1042,14 +821,6 @@ export async function syncProviderModels(
       if (/whisper|tts|embed|guard|moderation|rerank|playai|orpheus|dall-e|flux|sdxl/i.test(id)) {
         continue;
       }
-      if (settings.kind === 'together') {
-        const isFree =
-          /free/i.test(id) ||
-          (item.pricing !== undefined &&
-            Number(item.pricing.input ?? 1) === 0 &&
-            Number(item.pricing.output ?? 1) === 0);
-        if (!isFree) continue;
-      }
       const vision = modelSupportsVision(settings.kind, id);
       models.push({
         id,
@@ -1065,29 +836,3 @@ export async function syncProviderModels(
   }
 }
 
-/** Pull a local Ollama model directly from inside the app. */
-export async function pullOllamaModelInApp(
-  baseUrl: string,
-  modelName: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const base = normalizeOllamaBase(baseUrl);
-  const name = modelName.trim();
-  if (!name) return { ok: false, error: 'Enter a model name to install.' };
-  const res = await httpRequest({
-    url: `${base}/api/pull`,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, stream: false }),
-    timeoutMs: 180000,
-  });
-  if (!res.ok) {
-    return {
-      ok: false,
-      error:
-        res.status === 0
-          ? `Ollama is not reachable at ${base}. Start Ollama first.`
-          : parseApiError(res.status, res.text || '', 'Ollama'),
-    };
-  }
-  return { ok: true };
-}

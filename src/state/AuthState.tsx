@@ -12,6 +12,7 @@ import {
 import type { User } from '@supabase/supabase-js';
 import { licensingClient } from '@/lib/cloud/licensing';
 import { demoMode } from '@/lib/cloud/demo';
+import { avatarSpecFor, serializeAvatar } from '@/lib/avatar';
 
 /** Legacy local-account helpers are retained for migration only. New sessions
  * are authenticated and verified by the centralized licensing service. */
@@ -33,6 +34,8 @@ export interface UserSession {
   createdAt: string;
   loggedInAt: string;
   syncedToCloud?: boolean;
+  /** Stored avatar string (seed:palette:pattern or a data URI). */
+  avatar?: string;
 }
 
 const PBKDF2_ITERATIONS = 120_000;
@@ -250,6 +253,8 @@ interface AuthState {
   /** Confirm the current password, then set a new one. */
   changePassword: (current: string, next: string) => Promise<{ ok: boolean; error?: string }>;
   updateDisplayName: (name: string) => Promise<void>;
+  /** Set a new avatar (generated spec string or uploaded data URI). */
+  updateAvatar: (avatar: string) => Promise<void>;
   logout: () => Promise<void>;
   /** Ends every session for this account, including other devices. */
   signOutEverywhere: () => Promise<{ ok: boolean; error?: string }>;
@@ -264,6 +269,10 @@ interface AuthState {
 const AuthContext = createContext<AuthState | null>(null);
 
 function toUser(user: User): UserSession {
+  const storedAvatar = String(user.user_metadata?.avatar ?? '').trim();
+  // Every account gets a generated avatar on first sight; the user can
+  // shuffle or upload a photo later from the account panel.
+  const avatar = storedAvatar || serializeAvatar(avatarSpecFor(user.id));
   return {
     id: user.id,
     email: user.email ?? '',
@@ -271,6 +280,7 @@ function toUser(user: User): UserSession {
     createdAt: user.created_at,
     loggedInAt: user.last_sign_in_at || user.created_at,
     syncedToCloud: true,
+    avatar,
   };
 }
 
@@ -522,7 +532,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: cleanEmail,
       password,
       options: {
-        data: { display_name: displayName?.trim() || '' },
+        // A generated avatar is assigned at registration so the profile never
+        // shows a bare initial letter.
+        data: {
+          display_name: displayName?.trim() || '',
+          avatar: serializeAvatar(avatarSpecFor(cleanEmail)),
+        },
         ...(redirectTo ? { emailRedirectTo: redirectTo } : {}),
       },
     });
@@ -638,6 +653,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const client = licensingClient();
     if (!client || !name.trim()) return;
     const { data, error } = await client.auth.updateUser({ data: { display_name: name.trim().slice(0, 60) } });
+    if (error) throw error;
+    if (data.user) setSessionUser(toUser(data.user));
+  }, []);
+
+  const updateAvatar = useCallback(async (avatar: string) => {
+    const client = licensingClient();
+    if (!client || !avatar) return;
+    // Uploaded photos are stored as compact data URIs in user metadata so
+    // the picture follows the account to every device.
+    const { data, error } = await client.auth.updateUser({ data: { avatar } });
     if (error) throw error;
     if (data.user) setSessionUser(toUser(data.user));
   }, []);
@@ -826,6 +851,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updatePassword,
       changePassword,
       updateDisplayName,
+      updateAvatar,
       logout,
       signOutEverywhere,
       refreshMfa,
@@ -861,6 +887,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updatePassword,
       changePassword,
       updateDisplayName,
+      updateAvatar,
       logout,
       signOutEverywhere,
       refreshMfa,

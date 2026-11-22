@@ -4,6 +4,7 @@ import { GIcon } from '@/components/ui/GoogleIcon';
 import { AuthForm, type AuthView } from './AuthForm';
 import { demoMode } from '@/lib/cloud/demo';
 import { useAuth } from '@/state/AuthState';
+import { appName } from '@/lib/version';
 
 const HIGHLIGHTS = [
   { icon: 'smart_toy' as const, title: 'AI metadata', copy: 'Titles, keywords and categories for 14 marketplaces.' },
@@ -50,7 +51,7 @@ export function AuthScreen() {
         </div>
 
         <p className="text-[0.75rem] text-ink-faint">
-          © {new Date().getFullYear()} Micro Stocker Advanced Pro
+          © {new Date().getFullYear()} {appName()}
         </p>
       </section>
 

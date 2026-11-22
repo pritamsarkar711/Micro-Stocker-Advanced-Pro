@@ -14,7 +14,6 @@ import {
   loadAiSettings,
   PROVIDER_LIST,
   PROVIDERS,
-  pullOllamaModelInApp,
   saveAiSettings,
   syncProviderModels,
   testAiConnection,
@@ -36,7 +35,6 @@ export function AiPanel({ compact = false, onChange }: AiPanelProps) {
   const [liveModels, setLiveModels] = useState<Partial<Record<ProviderKind, ModelPreset[]>>>({});
   const [syncing, setSyncing] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [pulling, setPulling] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
@@ -61,7 +59,7 @@ export function AiPanel({ compact = false, onChange }: AiPanelProps) {
       ...settings,
       kind,
       model: nextModel,
-      baseUrl: kind === 'ollama' || kind === 'custom' ? p.baseUrl : '',
+      baseUrl: kind === 'custom' ? p.baseUrl : '',
       modelsByProvider: { ...settings.modelsByProvider, [settings.kind]: settings.model },
     });
     setShowKey(false);
@@ -115,9 +113,7 @@ export function AiPanel({ compact = false, onChange }: AiPanelProps) {
       if (result.models.length && !result.models.some((m) => m.id === settings.model)) {
         selectModel(result.models[0].id);
       }
-      toast.success(
-        `${result.models.length} ${settings.kind === 'ollama' ? 'installed' : 'free'} models loaded`,
-      );
+      toast.success(`${result.models.length} models loaded`);
     } finally {
       setSyncing(false);
     }
@@ -138,25 +134,6 @@ export function AiPanel({ compact = false, onChange }: AiPanelProps) {
       }
     } finally {
       setTesting(false);
-    }
-  }
-
-  async function handlePullOllama() {
-    const target = (customModel.trim() || settings.model.trim());
-    if (!target) return;
-    setPulling(true);
-    try {
-      const res = await pullOllamaModelInApp(settings.baseUrl, target);
-      if (!res.ok) {
-        toast.error('Ollama install failed', res.error);
-        return;
-      }
-      selectModel(target);
-      setCustomModel('');
-      toast.success('Model installed in Ollama', target);
-      void handleSyncModels();
-    } finally {
-      setPulling(false);
     }
   }
 
@@ -233,7 +210,7 @@ export function AiPanel({ compact = false, onChange }: AiPanelProps) {
         </Field>
       )}
 
-      {(settings.kind === 'ollama' || settings.kind === 'custom') && (
+      {(settings.kind === 'custom') && (
         <Field label="Server URL">
           <Input
             value={settings.baseUrl}
@@ -248,21 +225,15 @@ export function AiPanel({ compact = false, onChange }: AiPanelProps) {
         <Field
           label="Model"
           hint={
-            settings.kind !== 'local' ? (
-              <button
-                type="button"
-                disabled={syncing}
-                onClick={() => void handleSyncModels()}
-                className="inline-flex items-center gap-1 text-accent hover:underline disabled:opacity-50"
-              >
-                <GIcon name="refresh" size={12} className={syncing ? 'animate-spin' : undefined} />
-                {syncing
-                  ? 'Loading'
-                  : settings.kind === 'ollama'
-                    ? 'Detect local models'
-                    : 'Refresh free models'}
-              </button>
-            ) : undefined
+            <button
+              type="button"
+              disabled={syncing}
+              onClick={() => void handleSyncModels()}
+              className="inline-flex items-center gap-1 text-accent hover:underline disabled:opacity-50"
+            >
+              <GIcon name="refresh" size={12} className={syncing ? 'animate-spin' : undefined} />
+              {syncing ? 'Loading' : 'Refresh free models'}
+            </button>
           }
         >
           {modelOptions.length > 0 ? (
@@ -281,36 +252,17 @@ export function AiPanel({ compact = false, onChange }: AiPanelProps) {
           )}
         </Field>
 
-        {settings.kind !== 'local' && (
-          <Field
-            label={
-              settings.kind === 'ollama' ? 'Install or use custom model' : 'Custom model ID (optional)'
-            }
-          >
+        {settings.kind === 'custom' && (
+          <Field label="Custom model ID (optional)">
             <div className="flex gap-2">
               <Input
                 value={customModel}
                 onChange={(e) => setCustomModel(e.target.value)}
-                placeholder={
-                  settings.kind === 'ollama'
-                    ? 'Example: gemma4:e4b or qwen3:8b'
-                    : settings.model || 'Enter model ID'
-                }
+                placeholder={settings.model || 'Enter model ID'}
               />
-              {settings.kind === 'ollama' ? (
-                <Button
-                  variant="secondary"
-                  size="md"
-                  loading={pulling}
-                  icon={<GIcon name="download" size={15} />}
-                  onClick={() => void handlePullOllama()}
-                >
-                  Install
-                </Button>
-              ) : (
-                <Button
-                  variant="secondary"
-                  size="md"
+              <Button
+                variant="secondary"
+                size="md"
                   disabled={!customModel.trim()}
                   onClick={() => {
                     selectModel(customModel.trim());
@@ -320,7 +272,6 @@ export function AiPanel({ compact = false, onChange }: AiPanelProps) {
                 >
                   Use
                 </Button>
-              )}
             </div>
           </Field>
         )}

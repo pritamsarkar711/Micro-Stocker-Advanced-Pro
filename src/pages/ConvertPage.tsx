@@ -10,6 +10,7 @@ import { FormatIcon } from '@/components/ui/FormatIcon';
 import { useLibrary } from '@/state/library';
 import { useToast } from '@/state/ToastState';
 import { triggerBlobDownload } from '@/lib/desktop';
+import { isAndroid } from '@/lib/native/platform';
 import { formatBytes } from '@/lib/modelStore';
 import {
   ACCEPT_ATTRIBUTE,
@@ -66,7 +67,15 @@ export function ConvertPage() {
     };
   }, []);
 
-  const activeFormat = CONVERT_FORMATS.find((f) => f.id === format) ?? CONVERT_FORMATS[0];
+  // Android: hide vector export formats (moved to dedicated Image to Vector tool).
+  const androidFormats = isAndroid()
+    ? CONVERT_FORMATS.filter((f) => !['svg', 'svgz', 'eps', 'pdf', 'ai'].includes(f.id))
+    : CONVERT_FORMATS;
+  const activeFormat = androidFormats.find((f) => f.id === format) ?? androidFormats[0];
+  // If the stored format is hidden on Android (vector), reset to a raster default.
+  if (format && !androidFormats.some((f) => f.id === format)) {
+    setFormat(androidFormats[0].id);
+  }
 
   function selectFormat(next: ConvertFormat) {
     setFormat(next);
@@ -250,7 +259,7 @@ export function ConvertPage() {
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,21rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,23rem)_minmax(0,1fr)]">
         <div className="space-y-4">
           <Card>
-            <CardHeader title={`Output format (${CONVERT_FORMATS.length})`} icon={<GIcon name="swap_horiz" size={17} />} />
+            <CardHeader title={`Output format (${androidFormats.length})`} icon={<GIcon name="swap_horiz" size={17} />} />
             <div className="mb-2">
               <Input
                 value={formatSearch}
@@ -259,7 +268,7 @@ export function ConvertPage() {
               />
             </div>
             <div className="grid max-h-72 grid-cols-2 gap-1.5 overflow-y-auto pr-1">
-              {CONVERT_FORMATS.filter(
+              {androidFormats.filter(
                 (fmt) =>
                   !formatSearch ||
                   fmt.label.toLowerCase().includes(formatSearch.toLowerCase()) ||

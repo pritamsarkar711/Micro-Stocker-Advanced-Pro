@@ -6,6 +6,8 @@ import { GIcon, type GoogleIconName } from '@/components/ui/GoogleIcon';
 import { useAuth } from '@/state/AuthState';
 import { useLibrary } from '@/state/library';
 import { useLicense } from '@/state/LicenseState';
+import { Avatar } from '@/components/ui/Avatar';
+import { appName } from '@/lib/version';
 
 interface Hit {
   id: string;
@@ -39,7 +41,7 @@ export function MobileHeader({ onOpenNav }: { onOpenNav: () => void }) {
     // Destinations that live outside the rail still need a name up top.
     if (pathname.startsWith('/report')) return 'Report issue';
     if (pathname.startsWith('/404')) return 'Page not found';
-    return 'Micro Stocker';
+    return appName();
   }, [pathname, isAdmin]);
 
   return (
@@ -74,9 +76,7 @@ export function MobileHeader({ onOpenNav }: { onOpenNav: () => void }) {
             aria-label={`Account: ${user.displayName}`}
             className="inline-flex size-11 shrink-0 items-center justify-center"
           >
-            <span className="inline-flex size-8 items-center justify-center rounded-full bg-brand text-[0.8125rem] font-bold text-on-brand">
-              {user.displayName.slice(0, 1).toUpperCase()}
-            </span>
+            <Avatar stored={user.avatar} seed={user.id} size={8} />
           </button>
         ) : (
           <button
