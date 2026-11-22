@@ -2,7 +2,7 @@
   "name": "micro-stocker-advanced-pro",
   "productName": "Micro Stocker Advanced Pro",
   "private": false,
-  "version": "2.3.2",
+  "version": "2.5.0",
   "description": "Cross platform microstock contributor studio for AI metadata generation, lossless IPTC and XMP embedding, per agency CSV export across 14 marketplaces, open source image and video upscaling, background removal and multi format image conversion.",
   "author": {
     "name": "pritamsarkar711",
@@ -44,7 +44,6 @@
     "qa:onnx": "node scripts/qa/onnx-upscale.mjs",
     "qa:bg": "node scripts/qa/onnx-bgremove.mjs",
     "qa:all": "npm run qa:deep && npm run qa:a11y && npm run qa:contrast && npm run qa:interaction && npm run qa:text && npm run qa:suggest && npm run qa:vector && npm run qa:security && npm run qa:tools && npm run qa:mobile && npm run qa:launch",
-    "qa:generate": "node scripts/qa/generate-samples.mjs",
     "build:web": "vite build",
     "android:sync": "npm run build:web && cap sync android",
     "android:debug": "npm run android:sync && cd android && ./gradlew assembleDebug",
@@ -160,8 +159,9 @@
     ]
   },
   "overrides": {
-    "minimatch": "^11.0.9",
+    "tar": "^7.5.23",
     "glob": "^14.0.6",
+    "minimatch": "^11.0.9",
     "rimraf": "^6.1.4"
   }
 }

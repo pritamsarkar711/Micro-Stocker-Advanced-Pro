@@ -40,7 +40,6 @@ import {
   inferModelBrand,
   isAiConfigured,
   modelSupportsVision,
-  normalizeOllamaBase,
   normalizeOpenAiBase,
   sanitizeAiSettings,
 } from '@/lib/stock/ai';
@@ -482,27 +481,28 @@ test('vector analyzer and file helpers operate cleanly', () => {
 });
 
 /* =========================== AI provider engine ========================== */
-group('AI metadata engine (10 providers + official brand logos)');
+group('AI metadata engine (5 providers + official brand logos)');
 
-test('all 10 AI providers have valid configurations and brand logos', () => {
-  equal(PROVIDER_LIST.length, 10, '10 providers');
+test('all 5 AI providers have valid configurations and brand logos', () => {
+  equal(PROVIDER_LIST.length, 5, '5 providers');
   for (const p of PROVIDER_LIST) {
     assert(p.brand.length > 0, `${p.kind} brand`);
-    assert(!/[—–]/.test(p.summary), `${p.kind} zero-dash summary`);
-    if (p.kind === 'local' || p.kind === 'custom') continue;
+    assert(!/[—–]/.test(p.badge), `${p.kind} zero-dash badge`);
+    if (p.kind === 'custom') continue;
     assert(/^https?:\/\//.test(p.baseUrl), `${p.kind} baseUrl`);
   }
-  for (const id of [
-    'local', 'ollama', 'openrouter', 'gemini', 'mistral',
-    'nvidia', 'groq', 'cerebras', 'together', 'custom',
-  ] as const) {
+  for (const id of ['openrouter', 'gemini', 'groq', 'nvidia', 'custom'] as const) {
     assert(Boolean(PROVIDERS[id]), `provider ${id}`);
+  }
+  // The Local AI Built-in and Ollama options were removed on purpose: the
+  // Android build only offers cloud providers plus a user supplied endpoint.
+  for (const removed of ['local', 'ollama'] as const) {
+    assert(!(removed in PROVIDERS), `provider ${removed} removed`);
   }
 });
 
 test('AI URL normalizers, vision detection, brand inference and JSON parser work', () => {
   equal(normalizeOpenAiBase('https://api.groq.com/openai/v1/chat/completions'), 'https://api.groq.com/openai/v1');
-  equal(normalizeOllamaBase('http://localhost:11434/api/chat/'), 'http://localhost:11434');
 
   const groqNoKey = sanitizeAiSettings({ ...DEFAULT_AI, kind: 'groq', apiKey: '', keys: {} });
   const groqWithKey = sanitizeAiSettings({
@@ -520,8 +520,8 @@ test('AI URL normalizers, vision detection, brand inference and JSON parser work
   equal(inferModelBrand('qwen/qwen3.6-plus:free'), 'qwen');
   equal(inferModelBrand('deepseek/deepseek-r1'), 'deepseek');
   equal(inferModelBrand('z-ai/glm-4.5-air:free'), 'zhipu');
-  equal(modelSupportsVision('gemini', 'gemini-2.5-flash'), true);
-  equal(modelSupportsVision('ollama', 'qwen2.5vl:7b'), true);
+  equal(modelSupportsVision('gemini', 'gemini-3.1-flash'), true);
+  equal(modelSupportsVision('nvidia', 'meta/llama-3.2-90b-vision-instruct'), true);
 
   const parsed = extractJsonMetadata(
     '```json\n{"title":"Modern studio — desk – coffee","description":"Bright studio — natural light.","keywords":["Desk","desk","coffee","laptop","minimal","office","work","creative"]}\n```',

@@ -14,6 +14,8 @@ import { useLibrary } from '@/state/library';
 import { useToast } from '@/state/ToastState';
 import { useLicense } from '@/state/LicenseState';
 import { desktop, triggerBlobDownload, type ModelProgressEvent } from '@/lib/desktop';
+import { isAndroid } from '@/lib/native/platform';
+import { detectDevice, modelFitsDevice } from '@/lib/device';
 import {
   cancelModelInstall,
   formatBytes,
@@ -94,10 +96,16 @@ export function BgRemovePage() {
     };
   }, []);
 
-  const filteredModels = useMemo(
-    () => (purpose === 'all' ? BG_MODELS : BG_MODELS.filter((m) => m.purposes.includes(purpose))),
-    [purpose],
-  );
+  const deviceTier = useMemo(() => (isAndroid() ? detectDevice().tier : 'high'), []);
+  const filteredModels = useMemo(() => {
+    // Phones: only show background models this device can actually run. The
+    // 900 MB BiRefNet graphs are desktop class hardware; on low tier devices
+    // the built-in engine is the only safe path.
+    const compatible = isAndroid()
+      ? BG_MODELS.filter((m) => modelFitsDevice(m.sizeMB, deviceTier, { low: 0, mid: 350 }))
+      : BG_MODELS;
+    return purpose === 'all' ? compatible : compatible.filter((m) => m.purposes.includes(purpose));
+  }, [purpose, deviceTier]);
   const activeModel = BG_MODELS.find((m) => m.id === modelId) ?? BG_MODELS[0];
 
   async function handleInstall(model: BgModel) {
@@ -637,13 +645,13 @@ export function BgRemovePage() {
                   license={model.license}
                   sizeMB={model.sizeMB}
                   selected={modelId === model.id}
-                  locked={Boolean(model.premium) && !hasPlan}
+                  locked={!isAndroid() && Boolean(model.premium) && !hasPlan}
                   builtin={model.kind === 'builtin'}
                   installed={Boolean(installed[model.id])}
                   isDesktop={desktop.isDesktop}
                   progress={dlProgress[model.id]}
                   onSelect={() => {
-                    if (model.premium && !hasPlan) {
+                    if (!isAndroid() && model.premium && !hasPlan) {
                       toast.info('Premium model', 'Included with any plan. It uses no credits.');
                       navigate('/subscription');
                       return;

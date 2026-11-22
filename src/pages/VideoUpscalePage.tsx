@@ -62,7 +62,9 @@ export function VideoUpscalePage() {
 
   const [purpose, setPurpose] = useState<VideoPurpose>('all');
   const [modelId, setModelId] = useState<string>('fsr-easu-rcas');
-  const [targetId, setTargetId] = useState<string>('4k');
+  const [resolutionId, setResolutionId] = useState<string>('4k');
+  // null = "None": upscale to the chosen resolution with no marketplace rules.
+  const [marketplaceId, setMarketplaceId] = useState<string | null>(null);
   const [outFormat, setOutFormat] = useState<'mp4' | 'webm'>('mp4');
   const [fps, setFps] = useState<24 | 30 | 60>(30);
   const [bitrateMbps, setBitrateMbps] = useState(20);
@@ -110,16 +112,26 @@ export function VideoUpscalePage() {
       ),
     [purpose],
   );
-  // A downgrade must not leave a gated preset selected.
   const activeModel = VIDEO_MODELS.find((m) => m.id === modelId) ?? VIDEO_MODELS[0];
-  const activeTarget = VIDEO_TARGETS.find((t) => t.id === targetId) ?? VIDEO_TARGETS[0];
+  const activeTarget = useMemo(() => {
+    if (marketplaceId) {
+      const preset = VIDEO_TARGETS.find((t) => t.id === marketplaceId);
+      if (preset) return preset;
+    }
+    return VIDEO_TARGETS.find((t) => t.id === resolutionId) ?? VIDEO_TARGETS[0];
+  }, [resolutionId, marketplaceId]);
   const activeJob = jobs.find((j) => j.id === activeId) ?? jobs[0];
 
-  function selectTarget(id: string) {
+  function selectResolution(id: string) {
+    setResolutionId(id);
+    setMarketplaceId(null);
+  }
+
+  function selectMarketplace(id: string | null) {
+    setMarketplaceId(id);
+    if (!id) return;
     const t = VIDEO_TARGETS.find((x) => x.id === id);
-    if (!t) return;
-    setTargetId(id);
-    if (t.defaultFps) setFps(t.defaultFps);
+    if (t?.defaultFps) setFps(t.defaultFps);
   }
 
   function selectModel(model: VideoModel) {
@@ -342,10 +354,10 @@ export function VideoUpscalePage() {
                     <button
                       key={t.id}
                       type="button"
-                      onClick={() => selectTarget(t.id)}
+                      onClick={() => selectResolution(t.id)}
                       className={clsx(
                         'flex items-center gap-2 rounded-[var(--r-control)] border px-2.5 py-2 text-left text-xs',
-                        targetId === t.id
+                        !marketplaceId && resolutionId === t.id
                           ? 'border-accent bg-accent-soft font-semibold text-accent'
                           : 'border-line bg-surface text-ink hover:bg-surface-2',
                       )}
@@ -363,16 +375,34 @@ export function VideoUpscalePage() {
               </div>
 
               <div>
-                <div className="mb-1.5 text-xs font-medium text-ink-muted">Stock footage presets</div>
+                <div className="mb-1.5 text-xs font-medium text-ink-muted">Marketplace</div>
                 <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => selectMarketplace(null)}
+                    className={clsx(
+                      'flex items-center gap-2 rounded-[var(--r-control)] border px-2.5 py-2 text-left text-xs',
+                      !marketplaceId
+                        ? 'border-accent bg-accent-soft font-semibold text-ink'
+                        : 'border-line bg-surface text-ink hover:bg-surface-2',
+                    )}
+                  >
+                    <GIcon name="close" size={18} className="shrink-0 text-ink-muted" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium">None</div>
+                      <div className="flex items-center gap-1 text-2xs text-ink-muted">
+                        <span className="truncate">Just the resolution</span>
+                      </div>
+                    </div>
+                  </button>
                   {stockTargets.map((t) => (
                     <button
                       key={t.id}
                       type="button"
-                      onClick={() => selectTarget(t.id)}
+                      onClick={() => selectMarketplace(t.id)}
                       className={clsx(
                         'flex items-center gap-2 rounded-[var(--r-control)] border px-2.5 py-2 text-left text-xs',
-                        targetId === t.id
+                        marketplaceId === t.id
                           ? 'border-accent bg-accent-soft font-semibold text-ink'
                           : 'border-line bg-surface text-ink hover:bg-surface-2',
                       )}
@@ -595,16 +625,7 @@ export function VideoUpscalePage() {
               action={<Badge tone="neutral">{filteredModels.length}</Badge>}
             />
 
-            <p className="mb-3 text-2xs text-ink-muted">Built-in resampling. Check model licences before commercial use.</p>
-            {!desktop.isDesktop && (
-              <p className="mb-3 flex items-start gap-1.5 rounded-[var(--r-xs)] border border-line bg-surface-2/60 px-2.5 py-2 text-2xs leading-relaxed text-ink-muted">
-                <GIcon name="info" size={13} className="mt-px shrink-0" />
-                <span>
-                  The instant engine runs every frame on this phone. The RIFE and NCNN video packs need a desktop
-                  graphics card, so they stay in the Windows, macOS and Linux build.
-                </span>
-              </p>
-            )}
+
 
             <div className="mb-3 flex flex-wrap gap-1">
               {VIDEO_PURPOSES.map((p) => (

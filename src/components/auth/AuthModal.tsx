@@ -11,7 +11,7 @@ import { useToast } from '@/state/ToastState';
 import { date } from '@/lib/format';
 import { AuthForm } from './AuthForm';
 import { Avatar } from '@/components/ui/Avatar';
-import { avatarGallery, randomAvatarSpec, serializeAvatar } from '@/lib/avatar';
+import { avatarGallery, fileToAvatarDataUri, randomAvatarSpec, serializeAvatar } from '@/lib/avatar';
 
 export function AuthModal() {
   const { user, modalOpen, closeAuth, updateDisplayName, updateAvatar, logout, mfaRequired, recovery, recoveryError } = useAuth();
@@ -133,7 +133,7 @@ export function AuthModal() {
         </Field>
 
         <Field label="Profile picture">
-          <p className="text-[0.7rem] text-ink-muted mb-2">Pick a generated avatar, or shuffle for a new look.</p>
+          <p className="text-[0.7rem] text-ink-muted mb-2">Pick a generated avatar, shuffle for a new look, or upload your own photo.</p>
           <div className="flex flex-wrap gap-2">
             {avatarGallery(user.id, 6).map((src, i) => (
               <button
@@ -171,11 +171,44 @@ export function AuthModal() {
                   setBusy(false);
                 }
               }}
-              className="size-10 shrink-0 rounded-full border border-dashed border-line object-cover bg-surface-2 hover:border-brand active:scale-95 transition-transform"
+              disabled={busy}
+              aria-label="Shuffle avatar"
+              className="size-10 shrink-0 rounded-full border border-dashed border-line object-cover bg-surface-2 hover:border-brand active:scale-95 transition-transform disabled:opacity-50"
               style={{ width: 40, height: 40 }}
             >
               <GIcon name="refresh" size={16} className="text-ink-muted" />
             </button>
+            <label
+              className="size-10 shrink-0 cursor-pointer rounded-full border border-dashed border-line bg-surface-2 grid place-items-center hover:border-brand active:scale-95 transition-transform"
+              style={{ width: 40, height: 40 }}
+              aria-label="Upload a photo"
+            >
+              <GIcon name="add_photo_alternate" size={16} className="text-ink-muted" />
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="sr-only"
+                onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = '';
+                  if (!file) return;
+                  if (file.size > 8 * 1024 * 1024) {
+                    toast.error('Photo too large', 'Choose an image under 8 MB.');
+                    return;
+                  }
+                  setBusy(true);
+                  try {
+                    const dataUri = await fileToAvatarDataUri(file);
+                    await updateAvatar(dataUri);
+                    toast.success('Avatar updated');
+                  } catch (err) {
+                    toast.error('Could not use that photo', err instanceof Error ? err.message : String(err));
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              />
+            </label>
           </div>
         </Field>
       </div>

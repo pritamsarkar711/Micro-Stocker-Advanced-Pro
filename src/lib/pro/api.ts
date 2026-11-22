@@ -7,6 +7,7 @@
  */
 
 import { licensingClient } from '@/lib/cloud/licensing';
+import { isAndroid } from '@/lib/native/platform';
 
 export interface PlanFeatures {
   vector?: boolean;
@@ -274,9 +275,11 @@ export async function loadCatalog() {
     select<PaymentMethod>('payment_methods', (q) => (q as { order(column: string): unknown }).order('sort')),
     select<CryptoAsset>('crypto_assets', (q) => (q as { order(column: string): unknown }).order('sort')),
   ]);
+  const androidOnly = isAndroid();
   return {
-    plans: isFailure(plans) ? [] : plans.filter((plan) => plan.active),
-    prices: isFailure(prices) ? [] : prices.filter((price) => price.active),
+    // vecmotion sells a single minimal-fee plan; the desktop catalogue stays intact.
+    plans: isFailure(plans) ? [] : plans.filter((plan) => plan.active && (!androidOnly || plan.slug === 'vecmotion')),
+    prices: isFailure(prices) ? [] : prices.filter((price) => price.active && (!androidOnly || price.plan_slug === 'vecmotion')),
     methods: isFailure(methods) ? [] : methods.filter((method) => method.enabled),
     assets: isFailure(assets) ? [] : assets.filter((asset) => asset.enabled),
     error: [plans, prices, methods, assets].find(isFailure)?.error,

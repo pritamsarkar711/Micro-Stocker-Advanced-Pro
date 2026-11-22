@@ -122,15 +122,8 @@ function SearchSheet({ onClose }: { onClose: () => void }) {
     const assets = items
       .filter((it) => q && (it.name.toLowerCase().includes(q) || it.metadata.title.toLowerCase().includes(q)))
       .slice(0, 8)
-      .map((it) => ({ id: `it:${it.id}`, label: it.name, sub: it.metadata.title || 'Library asset', icon: 'image' as const, to: `/library?item=${encodeURIComponent(it.id)}` }));
-    const creative = q
-      ? [
-          { id: 'gen:eps', label: 'AI EPS generator', sub: 'Editable vector', icon: 'polyline' as const, to: '/generate/eps' },
-          { id: 'gen:svg', label: 'AI SVG generator', sub: 'Layered vector', icon: 'draw' as const, to: '/generate/svg' },
-          { id: 'gen:jpg', label: 'JPG generator', sub: 'Photo style', icon: 'image' as const, to: '/generate/jpg' },
-        ].filter((entry) => entry.label.toLowerCase().includes(q) || entry.sub.toLowerCase().includes(q))
-      : [];
-    return [...creative, ...nav, ...assets].slice(0, 14);
+      .map((it) => ({ id: `it:${it.id}`, label: it.name, sub: it.metadata.title || 'Library asset', icon: 'photo_library' as const, to: '/metadata' }));
+    return [...nav, ...assets].slice(0, 14);
   }, [items, isAdmin, query]);
 
   return (

@@ -35,6 +35,7 @@ const urlStubPlugin = {
 
 await build({
   plugins: [urlStubPlugin],
+  loader: { '.png': 'dataurl', '.jpg': 'dataurl', '.jpeg': 'dataurl', '.svg': 'dataurl', '.webp': 'dataurl' },
   stdin: {
     contents: `
 import { renderToString } from 'react-dom/server';
@@ -52,20 +53,22 @@ import { AppShell } from '@/components/layout/AppShell';
 
 const PAGES = {
   Overview: () => import('@/pages/OverviewPage').then(m => m.OverviewPage),
-  Library: () => import('@/pages/LibraryPage').then(m => m.LibraryPage),
-  Prepare: () => import('@/pages/PreparePage').then(m => m.PreparePage),
-  Export: () => import('@/pages/ExportPage').then(m => m.ExportPage),
+  MetadataGenerator: () => import('@/pages/MetadataGeneratorPage').then(m => m.MetadataGeneratorPage),
   Upscale: () => import('@/pages/UpscalePage').then(m => m.UpscalePage),
   VideoUpscale: () => import('@/pages/VideoUpscalePage').then(m => m.VideoUpscalePage),
   BgRemove: () => import('@/pages/BgRemovePage').then(m => m.BgRemovePage),
+  Quality: () => import('@/pages/QualityPage').then(m => m.QualityPage),
+  Optimize: () => import('@/pages/OptimizePage').then(m => m.OptimizePage),
   Convert: () => import('@/pages/ConvertPage').then(m => m.ConvertPage),
+  Vectorize: () => import('@/pages/VectorizePage').then(m => m.VectorizePage),
+  Motion: () => import('@/pages/MotionPage').then(m => m.MotionPage),
+  Backgrounds: () => import('@/pages/BackgroundsPage').then(m => m.BackgroundsPage),
   Planner: () => import('@/pages/PlannerPage').then(m => m.PlannerPage),
-  Submissions: () => import('@/pages/SubmissionsPage').then(m => m.SubmissionsPage),
   Earnings: () => import('@/pages/EarningsPage').then(m => m.EarningsPage),
-  Platforms: () => import('@/pages/PlatformsPage').then(m => m.PlatformsPage),
   Releases: () => import('@/pages/ReleasesPage').then(m => m.ReleasesPage),
   Bank: () => import('@/pages/BankPage').then(m => m.BankPage),
   Cloud: () => import('@/pages/CloudPage').then(m => m.CloudPage),
+  Subscription: () => import('@/pages/SubscriptionPage').then(m => m.SubscriptionPage),
   Settings: () => import('@/pages/SettingsPage').then(m => m.SettingsPage),
   Contact: () => import('@/pages/ContactPage').then(m => m.ContactPage),
   Report: () => import('@/pages/ReportPage').then(m => m.ReportPage),

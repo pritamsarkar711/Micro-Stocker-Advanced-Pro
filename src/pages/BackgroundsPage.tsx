@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -7,47 +7,71 @@ import { GIcon } from '@/components/ui/GoogleIcon';
 import { useToast } from '@/state/ToastState';
 import { triggerBlobDownload } from '@/lib/desktop';
 import { isAndroid } from '@/lib/native/platform';
+import {
+  BACKGROUND_PALETTES,
+  BACKGROUND_STYLES,
+  backgroundToEps,
+  backgroundToSvg,
+  drawBackground,
+  type BackgroundScene,
+  type BackgroundStyleId,
+} from '@/lib/motion/backgrounds';
 
-/** Background Image Generator (Android, premium, unlimited).
+type ResolutionId = '2K' | '4K' | '8K';
+type AspectId = '16:9' | '9:16' | '1:1' | '4:5';
+
+const RESOLUTIONS: Array<{ id: ResolutionId; label: string; w: number; h: number }> = [
+  { id: '2K', label: '2K', w: 2560, h: 1440 },
+  { id: '4K', label: '4K', w: 3840, h: 2160 },
+  { id: '8K', label: '8K', w: 7680, h: 4320 },
+];
+
+const ASPECTS: Array<{ id: AspectId; label: string; w: number; h: number }> = [
+  { id: '16:9', label: '16:9', w: 16, h: 9 },
+  { id: '9:16', label: '9:16', w: 9, h: 16 },
+  { id: '1:1', label: '1:1', w: 1, h: 1 },
+  { id: '4:5', label: '4:5', w: 4, h: 5 },
+];
+
+/**
+ * Background Image Generator (Android).
  *
- * Generates unlimited unique background images client-side from styles,
- * textures and patterns. Live preview updates as parameters change. Download
- * PNG/JPG, or SVG/EPS with editable vector elements. Output 2K/4K/8K.
- *
- * Everything is procedural: gradients, noise, shapes and per-session
- * randomness make every result unique and commercially usable without any
- * external AI model or API.
+ * Unlimited unique backgrounds from 10 styles, 8 palettes and a seed you can
+ * shuffle forever. The live preview updates instantly as you change anything.
+ * Download PNG or JPG at 2K, 4K or 8K, or SVG / EPS with real editable
+ * vector shapes. Everything is generated on the device: original designs,
+ * commercially usable, no external AI.
  */
 export function BackgroundsPage() {
   const toast = useToast();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [style, setStyle] = useState<'gradient' | 'texture' | 'pattern' | 'mesh'>('gradient');
-  const [resolution, setResolution] = useState<'2K' | '4K' | '8K'>('2K');
-  const [colorA, setColorA] = useState('#6366f1');
-  const [colorB, setColorB] = useState('#a855f7');
-  const [density, setDensity] = useState(40);
-  const [preview, setPreview] = useState<string | null>(null);
-  const animRef = useRef<number | null>(null);
+  const [style, setStyle] = useState<BackgroundStyleId>('aurora');
+  const [paletteId, setPaletteId] = useState('indigo');
+  const [customColors, setCustomColors] = useState(false);
+  const [colorA, setColorA] = useState('#312e81');
+  const [colorB, setColorB] = useState('#6366f1');
+  const [colorC, setColorC] = useState('#a5b4fc');
+  const [density, setDensity] = useState(50);
+  const [grain, setGrain] = useState(15);
+  const [vignette, setVignette] = useState(20);
+  const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1_000_000));
+  const [resolution, setResolution] = useState<ResolutionId>('2K');
+  const [aspect, setAspect] = useState<AspectId>('16:9');
+  const [rendered, setRendered] = useState<string | null>(null);
+  const [rendering, setRendering] = useState(false);
 
-  const RESOLUTIONS: Array<{ id: '2K' | '4K' | '8K'; label: string; w: number; h: number }> = [
-    { id: '2K', label: '2K QHD', w: 2560, h: 1440 },
-    { id: '4K', label: '4K UHD', w: 3840, h: 2160 },
-    { id: '8K', label: '8K', w: 7680, h: 4320 },
-  ];
-
-  const STYLES = [
-    { id: 'gradient', label: 'Gradient', icon: 'colorize' },
-    { id: 'texture', label: 'Texture', icon: 'crop_square' },
-    { id: 'pattern', label: 'Pattern', icon: 'view_column' },
-    { id: 'mesh', label: 'Gradient mesh', icon: 'grid_on' },
-  ];
-
+  const palette = BACKGROUND_PALETTES.find((p) => p.id === paletteId) ?? BACKGROUND_PALETTES[0];
+  const aspectDef = ASPECTS.find((a) => a.id === aspect) ?? ASPECTS[0];
+  const target = RESOLUTIONS.find((r) => r.id === resolution) ?? RESOLUTIONS[0];
   const isAndroidBuild = isAndroid();
-  const target = RESOLUTIONS.find((r) => r.id === resolution)!;
 
-  const rand = (seed: number) => {
-    let x = Math.sin(seed) * 10000;
-    return x - Math.floor(x);
+  const scene: BackgroundScene = {
+    style,
+    colors: customColors ? [colorA, colorB, colorC] : palette.colors,
+    seed,
+    density,
+    grain,
+    vignette,
   };
 
   const drawPreview = useCallback(() => {
@@ -55,274 +79,288 @@ export function BackgroundsPage() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const w = canvas.width;
-    const h = canvas.height;
-    const t = Date.now() / 1000;
+    drawBackground(ctx, canvas.width, canvas.height, scene);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [style, paletteId, customColors, colorA, colorB, colorC, density, grain, vignette, seed]);
 
-    if (style === 'gradient') {
-      const g = ctx.createLinearGradient(0, 0, w, h);
-      g.addColorStop(0, colorA);
-      g.addColorStop(1, colorB);
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, w, h);
-      for (let i = 0; i < 6; i++) {
-        const x = (w * 0.3 + Math.sin(t + i) * 100) % w;
-        const y = (h * 0.3 + Math.cos(t * 0.7 + i) * 100) % h;
-        const g2 = ctx.createRadialGradient(x, y, 20, x, y, 220);
-        g2.addColorStop(0, 'rgba(255,255,255,0.08)');
-        g2.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.fillStyle = g2;
-        ctx.fillRect(0, 0, w, h);
-      }
-    } else if (style === 'texture') {
-      ctx.fillStyle = colorA;
-      ctx.fillRect(0, 0, w, h);
-      ctx.fillStyle = colorB;
-      for (let i = 0; i < density; i++) {
-        const x = rand(i * 97 + t * 10) * w;
-        const y = rand(i * 131 + t * 7) * h;
-        const s = rand(i * 53) * 40 + 10;
-        ctx.beginPath();
-        ctx.arc(x, y, s, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    } else if (style === 'pattern') {
-      ctx.fillStyle = colorA;
-      ctx.fillRect(0, 0, w, h);
-      ctx.strokeStyle = colorB;
-      ctx.lineWidth = 2;
-      const step = 60 + density;
-      for (let x = -step; x < w + step; x += step) {
-        for (let y = -step; y < h + step; y += step) {
-          const rx = x + Math.sin(t) * 20;
-          const ry = y + Math.cos(t * 0.5) * 20;
-          ctx.beginPath();
-          ctx.arc(rx, ry, step * 0.35, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-      }
-    } else if (style === 'mesh') {
-      const cols = 4 + Math.floor(density / 10);
-      const rows = 4 + Math.floor(density / 10);
-      for (let cy = 0; cy < rows; cy++) {
-        for (let cx = 0; cx < cols; cx++) {
-          const g = ctx.createLinearGradient(
-            (cx / cols) * w + Math.sin(t + cx) * 40,
-            (cy / rows) * h + Math.cos(t + cy) * 40,
-            ((cx + 1) / cols) * w - Math.sin(t + cx) * 40,
-            ((cy + 1) / rows) * h - Math.cos(t + cy) * 40,
-          );
-          const mix = (cx + cy) % 2 === 0 ? colorA : colorB;
-          g.addColorStop(0, mix);
-          g.addColorStop(1, colorB);
-          ctx.fillStyle = g;
-          ctx.fillRect((cx / cols) * w, (cy / rows) * h, w / cols + 2, h / rows + 2);
-        }
-      }
-    }
-  }, [style, colorA, colorB, density]);
-
-  const startPreview = () => {
+  useEffect(() => {
     drawPreview();
-    const loop = () => {
-      if (animRef.current === null) return;
-      drawPreview();
-      animRef.current = requestAnimationFrame(loop);
-    };
-    animRef.current = requestAnimationFrame(loop);
+    setRendered(null);
+  }, [drawPreview]);
+
+  const shuffle = () => {
+    setSeed(Math.floor(Math.random() * 1_000_000));
   };
 
-  const stopPreview = () => {
-    if (animRef.current !== null) cancelAnimationFrame(animRef.current);
-    animRef.current = null;
+  const surprise = () => {
+    const styles = BACKGROUND_STYLES.map((s) => s.id);
+    setStyle(styles[Math.floor(Math.random() * styles.length)]);
+    setPaletteId(BACKGROUND_PALETTES[Math.floor(Math.random() * BACKGROUND_PALETTES.length)].id);
+    setCustomColors(false);
+    setSeed(Math.floor(Math.random() * 1_000_000));
+    setDensity(30 + Math.floor(Math.random() * 70));
   };
 
-  const download = (format: 'png' | 'jpg' | 'svg' | 'eps') => {
-    if (!preview) return;
-    if (format === 'png' || format === 'jpg') {
-      const img = new Image();
-      img.onload = () => {
-        const c = document.createElement('canvas');
-        c.width = target.w;
-        c.height = target.h;
-        const cctx = c.getContext('2d');
-        if (!cctx) return;
-        cctx.drawImage(img, 0, 0);
-        const mime = format === 'png' ? 'image/png' : 'image/jpeg';
-        c.toBlob((blob) => {
+  const outputSize = () => {
+    const scale = Math.min(target.w / aspectDef.w, target.h / aspectDef.h);
+    return { w: Math.round(aspectDef.w * scale), h: Math.round(aspectDef.h * scale) };
+  };
+
+  const generate = () => {
+    if (rendering) return;
+    setRendering(true);
+    // Let the button paint before the heavy full-res render.
+    requestAnimationFrame(() => {
+      try {
+        const { w, h } = outputSize();
+        const deviceMemory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8;
+        let outW = w;
+        let outH = h;
+        if (target.id === '8K' && deviceMemory < 6) {
+          outW = Math.round(w / 2);
+          outH = Math.round(h / 2);
+          toast.info('Rendered at 4K', 'This device has limited memory for an 8K canvas');
+        }
+        const off = document.createElement('canvas');
+        off.width = outW;
+        off.height = outH;
+        const ctx = off.getContext('2d');
+        if (!ctx) throw new Error('Could not create the render canvas');
+        drawBackground(ctx, outW, outH, scene);
+        setRendered(off.toDataURL('image/png'));
+        toast.success('Background generated', `${outW}×${outH}`);
+      } catch (err) {
+        toast.error('Generation failed', err instanceof Error ? err.message : String(err));
+      } finally {
+        setRendering(false);
+      }
+    });
+  };
+
+  const downloadRaster = (format: 'png' | 'jpg') => {
+    if (!rendered) return;
+    const img = new Image();
+    img.onload = () => {
+      const { w, h } = outputSize();
+      const c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      const ctx = c.getContext('2d');
+      if (!ctx) return;
+      ctx.drawImage(img, 0, 0, w, h);
+      c.toBlob(
+        (blob) => {
           if (!blob) return;
           const name = `vecmotion-bg-${style}-${resolution.toLowerCase()}.${format === 'jpg' ? 'jpg' : 'png'}`;
           triggerBlobDownload(blob, name);
           toast.success('Downloaded', name);
-        }, mime, format === 'jpg' ? 0.92 : undefined);
-      };
-      img.src = preview;
-    } else {
-      const { w, h } = target;
-      let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">`;
-      if (style === 'gradient') {
-        svg += `<rect width="${w}" height="${h}" fill="${colorA}"/>`;
-        svg += `<rect width="${w}" height="${h}" fill="${colorB}" opacity="0.55"/>`;
-      } else if (style === 'texture') {
-        svg += `<rect width="${w}" height="${h}" fill="${colorA}"/>`;
-        for (let i = 0; i < density; i++) {
-          svg += `<circle cx="${rand(i * 97) * w}" cy="${rand(i * 131) * h}" r="${rand(i * 53) * 40 + 10}" fill="${colorB}"/>`;
-        }
-      } else if (style === 'pattern') {
-        svg += `<rect width="${w}" height="${h}" fill="${colorA}"/>`;
-        const step = 60 + density;
-        for (let x = 0; x < w; x += step) {
-          for (let y = 0; y < h; y += step) {
-            svg += `<circle cx="${x + step / 2}" cy="${y + step / 2}" r="${step * 0.35}" fill="none" stroke="${colorB}" stroke-width="2"/>`;
-          }
-        }
-      } else if (style === 'mesh') {
-        const cols = 4 + Math.floor(density / 10);
-        const rows = 4 + Math.floor(density / 10);
-        for (let cy = 0; cy < rows; cy++) {
-          for (let cx = 0; cx < cols; cx++) {
-            svg += `<rect x="${(cx / cols) * w}" y="${(cy / rows) * h}" width="${w / cols + 2}" height="${h / rows + 2}" fill="${(cx + cy) % 2 === 0 ? colorA : colorB}"/>`;
-          }
-        }
-      }
-      svg += `</svg>`;
-      const mime = format === 'svg' ? 'image/svg+xml' : 'application/postscript';
-      const ext = format === 'svg' ? 'svg' : 'eps';
-      const content = format === 'eps' ? `%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 ${w} ${h}\n${svg}\n%%EOF` : svg;
-      const name = `vecmotion-bg-${style}-${resolution.toLowerCase()}.${ext}`;
-      triggerBlobDownload(new Blob([content], { type: mime }), name);
-      toast.success('Downloaded', name);
-    }
+        },
+        format === 'jpg' ? 'image/jpeg' : 'image/png',
+        format === 'jpg' ? 0.92 : undefined,
+      );
+    };
+    img.src = rendered;
   };
+
+  const downloadVector = (format: 'svg' | 'eps') => {
+    const { w, h } = outputSize();
+    const content = format === 'svg' ? backgroundToSvg(w, h, scene) : backgroundToEps(w, h, scene);
+    const mime = format === 'svg' ? 'image/svg+xml' : 'application/postscript';
+    const name = `vecmotion-bg-${style}-${resolution.toLowerCase()}.${format}`;
+    triggerBlobDownload(new Blob([content], { type: mime }), name);
+    toast.success('Downloaded', name);
+  };
+
+  const previewW = aspectDef.w >= aspectDef.h ? 640 : Math.round(640 * (aspectDef.w / aspectDef.h));
+  const previewH = aspectDef.w >= aspectDef.h ? Math.round(640 * (aspectDef.h / aspectDef.w)) : 640;
 
   return (
     <div className="space-y-5">
       <PageHeader
         title="Backgrounds"
-        description={isAndroidBuild ? "Unlimited · styles · textures · patterns · 2K · 4K · 8K" : undefined}
+        description={isAndroidBuild ? 'Unlimited unique designs · live preview · 2K · 4K · 8K · PNG · JPG · SVG · EPS' : undefined}
         actions={
-          <>
-            {preview && (
-              <Button size="sm" variant="secondary" icon={<GIcon name="redo" size={16} />} onClick={() => setPreview(null)}>
-                New background
-              </Button>
-            )}
-          </>
+          <Button size="sm" variant="secondary" icon={<GIcon name="refresh" size={16} />} onClick={surprise}>
+            Surprise me
+          </Button>
         }
       />
 
       <Card>
-        <div className="flex items-center justify-between px-4 py-3 border-b border-line">
+        <div className="border-b border-line px-4 py-3">
           <span className="font-semibold text-ink">Design</span>
         </div>
-        <div className="px-4 py-4 grid gap-3">
+        <div className="grid gap-4 px-4 py-4">
           <Field label="Style">
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {STYLES.map((s) => {
+            <div className="flex flex-wrap gap-1.5">
+              {BACKGROUND_STYLES.map((s) => {
                 const active = style === s.id;
                 return (
                   <button
                     key={s.id}
                     type="button"
-                    onClick={() => { setStyle(s.id as typeof style); setPreview(null); }}
-                    className={`flex items-center gap-1.5 rounded-[var(--r-control)] border px-2.5 py-2 text-xs font-medium transition-colors ${
+                    onClick={() => setStyle(s.id)}
+                    className={`rounded-[var(--r-control)] border px-2.5 py-2 text-xs font-medium transition-colors ${
                       active ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-surface text-ink hover:border-line-strong'
                     }`}
                   >
-                    <GIcon name={s.icon as any} size={14} />
                     {s.label}
                   </button>
                 );
               })}
             </div>
           </Field>
-          <Field label="Color A">
-            <Input value={colorA} onChange={(e) => { setColorA(e.target.value); setPreview(null); }} type="color" />
-          </Field>
-          <Field label="Color B">
-            <Input value={colorB} onChange={(e) => { setColorB(e.target.value); setPreview(null); }} type="color" />
-          </Field>
-          <Field label="Density">
-            <input
-              type="range"
-              min={10}
-              max={120}
-              value={density}
-              onChange={(e) => { setDensity(Number(e.target.value)); setPreview(null); }}
-              className="mt-2 w-full accent-[var(--accent)]"
-            />
-            <div className="text-[0.7rem] text-ink-muted">{density}</div>
-          </Field>
-          <div className="flex items-center gap-2">
-            <span className="text-[0.7rem] text-ink-muted">Resolution</span>
-            <div className="grid grid-cols-3 gap-1 w-full">
-              {RESOLUTIONS.map((r) => {
-                const active = resolution === r.id;
+
+          <Field label="Palette">
+            <div className="flex flex-wrap gap-1.5">
+              {BACKGROUND_PALETTES.map((p) => {
+                const active = !customColors && paletteId === p.id;
                 return (
                   <button
-                    key={r.id}
+                    key={p.id}
                     type="button"
-                    onClick={() => setResolution(r.id)}
-                    className={`rounded-[var(--r-control)] border px-2 py-2 text-[0.725rem] font-medium transition-colors ${
+                    onClick={() => {
+                      setPaletteId(p.id);
+                      setCustomColors(false);
+                    }}
+                    className={`flex items-center gap-1.5 rounded-[var(--r-control)] border px-2.5 py-2 text-xs font-medium transition-colors ${
                       active ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-surface text-ink hover:border-line-strong'
                     }`}
                   >
-                    {r.label}
+                    <span className="flex -space-x-1">
+                      {p.colors.map((c) => (
+                        <span key={c} className="size-3 rounded-full border border-black/10" style={{ backgroundColor: c }} />
+                      ))}
+                    </span>
+                    {p.label}
                   </button>
                 );
               })}
+              <button
+                type="button"
+                onClick={() => setCustomColors(true)}
+                className={`rounded-[var(--r-control)] border px-2.5 py-2 text-xs font-medium transition-colors ${
+                  customColors ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-surface text-ink hover:border-line-strong'
+                }`}
+              >
+                Custom
+              </button>
             </div>
+          </Field>
+
+          {customColors && (
+            <div className="grid grid-cols-3 gap-2">
+              <Field label="Colour 1">
+                <Input type="color" value={colorA} onChange={(e) => setColorA(e.target.value)} />
+              </Field>
+              <Field label="Colour 2">
+                <Input type="color" value={colorB} onChange={(e) => setColorB(e.target.value)} />
+              </Field>
+              <Field label="Colour 3">
+                <Input type="color" value={colorC} onChange={(e) => setColorC(e.target.value)} />
+              </Field>
+            </div>
+          )}
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label={`Elements (${density})`}>
+              <input type="range" min={10} max={120} step={5} value={density} onChange={(e) => setDensity(Number(e.target.value))} className="w-full accent-[var(--accent)]" aria-label="Element density" />
+            </Field>
+            <Field label={`Grain (${grain})`}>
+              <input type="range" min={0} max={100} step={5} value={grain} onChange={(e) => setGrain(Number(e.target.value))} className="w-full accent-[var(--accent)]" aria-label="Grain amount" />
+            </Field>
+            <Field label={`Vignette (${vignette})`}>
+              <input type="range" min={0} max={100} step={5} value={vignette} onChange={(e) => setVignette(Number(e.target.value))} className="w-full accent-[var(--accent)]" aria-label="Vignette strength" />
+            </Field>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Shape">
+              <div className="grid grid-cols-4 gap-1.5">
+                {ASPECTS.map((a) => {
+                  const active = aspect === a.id;
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => setAspect(a.id)}
+                      className={`rounded-[var(--r-control)] border px-2 py-2 text-xs font-medium transition-colors ${
+                        active ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-surface text-ink hover:border-line-strong'
+                      }`}
+                    >
+                      {a.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+            <Field label="Resolution">
+              <div className="grid grid-cols-3 gap-1.5">
+                {RESOLUTIONS.map((r) => {
+                  const active = resolution === r.id;
+                  return (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => setResolution(r.id)}
+                      className={`rounded-[var(--r-control)] border px-2 py-2 text-xs font-medium transition-colors ${
+                        active ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-surface text-ink hover:border-line-strong'
+                      }`}
+                    >
+                      {r.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" size="sm" icon={<GIcon name="refresh" size={15} />} onClick={shuffle}>
+              Shuffle design
+            </Button>
+            <Button variant="primary" size="sm" loading={rendering} icon={<GIcon name="image" size={15} />} onClick={generate}>
+              {rendering ? 'Generating…' : `Generate ${target.label}`}
+            </Button>
           </div>
         </div>
       </Card>
 
-      {!preview && (
-        <Card>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-line">
-            <span className="font-semibold text-ink">Live preview</span>
+      <Card>
+        <div className="border-b border-line px-4 py-3">
+          <span className="font-semibold text-ink">Live preview</span>
+        </div>
+        <div className="flex flex-col items-center px-4 py-4">
+          <div
+            className="overflow-hidden rounded-[var(--r-card)] border border-line"
+            style={{ width: previewW, maxWidth: '100%', aspectRatio: `${aspectDef.w}/${aspectDef.h}` }}
+          >
+            <canvas ref={canvasRef} width={previewW} height={previewH} className="h-full w-full" />
           </div>
-          <div className="px-4 py-4">
-            <div className="relative size-48 md:size-64 rounded-[var(--r-card)] border border-line bg-surface overflow-hidden">
-              <canvas ref={canvasRef} className="w-full h-full" />
-            </div>
-            <div className="mt-3 flex gap-2">
-              <Button variant="secondary" size="sm" onClick={startPreview} icon={<GIcon name="videocam" size={16} />}>
-                Start preview
-              </Button>
-              <Button variant="ghost" size="sm" onClick={stopPreview} icon={<GIcon name="videocam" size={16} />} />
-            </div>
-          </div>
-        </Card>
-      )}
+        </div>
+      </Card>
 
-      {preview && (
+      {rendered && (
         <>
           <Card>
-            <div className="flex items-center justify-between px-4 py-3 border-b border-line">
-              <span className="font-semibold text-ink">Rendered background</span>
+            <div className="border-b border-line px-4 py-3">
+              <span className="font-semibold text-ink">Generated background</span>
             </div>
-            <div className="px-4 py-4">
-              <div className="flex items-center justify-center">
-                <img src={preview} alt="Background" className="max-w-full max-h-[24rem] rounded-[var(--r-xs)] border border-line object-contain bg-white" />
-              </div>
+            <div className="flex items-center justify-center px-4 py-4">
+              <img src={rendered} alt="Generated background" className="max-h-[24rem] max-w-full rounded-[var(--r-xs)] border border-line object-contain" />
             </div>
           </Card>
-
-          <div className="grid grid-cols-2 gap-3 px-4">
-            <Button variant="secondary" size="sm" onClick={() => download('png')} className="w-full">
-              <GIcon name="content_paste" size={14} className="mr-1" />
+          <div className="grid grid-cols-2 gap-2 px-4 sm:grid-cols-4">
+            <Button variant="secondary" size="sm" icon={<GIcon name="download" size={14} />} onClick={() => downloadRaster('png')}>
               PNG
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => download('jpg')} className="w-full">
-              <GIcon name="add_photo_alternate" size={14} className="mr-1" />
+            <Button variant="secondary" size="sm" icon={<GIcon name="download" size={14} />} onClick={() => downloadRaster('jpg')}>
               JPG
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => download('svg')} className="w-full">
-              <GIcon name="description" size={14} className="mr-1" />
+            <Button variant="secondary" size="sm" icon={<GIcon name="download" size={14} />} onClick={() => downloadVector('svg')}>
               SVG
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => download('eps')} className="w-full">
-              <GIcon name="description" size={14} className="mr-1" />
+            <Button variant="secondary" size="sm" icon={<GIcon name="download" size={14} />} onClick={() => downloadVector('eps')}>
               EPS
             </Button>
           </div>

@@ -72,9 +72,9 @@ const STUDIO_TOOLS: Array<{
   ]
   : [
     {
-      to: '/vector',
-      title: 'Vector Studio',
-      sub: 'Draw, open and export SVG or EPS',
+      to: '/vectorize',
+      title: 'Image to Vector',
+      sub: 'PNG, JPG, WebP to SVG, EPS, AI',
       icon: 'polyline',
     },
     {
@@ -107,15 +107,6 @@ const STUDIO_TOOLS: Array<{
       sub: 'JPG, PNG, WebP, AVIF, TIFF, EPS',
       icon: 'swap_horiz',
     },
-  ];
-
-const GENERATORS: Array<{ to: string; title: string; sub: string; icon: GoogleIconName }> = isAndroid()
-  ? []
-  : [
-    { to: '/generate/eps', title: 'AI EPS', sub: 'Editable vector', icon: 'polyline' },
-    { to: '/generate/svg', title: 'AI SVG', sub: 'Layered vector', icon: 'draw' },
-    { to: '/generate/ai', title: 'Illustrator', sub: 'AI file', icon: 'layers' },
-    { to: '/generate/jpg', title: 'JPG image', sub: 'Photo style', icon: 'image' },
   ];
 
 const FEATURED_PLATFORMS: PlatformId[] = [
@@ -173,7 +164,7 @@ export function OverviewPage() {
         to: null as string | null,
       };
     }
-    const metadataRoute = isAndroid() ? '/metadata' : '/library';
+    const metadataRoute = '/metadata';
     const untagged = items.filter((it) => !it.metadata.title.trim() || it.metadata.keywords.length < 7).length;
     if (untagged) {
       return {
@@ -204,7 +195,7 @@ export function OverviewPage() {
     const added = await importFiles(files);
     if (added.length) {
       toast.success(`Imported ${added.length} file${added.length === 1 ? '' : 's'}`);
-      navigate(isAndroid() ? '/metadata' : '/library');
+      navigate('/metadata');
     }
   }
 
@@ -235,13 +226,13 @@ export function OverviewPage() {
               Import files
             </Button>
             <ButtonLink
-              to={isAndroid() ? '/metadata' : '/library'}
+              to="/metadata"
               size="sm"
               variant="primary"
               className="w-full sm:w-auto"
               icon={<GIcon name="photo_library" size={16} />}
             >
-              {isAndroid() ? 'Open Metadata' : 'Open Library'}
+              Open Metadata
             </ButtonLink>
           </div>
         }
@@ -287,26 +278,6 @@ export function OverviewPage() {
           )}
         </div>
       </Card>
-
-      <div>
-        <h2 className="mb-2.5 text-xs font-semibold tracking-wider text-ink-muted uppercase">Create with AI</h2>
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-          {GENERATORS.map((tool) => (
-            <Link key={tool.to} to={tool.to} className="min-w-0">
-              <div className="flex h-full flex-col gap-2 rounded-[var(--r-card)] border border-brand/20 bg-brand-soft/45 p-3 active:brightness-95 sm:p-3.5">
-                <span className="inline-flex size-9 items-center justify-center rounded-[var(--r-control)] bg-brand text-on-brand">
-                  <GIcon name={tool.icon} size={19} />
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-[0.8125rem] font-bold text-ink">{tool.title}</span>
-                  <span className="block truncate text-2xs text-ink-muted">{tool.sub}</span>
-                </span>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </div>
-
       <div>
         <h2 className="mb-2.5 text-xs font-semibold tracking-wider text-ink-muted uppercase">
           Studio Tools
@@ -329,22 +300,18 @@ export function OverviewPage() {
         </div>
       </div>
 
+      {isAndroid() ? null : (
       <Card>
         <CardHeader
           title="Marketplace Readiness"
           icon={<GIcon name="storefront" size={17} />}
-          action={
-            <ButtonLink to="/platforms" size="xs" variant="ghost" iconRight={<GIcon name="arrow_forward" size={13} />}>
-              All rules
-            </ButtonLink>
-          }
         />
 
         <div className="divide-y divide-line overflow-hidden rounded-[var(--r-control)] border border-line bg-surface sm:grid sm:grid-cols-2 sm:gap-2.5 sm:divide-y-0 sm:overflow-visible sm:border-0 sm:bg-transparent lg:grid-cols-3">
           {readiness.map(({ platform, ready }) => (
             <Link
               key={platform.id}
-              to="/export"
+              to="/metadata"
               className="flex items-center gap-3 px-3 py-2.5 active:bg-surface-2 sm:rounded-[var(--r-control)] sm:border sm:border-line sm:bg-surface sm:p-3 sm:hover:border-line-strong sm:hover:bg-surface-2/50"
             >
               <PlatformLogo id={platform.id} size={28} />
@@ -362,6 +329,7 @@ export function OverviewPage() {
           ))}
         </div>
       </Card>
+      )}
     </div>
   );
 }

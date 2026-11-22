@@ -3,6 +3,70 @@
 All notable changes to Micro Stocker Advanced Pro are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.5.0] - 2026-11-22
+
+The Android build is now its own product, branded **vecmotion**. The desktop
+build is unchanged.
+
+### Added
+- **Motion Video Generator.** Procedural, fully on-device animation loops:
+  describe an idea (or upload an image), pick a motion style, palette, speed,
+  density and composition, preview live, then export a seamless loop in 2K, 4K
+  or 8K. No external AI service is involved for image animation.
+- **Background Image Generator.** Unlimited unique backgrounds across ten
+  styles (gradient, aurora, bokeh, waves, geometric, mesh, texture, pattern,
+  starfield, topographic) with live preview, PNG/JPG export, editable SVG and
+  PostScript EPS export, and 2K/4K/8K resolution.
+- **Image to Vector Converter.** Dedicated PNG/JPG/WebP to vector tool using
+  median-cut colour quantisation and marching-squares contour tracing,
+  exporting editable SVG, EPS and AI files that open in Illustrator and
+  Photoshop.
+- **Device aware model catalogs.** The Image Upscaler, Video Upscaler and
+  Background Remover detect RAM, core count and chipset (where the WebView
+  reports them) and list only models this device can run.
+- **2K, 4K and 8K everywhere.** Both upscalers offer 2K, 4K and 8K output
+  (and up to 8x enlargement for images), plus marketplace presets with a
+  "None" option. The Pro requirement for 4K/8K is gone.
+- **Avatar system.** New accounts receive a high quality generated avatar
+  (gradient, layered shapes, deterministic from the account id). Users can
+  shuffle, pick from a gallery, or upload their own photo at any time.
+- **Metadata Generator (Android).** One consolidated tool replaces Library,
+  Metadata, P&A, Export and CSV: import EPS/SVG/JPG/PNG, connect OpenRouter,
+  Google Gemini, Groq, NVIDIA or a custom OpenAI-compatible endpoint, generate
+  platform-agnostic titles and keywords, and download a CSV directly.
+  EPS files contribute their embedded preview to vision models, SVG files are
+  rasterised for analysis, and free model lists can be refreshed live from
+  each provider.
+- **GitHub Pages release channel** for the Android APK with SHA-256 checksum
+  verification.
+
+### Changed
+- **Android is now vecmotion.** App name, splash, logo, metadata and the
+  Android package resources use the new name. Desktop keeps the old name.
+- **The Android subscription is a minimal-fee plan** (`vecmotion` plan, BDT
+  49/249/449 for 1/6/12 months) because the paid generators are not part of
+  the phone build. The desktop catalog is unchanged.
+- **Settings (Android) simplified**: the dead Workflow card is gone and the
+  Updates card is reduced to a check/install row. Security, accounts and the
+  AI provider panel stay.
+- **AI providers reduced to five** on Android: OpenRouter, Google Gemini,
+  Groq, NVIDIA and Custom. Local AI Built-in and Ollama are removed
+  everywhere in the app.
+
+### Removed
+- From Android: Feature Studio, the AI EPS/SVG/Illustrator/JPG generators,
+  Submission Tracker, Platform Rules, the Vector Studio page and the
+  dedicated EPS/SVG generation backend UI. The orphaned desktop-era pages
+  (Library, Prepare, Export, Submissions, Platforms, Generate, Vector Studio)
+  are deleted from the bundle entirely.
+- The premium model locks in the background remover and upscalers on Android.
+
+### Fixed
+- Dead routes and search hits: the mobile search no longer offers "AI EPS
+  generator" or library links that lead nowhere; every searchable page exists.
+- EPS export contains no device-specific PostScript operators, so Illustrator
+  accepts the file.
+
 ## [Unreleased]
 
 ### Fixed

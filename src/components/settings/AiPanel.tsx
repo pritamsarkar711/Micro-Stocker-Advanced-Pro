@@ -194,7 +194,7 @@ export function AiPanel({ compact = false, onChange }: AiPanelProps) {
             onChange={(e) =>
               commit({ ...settings, keys: { ...settings.keys, [settings.kind]: e.target.value } })
             }
-            placeholder={preset.optionalKey ? 'Leave blank for local server' : `Paste ${preset.name} key`}
+            placeholder={preset.optionalKey ? 'Leave blank to connect without a key' : `Paste ${preset.name} key`}
             leading={<GIcon name="key" size={15} />}
             trailing={
               <button

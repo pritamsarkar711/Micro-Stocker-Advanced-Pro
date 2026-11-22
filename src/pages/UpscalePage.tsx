@@ -37,6 +37,7 @@ import { runUpscale } from '@/lib/stock/upscale/engine';
 import { recommendUpscale, type UpscaleRecommendation } from '@/lib/stock/upscale/recommend';
 import { analyseBlob } from '@/lib/vision';
 import type { ImageInsight } from '@/lib/vision';
+import { detectDevice } from '@/lib/device';
 
 interface QueueEntry {
   id: string;
@@ -103,7 +104,9 @@ export function UpscalePage() {
 
   const [purpose, setPurpose] = useState<UpscalePurpose>('all');
   const [modelId, setModelId] = useState<string>('lanczos-pro');
-  const [targetId, setTargetId] = useState<string>('4k');
+  const [resolutionId, setResolutionId] = useState<string>('4k');
+  // null = "None": upscale to the chosen resolution with no marketplace rules.
+  const [marketplaceId, setMarketplaceId] = useState<string | null>(null);
   const [outFormat, setOutFormat] = useState<'jpg' | 'png' | 'webp'>(settings.upscaleFormat);
   const [quality, setQuality] = useState(90);
 
@@ -141,19 +144,26 @@ export function UpscalePage() {
     };
   }, []);
 
-  const activeTarget = useMemo(
-    () => UPSCALE_TARGETS.find((t) => t.id === targetId) ?? UPSCALE_TARGETS[0],
-    [targetId],
-  );
+  const activeTarget = useMemo(() => {
+    if (marketplaceId) {
+      const preset = UPSCALE_TARGETS.find((t) => t.id === marketplaceId);
+      if (preset) return preset;
+    }
+    return UPSCALE_TARGETS.find((t) => t.id === resolutionId) ?? UPSCALE_TARGETS[0];
+  }, [resolutionId, marketplaceId]);
   const activeModel = useMemo(
     () => UPSCALE_MODELS.find((m) => m.id === modelId) ?? UPSCALE_MODELS[0],
     [modelId],
   );
 
-  // Phones can only execute the built-in engine. Listing downloadable desktop
-  // packs here is what produced "install failed" popups on Android, so the
-  // catalog shows what this device can actually run.
-  const deviceModels = useMemo(() => modelsForDevice(desktop.isDesktop), []);
+  // The catalog shows what this device can actually run: desktop-only packs
+  // never appear on a phone, and neural graphs that exceed this device's
+  // memory tier are hidden as well.
+  const deviceInfo = useMemo(() => detectDevice(), []);
+  const deviceModels = useMemo(
+    () => modelsForDevice(desktop.isDesktop, deviceInfo.tier),
+    [deviceInfo.tier],
+  );
   const filteredModels = useMemo(
     () =>
       purpose === 'all'
@@ -182,17 +192,29 @@ export function UpscalePage() {
       setAutoInsight(insight);
       if (!manualPick) {
         setModelId(next.modelId);
-        setTargetId(next.targetId);
         const preset = UPSCALE_TARGETS.find((t) => t.id === next.targetId);
+        if (preset?.group === 'platform') {
+          setMarketplaceId(preset.id);
+        } else {
+          setMarketplaceId(null);
+          setResolutionId(next.targetId);
+        }
         setOutFormat(next.format === 'png' || inspected.hasAlpha ? 'png' : (preset?.recommendedFormat ?? next.format));
       }
     },
     [installed, manualPick],
   );
 
-  function pickTarget(id: string) {
+  function pickResolution(id: string) {
     setManualPick(true);
-    setTargetId(id);
+    setResolutionId(id);
+    setMarketplaceId(null);
+  }
+
+  function pickMarketplace(id: string | null) {
+    setManualPick(true);
+    setMarketplaceId(id);
+    if (!id) return;
     const t = UPSCALE_TARGETS.find((x) => x.id === id);
     if (!t) return;
     if (t.recommendedFormat) setOutFormat(t.recommendedFormat);
@@ -437,12 +459,12 @@ export function UpscalePage() {
                 <div className="mb-1.5 text-xs font-medium text-ink-muted">Resolution</div>
                 <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                   {resolutionTargets.map((t) => {
-                    const active = t.id === targetId;
+                    const active = !marketplaceId && t.id === resolutionId;
                     return (
                       <button
                         key={t.id}
                         type="button"
-                        onClick={() => pickTarget(t.id)}
+                        onClick={() => pickResolution(t.id)}
                         className={clsx(
                           'flex items-center gap-2 rounded-[var(--r-control)] border px-2.5 py-2 text-left text-xs transition-colors',
                           active
@@ -459,15 +481,31 @@ export function UpscalePage() {
               </div>
 
               <div>
-                <div className="mb-1.5 text-xs font-medium text-ink-muted">Marketplace presets</div>
+                <div className="mb-1.5 text-xs font-medium text-ink-muted">Marketplace</div>
                 <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => pickMarketplace(null)}
+                    className={clsx(
+                      'flex items-center gap-2 rounded-[var(--r-control)] border px-2.5 py-2 text-left text-xs transition-colors',
+                      !marketplaceId
+                        ? 'border-accent bg-accent-soft font-semibold text-ink'
+                        : 'border-line bg-surface text-ink hover:border-line-strong hover:bg-surface-2',
+                    )}
+                  >
+                    <GIcon name="close" size={18} className="shrink-0 text-ink-muted" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium">None</div>
+                      <div className="truncate text-2xs text-ink-muted">Just the resolution</div>
+                    </div>
+                  </button>
                   {agencyTargets.map((t) => {
-                    const active = t.id === targetId;
+                    const active = t.id === marketplaceId;
                     return (
                       <button
                         key={t.id}
                         type="button"
-                        onClick={() => pickTarget(t.id)}
+                        onClick={() => pickMarketplace(t.id)}
                         className={clsx(
                           'flex items-center gap-2 rounded-[var(--r-control)] border px-2.5 py-2 text-left text-xs transition-colors',
                           active
@@ -550,7 +588,7 @@ export function UpscalePage() {
                     {UPSCALE_TARGETS.find((t) => t.id === autoNote.targetId)?.label}
                   </Badge>
                   {!autoNote.readyNow && autoNote.needsDownload && (
-                    <Badge tone="warn">Needs download</Badge>
+                    <Badge tone="warn">Install needed</Badge>
                   )}
                 </div>
                 {autoInsight && (
@@ -585,15 +623,20 @@ export function UpscalePage() {
                     ))}
                   </div>
                 )}
-                {(manualPick || modelId !== autoNote.modelId || targetId !== autoNote.targetId) && (
+                {(manualPick || modelId !== autoNote.modelId || activeTarget.id !== autoNote.targetId) && (
                   <Button
                     size="xs"
                     variant="secondary"
                     icon={<GIcon name="restart_alt" size={14} />}
                     onClick={() => {
                       setModelId(autoNote.modelId);
-                      setTargetId(autoNote.targetId);
                       const preset = UPSCALE_TARGETS.find((t) => t.id === autoNote.targetId);
+                      if (preset?.group === 'platform') {
+                        setMarketplaceId(preset.id);
+                      } else {
+                        setMarketplaceId(null);
+                        setResolutionId(autoNote.targetId);
+                      }
                       setOutFormat(autoNote.format === 'png' ? 'png' : (preset?.recommendedFormat ?? autoNote.format));
                       setManualPick(false);
                     }}
@@ -750,8 +793,7 @@ export function UpscalePage() {
 
       <Card className="mt-5">
             <CardHeader
-              title="Model catalog"
-              subtitle="Download once, then upscale offline."
+              title="Models"
               icon={<GIcon name="memory" size={18} />}
               action={<Badge tone="neutral">{filteredModels.length} models</Badge>}
             />

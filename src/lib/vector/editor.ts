@@ -1,3 +1,4 @@
+import { appName } from '@/lib/version';
 /**
  * Beginner-friendly vector document helpers.
  *
@@ -453,7 +454,7 @@ interface Ctx {
 
 export function svgToEps(
   svg: SVGSVGElement,
-  title = 'Micro Stocker Advanced Pro',
+  title = appName(),
   kind: 'eps' | 'ai' = 'eps',
 ): EpsExportResult {
   const viewBox = (svg.getAttribute('viewBox') ?? '').split(/[\s,]+/).map(Number);
@@ -464,7 +465,7 @@ export function svgToEps(
   ctx.lines.push('%!PS-Adobe-3.0 EPSF-3.0');
   ctx.lines.push(`%%Creator: ${title}`);
   ctx.lines.push(`%%Title: ${title}`);
-  ctx.lines.push(`%%For: ${kind === 'ai' ? 'Adobe Illustrator' : 'Micro Stocker Advanced Pro'}`);
+  ctx.lines.push(`%%For: ${kind === 'ai' ? 'Adobe Illustrator' : appName()}`);
   if (kind === 'ai') {
     // Illustrator opens EPS compatible .ai files, and this header keeps the
     // file recognisable to its own importer and to CorelDRAW and Affinity.

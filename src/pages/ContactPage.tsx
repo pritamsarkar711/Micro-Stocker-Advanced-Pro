@@ -6,6 +6,7 @@ import { BrandLogo } from '@/components/ui/BrandLogo';
 import { GIcon } from '@/components/ui/GoogleIcon';
 import { useToast } from '@/state/ToastState';
 import { desktop } from '@/lib/desktop';
+import { appName } from '@/lib/version';
 
 const TELEGRAM_ID = '@joegoldberg2025';
 const TELEGRAM_URL = 'https://t.me/joegoldberg2025';
@@ -39,7 +40,7 @@ export function ContactPage() {
               <h2 className="mt-1 text-xl font-bold tracking-tight text-ink">{TELEGRAM_ID}</h2>
               <p className="mt-1.5 text-xs leading-relaxed text-ink-muted">
                 Reach the creator directly on Telegram for questions, feature discussions or
-                support with Micro Stocker Advanced Pro.
+                support with {appName()}.
               </p>
             </div>
           </div>
