@@ -10,7 +10,6 @@ import { GIcon } from '@/components/ui/GoogleIcon';
 import { FormatIcon } from '@/components/ui/FormatIcon';
 import { PlatformLogo } from '@/components/stock/PlatformLogo';
 import { useApp } from '@/state/AppState';
-import { useLicense } from '@/state/LicenseState';
 import { useLibrary } from '@/state/library';
 import { useToast } from '@/state/ToastState';
 import { desktop, triggerBlobDownload, type ModelProgressEvent } from '@/lib/desktop';
@@ -29,7 +28,6 @@ import {
   UPSCALE_MODELS,
   UPSCALE_PURPOSES,
   UPSCALE_TARGETS,
-  isPremiumUpscaleModel,
   isDesktopOnlyModel,
   modelsForDevice,
   type UpscaleModel,
@@ -101,8 +99,6 @@ export function UpscalePage() {
   const { settings } = useApp();
   const { items: libItems, getBlob, addGeneratedBlob } = useLibrary();
   const toast = useToast();
-  const { hasFeature } = useLicense();
-  const premiumAllowed = hasFeature('premium_upscale');
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [purpose, setPurpose] = useState<UpscalePurpose>('all');
@@ -158,11 +154,6 @@ export function UpscalePage() {
   // packs here is what produced "install failed" popups on Android, so the
   // catalog shows what this device can actually run.
   const deviceModels = useMemo(() => modelsForDevice(desktop.isDesktop), []);
-  const mobileNeuralMB = useMemo(() => {
-    const mobile = deviceModels.find((m) => m.family === 'onnx');
-    return mobile ? Math.round(mobile.sizeMB) : 0;
-  }, [deviceModels]);
-  const desktopPackCount = UPSCALE_MODELS.length - deviceModels.length;
   const filteredModels = useMemo(
     () =>
       purpose === 'all'
@@ -787,16 +778,7 @@ export function UpscalePage() {
               })}
             </div>
 
-            {desktopPackCount > 0 && (
-              <p className="mb-3 flex items-start gap-1.5 rounded-[var(--r-xs)] border border-line bg-surface-2/60 px-2.5 py-2 text-2xs leading-relaxed text-ink-muted">
-                <GIcon name="info" size={13} className="mt-px shrink-0" />
-                <span>
-                  {filteredModels.length} models run on this device. The built-in engines need no download; the mobile neural model
-                  installs once ({mobileNeuralMB} MB) and then works offline. {desktopPackCount} desktop GPU packs
-                  (Real-ESRGAN NCNN, RealCUGAN, Waifu2x) need a graphics card and stay in the Windows, macOS and Linux build.
-                </span>
-              </p>
-            )}
+
 
             <div className="grid max-h-[26rem] gap-2 overflow-y-auto pr-1 md:grid-cols-2 2xl:grid-cols-3">
               {filteredModels.map((model) => (
@@ -814,10 +796,6 @@ export function UpscalePage() {
                   isDesktop={desktop.isDesktop}
                   progress={dlProgress[model.id]}
                   onSelect={() => {
-                    if (isPremiumUpscaleModel(model.id) && !premiumAllowed) {
-                      toast.warning('Pro model', 'This is one of the top tier models. Upgrade to use it.');
-                      return;
-                    }
                     setModelId(model.id);
                     setManualPick(true);
                   }}

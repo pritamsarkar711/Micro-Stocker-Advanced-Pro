@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Logo } from '@/components/layout/Logo';
 import { launch } from '@/lib/launch';
+import { appName } from '@/lib/version';
+import { isAndroid } from '@/lib/native/platform';
 
 /**
  * The first thing a cold start paints: the mark, the name and a hairline of
@@ -33,12 +35,20 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
         <div className="launch-mark">
           <Logo size={92} />
         </div>
-        <h1 className="display mt-6 text-[1.75rem] leading-none font-bold tracking-[-0.02em] text-white">
-          Micro Stocker
-        </h1>
-        <p className="mt-2 text-[0.6875rem] font-semibold tracking-[0.34em] text-white/45 uppercase">
-          Advanced Pro
-        </p>
+        {isAndroid() ? (
+          <h1 className="display mt-6 text-[1.75rem] leading-none font-bold tracking-[-0.02em] text-white">
+            {appName()}
+          </h1>
+        ) : (
+          <>
+            <h1 className="display mt-6 text-[1.75rem] leading-none font-bold tracking-[-0.02em] text-white">
+              Micro Stocker
+            </h1>
+            <p className="mt-2 text-[0.6875rem] font-semibold tracking-[0.34em] text-white/45 uppercase">
+              Advanced Pro
+            </p>
+          </>
+        )}
       </div>
 
       <div className="absolute inset-x-0 bottom-[calc(2.75rem+env(safe-area-inset-bottom,0px))] flex flex-col items-center gap-3 px-10">

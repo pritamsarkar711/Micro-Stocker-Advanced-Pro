@@ -5,6 +5,7 @@ import { navItemsFor } from '@/lib/nav';
 import { GIcon } from '@/components/ui/GoogleIcon';
 import { ThemeToggle } from '@/components/ui/ThemeSwitch';
 import { WindowControls } from './WindowControls';
+import { Avatar } from '@/components/ui/Avatar';
 import { useAuth } from '@/state/AuthState';
 import { useLibrary } from '@/state/library';
 import { useLicense } from '@/state/LicenseState';
@@ -247,12 +248,7 @@ export function Topbar({ onOpenMobileNav }: TopbarProps) {
             aria-haspopup="dialog"
             title={`${user.displayName} · ${user.email}`}
           >
-            <span
-              aria-hidden="true"
-              className="inline-flex size-7 items-center justify-center rounded-full bg-brand text-[0.75rem] font-bold text-on-brand"
-            >
-              {user.displayName.slice(0, 1).toUpperCase()}
-            </span>
+            <Avatar stored={user.avatar} seed={user.id} size={7} />
             <span className="hidden max-w-[8rem] truncate md:inline">{user.displayName}</span>
             <GIcon name="expand_more" aria-hidden="true" size={16} className="hidden text-ink-faint md:inline" />
           </button>

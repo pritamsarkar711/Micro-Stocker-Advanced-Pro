@@ -11,6 +11,7 @@ import { GIcon } from '@/components/ui/GoogleIcon';
 import { copyText } from '@/components/ui/Misc';
 import { CoinMark, PaymentMark } from '@/components/pro/BrandMark';
 import { bdt } from '@/lib/format';
+import { isAndroid } from '@/lib/native/platform';
 import { useAuth } from '@/state/AuthState';
 import { useLicense } from '@/state/LicenseState';
 import { useToast } from '@/state/ToastState';
@@ -34,12 +35,18 @@ import {
   type PlanPrice,
 } from '@/lib/pro/api';
 
-const FEATURE_ROWS: Array<{ key: keyof Plan['features']; label: string; free: string }> = [
-  { key: 'vector', label: 'EPS, SVG and AI generators', free: 'Locked' },
-  { key: 'jpg', label: 'JPG image studio', free: 'Locked' },
-  { key: 'premium_upscale', label: 'Premium upscale models', free: 'Standard models only' },
-  { key: 'video_premium', label: 'Premium video upscaling', free: 'Standard modes only' },
-];
+const FEATURE_ROWS: Array<{ key: keyof Plan['features']; label: string; free: string }> = isAndroid()
+  ? [
+    { key: 'jpg', label: 'JPG image studio', free: 'Locked' },
+    { key: 'premium_upscale', label: 'Premium upscale models', free: 'Standard models only' },
+    { key: 'video_premium', label: 'Premium video upscaling', free: 'Standard modes only' },
+  ]
+  : [
+    { key: 'vector', label: 'EPS, SVG and AI generators', free: 'Locked' },
+    { key: 'jpg', label: 'JPG image studio', free: 'Locked' },
+    { key: 'premium_upscale', label: 'Premium upscale models', free: 'Standard models only' },
+    { key: 'video_premium', label: 'Premium video upscaling', free: 'Standard modes only' },
+  ];
 
 /** On chain amounts are shown to six places, the precision wallets print. */
 function cryptoAmount(value: number): string {
@@ -182,7 +189,7 @@ export function SubscriptionPage() {
     <div>
       <PageHeader
         title="Subscription"
-        description="The studio is free. A plan unlocks the premium generators and the top upscale models."
+        description={isAndroid() ? "A small monthly fee keeps vecmotion running. Premium unlocks upscale models and video tools." : "The studio is free. A plan unlocks the premium generators and the top upscale models."}
         actions={
           premium ? (
             <Badge tone="ok" icon={<GIcon name="verified" size={14} />}>

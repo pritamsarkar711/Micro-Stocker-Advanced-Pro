@@ -10,6 +10,7 @@ import {
   openApkInstallSettings,
   type AvailableUpdate,
 } from './updates';
+import { appName } from './version';
 
 /**
  * One update state for the whole app, so the banner and the Settings card never
@@ -169,7 +170,7 @@ export async function beginUpdate(): Promise<void> {
   if (!allowed) {
     emit({
       phase: 'permission',
-      message: 'Android needs your permission once: allow Micro Stocker to install the update, then tap Install again.',
+      message: `Android needs your permission once: allow ${appName()} to install the update, then tap Install again.`,
     });
     await openApkInstallSettings();
     return;

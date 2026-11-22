@@ -12,57 +12,111 @@ import { useToast } from '@/state/ToastState';
 import { PLATFORM_LIST } from '@/lib/stock/platforms';
 import { buildValidationIndex, validateItem, worstLevel } from '@/lib/stock/validate';
 import type { PlatformId } from '@/lib/stock/types';
+import { isAndroid } from '@/lib/native/platform';
 
 const STUDIO_TOOLS: Array<{
   to: string;
   title: string;
   sub: string;
   icon: GoogleIconName;
-}> = [
-  {
-    to: '/vector',
-    title: 'Vector Studio',
-    sub: 'Draw, open and export SVG or EPS',
-    icon: 'polyline',
-  },
-  {
-    to: '/quality',
-    title: 'Quality Checker',
-    sub: 'Editability, sharpness and duplicates',
-    icon: 'fact_check',
-  },
-  {
-    to: '/optimize',
-    title: 'Image Optimizer',
-    sub: 'Smaller files, same visible quality',
-    icon: 'compress',
-  },
-  {
-    to: '/upscale',
-    title: 'Image Upscaler',
-    sub: 'Local models up to 8K',
-    icon: 'photo_size_select_large',
-  },
-  {
-    to: '/bg-remove',
-    title: 'Background Remover',
-    sub: 'Transparent PNG cutouts',
-    icon: 'content_cut',
-  },
-  {
-    to: '/convert',
-    title: 'Image Converter',
-    sub: 'JPG, PNG, WebP, AVIF, TIFF, EPS',
-    icon: 'swap_horiz',
-  },
-];
+}> = isAndroid()
+  ? [
+    {
+      to: '/quality',
+      title: 'Quality Checker',
+      sub: 'Editability, sharpness and duplicates',
+      icon: 'fact_check',
+    },
+    {
+      to: '/optimize',
+      title: 'Image Optimizer',
+      sub: 'Smaller files, same visible quality',
+      icon: 'compress',
+    },
+    {
+      to: '/upscale',
+      title: 'Image Upscaler',
+      sub: 'Local models up to 8K',
+      icon: 'photo_size_select_large',
+    },
+    {
+      to: '/bg-remove',
+      title: 'Background Remover',
+      sub: 'Transparent PNG cutouts',
+      icon: 'content_cut',
+    },
+    {
+      to: '/convert',
+      title: 'Image Converter',
+      sub: 'JPG, PNG, WebP, AVIF, TIFF',
+      icon: 'swap_horiz',
+    },
+    {
+      to: '/vectorize',
+      title: 'Image to Vector',
+      sub: 'PNG, JPG, WebP to SVG, EPS, AI',
+      icon: 'polyline',
+    },
+    {
+      to: '/motion',
+      title: 'Motion Video',
+      sub: 'Animation loops to 8K',
+      icon: 'videocam',
+    },
+    {
+      to: '/backgrounds',
+      title: 'Backgrounds',
+      sub: 'Unlimited textures and patterns',
+      icon: 'image',
+    },
+  ]
+  : [
+    {
+      to: '/vector',
+      title: 'Vector Studio',
+      sub: 'Draw, open and export SVG or EPS',
+      icon: 'polyline',
+    },
+    {
+      to: '/quality',
+      title: 'Quality Checker',
+      sub: 'Editability, sharpness and duplicates',
+      icon: 'fact_check',
+    },
+    {
+      to: '/optimize',
+      title: 'Image Optimizer',
+      sub: 'Smaller files, same visible quality',
+      icon: 'compress',
+    },
+    {
+      to: '/upscale',
+      title: 'Image Upscaler',
+      sub: 'Local models up to 8K',
+      icon: 'photo_size_select_large',
+    },
+    {
+      to: '/bg-remove',
+      title: 'Background Remover',
+      sub: 'Transparent PNG cutouts',
+      icon: 'content_cut',
+    },
+    {
+      to: '/convert',
+      title: 'Image Converter',
+      sub: 'JPG, PNG, WebP, AVIF, TIFF, EPS',
+      icon: 'swap_horiz',
+    },
+  ];
 
-const GENERATORS: Array<{ to: string; title: string; sub: string; icon: GoogleIconName }> = [
-  { to: '/generate/eps', title: 'AI EPS', sub: 'Editable vector', icon: 'polyline' },
-  { to: '/generate/svg', title: 'AI SVG', sub: 'Layered vector', icon: 'draw' },
-  { to: '/generate/ai', title: 'Illustrator', sub: 'AI file', icon: 'layers' },
-  { to: '/generate/jpg', title: 'JPG image', sub: 'Photo style', icon: 'image' },
-];
+const GENERATORS: Array<{ to: string; title: string; sub: string; icon: GoogleIconName }> = isAndroid()
+  ? []
+  : [
+    { to: '/generate/eps', title: 'AI EPS', sub: 'Editable vector', icon: 'polyline' },
+    { to: '/generate/svg', title: 'AI SVG', sub: 'Layered vector', icon: 'draw' },
+    { to: '/generate/ai', title: 'Illustrator', sub: 'AI file', icon: 'layers' },
+    { to: '/generate/jpg', title: 'JPG image', sub: 'Photo style', icon: 'image' },
+  ];
 
 const FEATURED_PLATFORMS: PlatformId[] = [
   'shutterstock',
@@ -119,13 +173,14 @@ export function OverviewPage() {
         to: null as string | null,
       };
     }
+    const metadataRoute = isAndroid() ? '/metadata' : '/library';
     const untagged = items.filter((it) => !it.metadata.title.trim() || it.metadata.keywords.length < 7).length;
     if (untagged) {
       return {
         title: `Finish metadata for ${untagged} file${untagged === 1 ? '' : 's'}`,
         body: 'Titles and keywords decide whether buyers ever see the file. Batch generate, then review.',
-        action: 'Open Library',
-        to: '/library',
+        action: 'Open Metadata',
+        to: metadataRoute,
       };
     }
     const notEmbedded = items.filter((it) => !it.embeddedAt).length;
@@ -133,8 +188,8 @@ export function OverviewPage() {
       return {
         title: `Embed metadata in ${notEmbedded} file${notEmbedded === 1 ? '' : 's'}`,
         body: 'Portal uploads read embedded IPTC and XMP. Embed once, then export.',
-        action: 'Open Export',
-        to: '/export',
+        action: 'Open Metadata',
+        to: metadataRoute,
       };
     }
     return {
@@ -149,7 +204,7 @@ export function OverviewPage() {
     const added = await importFiles(files);
     if (added.length) {
       toast.success(`Imported ${added.length} file${added.length === 1 ? '' : 's'}`);
-      navigate('/library');
+      navigate(isAndroid() ? '/metadata' : '/library');
     }
   }
 
@@ -180,13 +235,13 @@ export function OverviewPage() {
               Import files
             </Button>
             <ButtonLink
-              to="/library"
+              to={isAndroid() ? '/metadata' : '/library'}
               size="sm"
               variant="primary"
               className="w-full sm:w-auto"
               icon={<GIcon name="photo_library" size={16} />}
             >
-              Open Library
+              {isAndroid() ? 'Open Metadata' : 'Open Library'}
             </ButtonLink>
           </div>
         }

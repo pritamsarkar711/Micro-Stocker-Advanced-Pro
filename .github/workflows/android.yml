@@ -282,10 +282,10 @@ jobs:
       - name: Name the artifacts with the version
         run: |-
           mkdir -p out
-          release_apk="out/micro-stocker-pro-${version}-release.apk"
+          release_apk="out/vecmotion-${version}-release.apk"
           cp android/app/build/outputs/apk/release/app-release.apk "$release_apk"
           if [ -f android/app/build/outputs/apk/debug/app-debug.apk ]; then
-            cp android/app/build/outputs/apk/debug/app-debug.apk "out/micro-stocker-pro-${version}-debug.apk"
+            cp android/app/build/outputs/apk/debug/app-debug.apk "out/vecmotion-${version}-debug.apk"
           fi
           # A checksum next to the download lets a user confirm the file they
           # installed is the one this run produced.
@@ -293,7 +293,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: micro-stocker-pro-android-${{ env.version }}${{ github.event_name == 'pull_request' && '-pr' || '' }}
+          name: vecmotion-android-${{ env.version }}${{ github.event_name == 'pull_request' && '-pr' || '' }}
           path: |
             out/*.apk
             out/SHA256SUMS.txt

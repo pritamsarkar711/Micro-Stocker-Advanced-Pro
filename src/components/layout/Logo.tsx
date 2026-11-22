@@ -1,4 +1,6 @@
 import clsx from 'clsx';
+import { appName } from '@/lib/version';
+import { isAndroid } from '@/lib/native/platform';
 
 export interface LogoProps {
   size?: number;
@@ -29,7 +31,7 @@ export function LogoMark({
       height={size}
       viewBox="0 0 48 48"
       role={decorative ? undefined : 'img'}
-      aria-label={decorative ? undefined : 'Micro Stocker'}
+      aria-label={decorative ? undefined : appName()}
       aria-hidden={decorative ? true : undefined}
       className={clsx('shrink-0', className)}
     >
@@ -57,22 +59,35 @@ export function Logo({ size = 32, showWordmark = false, className, tone = 'defau
       <LogoMark size={size} decorative={showWordmark} />
       {showWordmark && (
         <span className="min-w-0 leading-none">
-          <span
-            className={clsx(
-              'block truncate text-[0.9375rem] font-bold tracking-[-0.01em]',
-              tone === 'onDark' ? 'text-nav-fg-strong' : 'text-ink',
-            )}
-          >
-            Micro Stocker
-          </span>
-          <span
-            className={clsx(
-              'mt-1 block truncate text-2xs font-medium tracking-[0.16em] uppercase',
-              tone === 'onDark' ? 'text-nav-fg-muted' : 'text-ink-faint',
-            )}
-          >
-            Advanced Pro
-          </span>
+          {isAndroid() ? (
+            <span
+              className={clsx(
+                'block truncate text-[0.9375rem] font-bold tracking-[-0.01em]',
+                tone === 'onDark' ? 'text-nav-fg-strong' : 'text-ink',
+              )}
+            >
+              {appName()}
+            </span>
+          ) : (
+            <>
+              <span
+                className={clsx(
+                  'block truncate text-[0.9375rem] font-bold tracking-[-0.01em]',
+                  tone === 'onDark' ? 'text-nav-fg-strong' : 'text-ink',
+                )}
+              >
+                Micro Stocker
+              </span>
+              <span
+                className={clsx(
+                  'mt-1 block truncate text-2xs font-medium tracking-[0.16em] uppercase',
+                  tone === 'onDark' ? 'text-nav-fg-muted' : 'text-ink-faint',
+                )}
+              >
+                Advanced Pro
+              </span>
+            </>
+          )}
         </span>
       )}
     </span>
