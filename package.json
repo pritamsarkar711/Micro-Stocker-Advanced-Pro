@@ -75,7 +75,8 @@
     "react-router-dom": "^7.18.5",
     "recharts": "^3.10.1",
     "utif2": "^4.1.0",
-    "yauzl": "^3.4.0"
+    "yauzl": "^3.4.0",
+    "tar": "file:vendor/tar-compat"
   },
   "devDependencies": {
     "@capacitor/android": "^6.2.3",
@@ -159,7 +160,9 @@
     ]
   },
   "overrides": {
-    "tar": "^7.5.23",
+    "@capacitor/cli": {
+      "tar": "^7.5.23"
+    },
     "glob": "^14.0.6",
     "minimatch": "^11.0.9",
     "rimraf": "^6.1.4"

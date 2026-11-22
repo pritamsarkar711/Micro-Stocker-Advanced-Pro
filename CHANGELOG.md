@@ -8,6 +8,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The Android build is now its own product, branded **vecmotion**. The desktop
 build is unchanged.
 
+### Fixed
+
+- `npx cap sync` crashed with `Cannot read properties of undefined (reading 'extract')`: `@capacitor/cli` reads `require('tar').default.extract`, which its targeted `tar@^6` provides but the security-patched `tar@^7` does not. `tar` is now a vendored compatibility shim (`vendor/tar-compat`) re-exporting the patched `tar@7.5.23` with the interop default export restored; `npm audit` stays at 0 vulnerabilities.
+- ConvertPage no longer calls `setState` during render (raster-format reset for Android is done in an effect).
+- BrandLogo dead code removed (ollama/lmstudio/vllm icons and the unused `brandForModel`/`brandForProvider` helpers).
+- GitHub Pages release channel publishes the signed APK and a download page with SHA-256 verification (`.github/workflows/pages.yml`, `scripts/pages/index.html`).
+
 ### Added
 - **Motion Video Generator.** Procedural, fully on-device animation loops:
   describe an idea (or upload an image), pick a motion style, palette, speed,

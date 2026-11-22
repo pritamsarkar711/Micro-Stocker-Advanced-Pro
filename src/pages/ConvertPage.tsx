@@ -73,9 +73,14 @@ export function ConvertPage() {
     : CONVERT_FORMATS;
   const activeFormat = androidFormats.find((f) => f.id === format) ?? androidFormats[0];
   // If the stored format is hidden on Android (vector), reset to a raster default.
-  if (format && !androidFormats.some((f) => f.id === format)) {
-    setFormat(androidFormats[0].id);
-  }
+  // This runs in an effect — calling setState during render is a React error.
+  useEffect(() => {
+    if (!androidFormats.some((f) => f.id === format)) {
+      setFormat(androidFormats[0].id);
+    }
+    // androidFormats is a fresh array every render; only re-check when format changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [format]);
 
   function selectFormat(next: ConvertFormat) {
     setFormat(next);

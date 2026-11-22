@@ -1,0 +1,14 @@
+{
+  "name": "tar",
+  "version": "7.5.23",
+  "description": "Local compatibility shim: re-exports the patched npm tar (v7) with a CommonJS default export so legacy tslib __importDefault consumers (e.g. @capacitor/cli) keep working. Wired in via the root package.json overrides.",
+  "main": "index.js",
+  "license": "ISC",
+  "files": [
+    "index.js",
+    "README.md"
+  ],
+  "dependencies": {
+    "tar-real": "npm:tar@7.5.23"
+  }
+}
